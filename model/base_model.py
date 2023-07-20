@@ -1,6 +1,6 @@
 from torch import nn
 
-from fqf_iqn_qrdqn.network import NoisyLinear
+from gym_4iar.network import NoisyLinear
 
 
 class BaseModel(nn.Module):

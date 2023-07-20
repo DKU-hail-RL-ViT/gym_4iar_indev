@@ -1,7 +1,7 @@
 from torch import nn
 
 from .base_model import BaseModel
-from fqf_iqn_qrdqn.network import DQNBase, NoisyLinear
+from gym_4iar.network import DQNBase, NoisyLinear
 
 
 class QRDQN(BaseModel):

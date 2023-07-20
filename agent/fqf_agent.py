@@ -1,8 +1,8 @@
 import torch
 from torch.optim import Adam, RMSprop
 
-from fqf_iqn_qrdqn.model import FQF
-from fqf_iqn_qrdqn.utils import calculate_quantile_huber_loss, disable_gradients, evaluate_quantile_at_action, update_params
+from gym_4iar.model import FQF
+from gym_4iar.utils import calculate_quantile_huber_loss, disable_gradients, evaluate_quantile_at_action, update_params
 
 from .base_agent import BaseAgent
 
