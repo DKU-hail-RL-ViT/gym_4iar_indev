@@ -8,6 +8,7 @@ from gym import spaces, wrappers
 import cv2
 cv2.ocl.setUseOpenCL(False)
 
+import fiar_env
 
 class NoopResetEnv(gym.Wrapper):
     def __init__(self, env, noop_max=30):
@@ -271,10 +272,10 @@ def make_atari(env_id):
     :param env_id: (str) the environment ID
     :return: (Gym Environment) the wrapped atari environment
     """
-    env = gym.make(env_id)
-    assert 'NoFrameskip' in env.spec.id
-    env = NoopResetEnv(env, noop_max=30)
-    env = MaxAndSkipEnv(env, skip=4)
+    env = fiar_env.Fiar()
+    # assert 'NoFrameskip' in env.spec.id
+    # env = NoopResetEnv(env, noop_max=30)
+    # env = MaxAndSkipEnv(env, skip=4)
     return env
 
 
@@ -302,14 +303,12 @@ def wrap_deepmind_pytorch(env, episode_life=True, clip_rewards=True,
         env = FrameStackPyTorch(env, 4)
     return env
 
-
 def make_pytorch_env(env_id, episode_life=True, clip_rewards=True,
                      frame_stack=True, scale=False):
     env = make_atari(env_id)
     env = wrap_deepmind_pytorch(
         env, episode_life, clip_rewards, frame_stack, scale)
     return env
-
 
 def wrap_monitor(env, log_dir):
     env = wrappers.Monitor(

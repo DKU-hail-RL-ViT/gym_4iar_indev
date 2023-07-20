@@ -4,9 +4,9 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from fqf_iqn_qrdqn.memory import LazyMultiStepMemory, \
+from gym_4iar.memory import LazyMultiStepMemory, \
     LazyPrioritizedMultiStepMemory
-from fqf_iqn_qrdqn.utils import RunningMeanStats, LinearAnneaer
+from gym_4iar.utils import RunningMeanStats, LinearAnneaer
 
 
 class BaseAgent(ABC):
