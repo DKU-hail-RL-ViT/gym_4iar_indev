@@ -80,10 +80,10 @@ def run(args):
     log_dir = os.path.join(
         'logs', args.env_id, f'{name}-seed{args.seed}-{time}')
 
+
     # Create the agent and run.
     agent = QRDQNAgent(
-        env=env, test_env=env, log_dir=log_dir, seed=args.seed,
-        cuda=args.cuda, **config)
+        env=env, cuda=args.cuda, **config)
     agent.run()
 
 

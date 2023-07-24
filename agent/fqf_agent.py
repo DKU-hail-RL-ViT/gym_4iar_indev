@@ -9,7 +9,7 @@ from .base_agent import BaseAgent
 
 class FQFAgent(BaseAgent):
 
-    def __init__(self, env, test_env, log_dir, num_steps=5*(10**7),
+    def __init__(self, env, test_env, num_steps=5*(10**7),
                  batch_size=32, N=32, num_cosines=64, ent_coef=0,
                  kappa=1.0, quantile_lr=5e-5, fraction_lr=2.5e-9,
                  memory_size=10**6, gamma=0.99, multi_step=1,

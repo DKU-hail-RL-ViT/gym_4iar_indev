@@ -11,7 +11,7 @@ from gym_4iar.utils import RunningMeanStats, LinearAnneaer
 
 class BaseAgent(ABC):
 
-    def __init__(self, env, test_env, log_dir, num_steps=5*(10**7),
+    def __init__(self, env, num_steps=5*(10**7),
                  batch_size=32, memory_size=10**6, gamma=0.99, multi_step=1,
                  update_interval=4, target_update_interval=10000,
                  start_steps=50000, epsilon_train=0.01, epsilon_eval=0.001,
@@ -21,10 +21,14 @@ class BaseAgent(ABC):
                  max_episode_steps=27000, grad_cliping=5.0, cuda=True, seed=0):
 
         self.env = env
-        self.test_env = test_env
+
 
         torch.manual_seed(seed)
         np.random.seed(seed)
+
+        # torch.manual_seed(seed)
+        # np.random.seed(seed)
+
         # self.env.seed(seed)
         # self.test_env.seed(2**31-1-seed)
         # torch.backends.cudnn.deterministic = True  # It harms a performance.
@@ -47,16 +51,16 @@ class BaseAgent(ABC):
                 memory_size, self.env.observation_space.shape,
                 self.device, gamma, multi_step)
 
-        self.log_dir = log_dir
-        self.model_dir = os.path.join(log_dir, 'model')
-        self.summary_dir = os.path.join(log_dir, 'summary')
-        if not os.path.exists(self.model_dir):
-            os.makedirs(self.model_dir)
-        if not os.path.exists(self.summary_dir):
-            os.makedirs(self.summary_dir)
+        # self.log_dir = log_dir
+        # self.model_dir = os.path.join(log_dir, 'model')
+        # self.summary_dir = os.path.join(log_dir, 'summary')
+        # if not os.path.exists(self.model_dir):
+        #    os.makedirs(self.model_dir)
+        # if not os.path.exists(self.summary_dir):
+        #    os.makedirs(self.summary_dir)
 
-        self.writer = SummaryWriter(log_dir=self.summary_dir)
-        self.train_return = RunningMeanStats(log_interval)
+        # self.writer = SummaryWriter(log_dir=self.summary_dir)
+        # self.train_return = RunningMeanStats(log_interval)
 
         self.steps = 0
         self.learning_steps = 0
@@ -176,12 +180,12 @@ class BaseAgent(ABC):
             self.train_step_interval()
 
         # We log running mean of stats.
-        self.train_return.append(episode_return)
+        # self.train_return.append(episode_return)
 
         # We log evaluation results along with training frames = 4 * steps.
-        if self.episodes % self.log_interval == 0:
-            self.writer.add_scalar(
-                'return/train', self.train_return.get(), 4 * self.steps)
+        # if self.episodes % self.log_interval == 0:
+        #     self.writer.add_scalar(
+        #         'return/train', self.train_return.get(), 4 * self.steps)
 
         print(f'Episode: {self.episodes:<4}  '
               f'episode steps: {episode_steps:<4}  '
@@ -198,7 +202,7 @@ class BaseAgent(ABC):
 
         if self.steps % self.eval_interval == 0:
             self.evaluate()
-            self.save_models(os.path.join(self.model_dir, 'final'))
+            # self.save_models(os.path.join(self.model_dir, 'final'))
             self.online_net.train()
 
     def evaluate(self):
@@ -208,7 +212,7 @@ class BaseAgent(ABC):
         total_return = 0.0
 
         while True:
-            state = self.test_env.reset()
+            state = self.env.reset()
             episode_steps = 0
             episode_return = 0.0
             done = False
@@ -218,7 +222,7 @@ class BaseAgent(ABC):
                 else:
                     action = self.exploit(state)
 
-                next_state, reward, done, _ = self.test_env.step(action)
+                next_state, reward, done, _ = self.env.step(action)
                 num_steps += 1
                 episode_steps += 1
                 episode_return += reward

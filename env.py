@@ -10,7 +10,6 @@ cv2.ocl.setUseOpenCL(False)
 
 import fiar_env
 
-
 def make_atari(env_id):
     """
     Create a wrapped atari envrionment
@@ -18,8 +17,5 @@ def make_atari(env_id):
     :return: (Gym Environment) the wrapped atari environment
     """
     env = fiar_env.Fiar()
-    # assert 'NoFrameskip' in env.spec.id
-    # env = NoopResetEnv(env, noop_max=30)
-    # env = MaxAndSkipEnv(env, skip=4)
     return env
 
