@@ -25,8 +25,8 @@ class BaseAgent(ABC):
 
         torch.manual_seed(seed)
         np.random.seed(seed)
-        self.env.seed(seed)
-        self.test_env.seed(2**31-1-seed)
+        # self.env.seed(seed)
+        # self.test_env.seed(2**31-1-seed)
         # torch.backends.cudnn.deterministic = True  # It harms a performance.
         # torch.backends.cudnn.benchmark = False  # It harms a performance.
 
@@ -246,5 +246,5 @@ class BaseAgent(ABC):
 
     def __del__(self):
         self.env.close()
-        self.test_env.close()
-        self.writer.close()
+        # self.test_env.close()
+        # self.writer.close()
