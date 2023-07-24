@@ -186,10 +186,19 @@ class BaseAgent(ABC):
         # if self.episodes % self.log_interval == 0:
         #     self.writer.add_scalar(
         #         'return/train', self.train_return.get(), 4 * self.steps)
+        if episode_steps % 2 == 0:
+            print(f'Episode: {self.episodes:<4}  '
+                  f'episode steps: {episode_steps:<4}  '
+                  f'return: {episode_return:<5.1f}  '
+                  f'win: white')
+        else:
+            print(f'Episode: {self.episodes:<4}  '
+                  f'episode steps: {episode_steps:<4}  '
+                  f'return: {episode_return:<5.1f}  '
+                  f'win: black')
 
-        print(f'Episode: {self.episodes:<4}  '
-              f'episode steps: {episode_steps:<4}  '
-              f'return: {episode_return:<5.1f}')
+
+
 
     def train_step_interval(self):
         self.epsilon_train.step()

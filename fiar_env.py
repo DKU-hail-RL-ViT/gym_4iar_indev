@@ -203,9 +203,8 @@ def next_state(state, action1d):
     # Initialize basic variables
     board_shape = state.shape[1:]
     pass_idx = np.prod(board_shape)
-    action2d = action1d // board_shape[0], action1d % board_shape[1]
-    # action2d = action1d_ize(action1d) previous
-
+    action2d = action1d % board_shape[0], action1d % board_shape[1]
+    # action2d = action2d_ize(action1d)
 
     player = turn(state)
     ko_protect = None
