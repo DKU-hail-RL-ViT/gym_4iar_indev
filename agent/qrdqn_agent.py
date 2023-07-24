@@ -9,7 +9,7 @@ from .base_agent import BaseAgent
 
 class QRDQNAgent(BaseAgent):
 
-    def __init__(self, env, test_env, log_dir, num_steps=5*(10**7),
+    def __init__(self, env,  num_steps=5*(10**7),
                  batch_size=32, N=200, kappa=1.0, lr=5e-5, memory_size=10**6,
                  gamma=0.99, multi_step=1, update_interval=4,
                  target_update_interval=10000, start_steps=50000,
@@ -20,7 +20,7 @@ class QRDQNAgent(BaseAgent):
                  max_episode_steps=27000, grad_cliping=None, cuda=True,
                  seed=0):
         super(QRDQNAgent, self).__init__(
-            env, test_env, log_dir, num_steps, batch_size, memory_size,
+            env, num_steps, batch_size, memory_size,
             gamma, multi_step, update_interval, target_update_interval,
             start_steps, epsilon_train, epsilon_eval, epsilon_decay_steps,
             double_q_learning, dueling_net, noisy_net, use_per, log_interval,
