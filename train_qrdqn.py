@@ -39,8 +39,8 @@ if __name__=="__main__":
             print('Game ended! [' + ('WHITE' if np.all(env.state_[2] == 1) else 'BLACK') + '] won!')
             SWITCHERS, STRRS =fiar_env.fiar_check(env.state_,loc=True)
             print("*" * 20)
-            print('winning streak: ' )
-            print(STRRS)
+            print('winning streak: ', STRRS)
+            print('\n')
             break
         action = env.render(mode="terminal")
         while True:
@@ -60,8 +60,8 @@ if __name__=="__main__":
             print('Game ended! [' + ('WHITE' if np.all(env.state_[2] == 1) else 'BLACK') + '] won!')
             SWITCHERS, STRRS =fiar_env.fiar_check(env.state_,loc=True)
             print("*" * 20)
-            print('winning streak: ' )
-            print(STRRS)
+            print('winning streak: ', STRRS)
+            print('\n')
             break
 
 

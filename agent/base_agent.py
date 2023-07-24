@@ -198,8 +198,6 @@ class BaseAgent(ABC):
                   f'win: black')
 
 
-
-
     def train_step_interval(self):
         self.epsilon_train.step()
 
@@ -214,6 +212,8 @@ class BaseAgent(ABC):
             # self.save_models(os.path.join(self.model_dir, 'final'))
             self.online_net.train()
 
+
+    """
     def evaluate(self):
         self.online_net.eval()
         num_episodes = 0
@@ -256,6 +256,8 @@ class BaseAgent(ABC):
         print(f'Num steps: {self.steps:<5}  '
               f'return: {mean_return:<5.1f}')
         print('-' * 60)
+        
+        """
 
     def __del__(self):
         self.env.close()
