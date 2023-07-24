@@ -3,7 +3,7 @@ import yaml
 import argparse
 from datetime import datetime
 
-from gym_4iar.env import make_pytorch_env
+# from gym_4iar.env import make_pytorch_env
 from gym_4iar.agent import QRDQNAgent
 
 # Four in a row task
@@ -73,8 +73,6 @@ def run(args):
     env = fiar_env.Fiar()
     # env = make_pytorch_env(args.env_id)
 
-    test_env = make_pytorch_env(
-        args.env_id, episode_life=False, clip_rewards=False)
 
     # Specify the directory to log.
     name = args.config.split('/')[-1].rstrip('.yaml')
@@ -84,7 +82,7 @@ def run(args):
 
     # Create the agent and run.
     agent = QRDQNAgent(
-        env=env, test_env=test_env, log_dir=log_dir, seed=args.seed,
+        env=env, test_env=env, log_dir=log_dir, seed=args.seed,
         cuda=args.cuda, **config)
     agent.run()
 
