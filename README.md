@@ -5,6 +5,7 @@ This is a PyTorch implementation of Fully parameterized Quantile Function(FQF)[1
 python version 3.10
 
 ```bash
+pip install torch torchvision torchaudio
 pip install scipy==1.11.1
 pip install numpy==1.25.1
 pip install matplotlib==3.7.2
@@ -15,3 +16,7 @@ pip install tensorboard
 ```
 
 Task : four in a row
+
+
+Todo
+1. Resolve overlapping numbers

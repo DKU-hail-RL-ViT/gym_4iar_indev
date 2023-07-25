@@ -17,15 +17,13 @@ class QRDQNAgent(BaseAgent):
                  epsilon_decay_steps=250000, double_q_learning=False,
                  dueling_net=False, noisy_net=False, use_per=False,
                  log_interval=100, eval_interval=250000, num_eval_steps=125000,
-                 max_episode_steps=27000, grad_cliping=None, cuda=True,
-                 seed=0):
+                 max_episode_steps=27000, grad_cliping=None, cuda=True):
         super(QRDQNAgent, self).__init__(
             env, num_steps, batch_size, memory_size,
             gamma, multi_step, update_interval, target_update_interval,
             start_steps, epsilon_train, epsilon_eval, epsilon_decay_steps,
             double_q_learning, dueling_net, noisy_net, use_per, log_interval,
-            eval_interval, num_eval_steps, max_episode_steps, grad_cliping,
-            cuda, seed)
+            eval_interval, num_eval_steps, max_episode_steps, grad_cliping, cuda)
 
         # Online network.
         self.online_net = QRDQN(

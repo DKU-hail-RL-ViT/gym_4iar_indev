@@ -11,11 +11,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 import fiar_env
 
-if __name__=="__main__":
+def run(args):
+    with open(args.config) as f:
+        config = yaml.load(f, Loader=yaml.SafeLoader)
+
+    # Create environments.
+    env = fiar_env.Fiar()
+
+    # Create the agent and run.
+    agent = QRDQNAgent(
+        env=env, cuda=args.cuda, **config)
+    agent.run()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--config', type=str, default=os.path.join('config', 'qrdqn.yaml'))
+    parser.add_argument('--env_id', type=str, default='gym_fiar_env')
+    parser.add_argument('--cuda', action='store_true')
     num_trials = 10
     env = fiar_env.Fiar()
-    done = False
 
+    done = False
 
     map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
     map_taken = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
@@ -37,7 +55,7 @@ if __name__=="__main__":
             env.render(mode="terminal")
             print("*" * 20)
             print('Game ended! [' + ('WHITE' if np.all(env.state_[2] == 1) else 'BLACK') + '] won!')
-            SWITCHERS, STRRS =fiar_env.fiar_check(env.state_,loc=True)
+            SWITCHERS, STRRS = fiar_env.fiar_check(env.state_,loc=True)
             print("*" * 20)
             print('winning streak: ', STRRS)
             print('\n')
@@ -64,35 +82,5 @@ if __name__=="__main__":
             print('\n')
             break
 
-
-def run(args):
-    with open(args.config) as f:
-        config = yaml.load(f, Loader=yaml.SafeLoader)
-
-    # Create environments.
-    env = fiar_env.Fiar()
-    # env = make_pytorch_env(args.env_id)
-
-
-    # Specify the directory to log.
-    name = args.config.split('/')[-1].rstrip('.yaml')
-    time = datetime.now().strftime("%Y%m%d-%H%M")
-    log_dir = os.path.join(
-        'logs', args.env_id, f'{name}-seed{args.seed}-{time}')
-
-
-    # Create the agent and run.
-    agent = QRDQNAgent(
-        env=env, cuda=args.cuda, **config)
-    agent.run()
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--config', type=str, default=os.path.join('config', 'qrdqn.yaml'))
-    parser.add_argument('--env_id', type=str, default='gym_fiar_env')
-    parser.add_argument('--cuda', action='store_true')
-    parser.add_argument('--seed', type=int, default=0)
     args = parser.parse_args()
     run(args)
