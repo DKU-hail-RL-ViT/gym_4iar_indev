@@ -18,13 +18,13 @@ class BaseAgent(ABC):
                  epsilon_decay_steps=250000, double_q_learning=False,
                  dueling_net=False, noisy_net=False, use_per=False,
                  log_interval=100, eval_interval=250000, num_eval_steps=125000,
-                 max_episode_steps=27000, grad_cliping=5.0, cuda=True, seed=0):
+                 max_episode_steps=27000, grad_cliping=5.0, cuda=True):
 
         self.env = env
 
 
-        torch.manual_seed(seed)
-        np.random.seed(seed)
+        # torch.manual_seed(seed)
+        # np.random.seed(seed)
 
         # torch.manual_seed(seed)
         # np.random.seed(seed)
