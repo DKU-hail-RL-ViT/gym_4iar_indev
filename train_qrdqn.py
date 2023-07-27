@@ -3,7 +3,6 @@ import yaml
 import argparse
 from datetime import datetime
 
-# from gym_4iar.env import make_pytorch_env
 from gym_4iar.agent import QRDQNAgent
 
 # Four in a row task
@@ -55,12 +54,13 @@ if __name__ == '__main__':
             env.render(mode="terminal")
             print("*" * 20)
             print('Game ended! [' + ('WHITE' if np.all(env.state_[2] == 1) else 'BLACK') + '] won!')
-            SWITCHERS, STRRS = fiar_env.fiar_check(env.state_,loc=True)
+            SWITCHERS, STRRS = fiar_env.fiar_check(env.state_, loc=True)
             print("*" * 20)
             print('winning streak: ', STRRS)
             print('\n')
             break
         action = env.render(mode="terminal")
+
         while True:
             action = np.random.randint(len(map_1d))
             action2d = np.where(map==action)
@@ -76,7 +76,7 @@ if __name__ == '__main__':
             env.render(mode="terminal")
             print("*" * 20)
             print('Game ended! [' + ('WHITE' if np.all(env.state_[2] == 1) else 'BLACK') + '] won!')
-            SWITCHERS, STRRS =fiar_env.fiar_check(env.state_,loc=True)
+            SWITCHERS, STRRS = fiar_env.fiar_check(env.state_,loc=True)
             print("*" * 20)
             print('winning streak: ', STRRS)
             print('\n')
