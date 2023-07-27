@@ -151,7 +151,7 @@ class BaseAgent(ABC):
 
         self.episodes += 1
         episode_return = 0.
-        episode_steps = 0
+        episode_steps = -1  # The reason for setting it to -1 is because it adds one more after it has finished
 
         done = False
         state = self.env.reset()
@@ -197,7 +197,6 @@ class BaseAgent(ABC):
                   f'return: {episode_return:<5.1f}  '
                   f'win: black')
 
-
     def train_step_interval(self):
         self.epsilon_train.step()
 
@@ -206,58 +205,6 @@ class BaseAgent(ABC):
 
         if self.is_update():
             self.learn()
-
-        if self.steps % self.eval_interval == 0:
-            self.evaluate()
-            # self.save_models(os.path.join(self.model_dir, 'final'))
-            self.online_net.train()
-
-
-    """
-    def evaluate(self):
-        self.online_net.eval()
-        num_episodes = 0
-        num_steps = 0
-        total_return = 0.0
-
-        while True:
-            state = self.env.reset()
-            episode_steps = 0
-            episode_return = 0.0
-            done = False
-            while (not done) and episode_steps <= self.max_episode_steps:
-                if self.is_random(eval=True):
-                    action = self.explore()
-                else:
-                    action = self.exploit(state)
-
-                next_state, reward, done, _ = self.env.step(action)
-                num_steps += 1
-                episode_steps += 1
-                episode_return += reward
-                state = next_state
-
-            num_episodes += 1
-            total_return += episode_return
-
-            if num_steps > self.num_eval_steps:
-                break
-
-        mean_return = total_return / num_episodes
-
-        if mean_return > self.best_eval_score:
-            self.best_eval_score = mean_return
-            self.save_models(os.path.join(self.model_dir, 'best'))
-
-        # We log evaluation results along with training frames = 4 * steps.
-        self.writer.add_scalar(
-            'return/test', mean_return, 4 * self.steps)
-        print('-' * 60)
-        print(f'Num steps: {self.steps:<5}  '
-              f'return: {mean_return:<5.1f}')
-        print('-' * 60)
-        
-        """
 
     def __del__(self):
         self.env.close()
