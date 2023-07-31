@@ -11,7 +11,7 @@ from gym_4iar.utils import RunningMeanStats, LinearAnneaer
 
 class BaseAgent(ABC):
 
-    def __init__(self, env, num_steps=5*(10**7),
+    def __init__(self, env, num_steps=5*(10**7), num_actions=37,
                  batch_size=32, memory_size=10**6, gamma=0.99, multi_step=1,
                  update_interval=4, target_update_interval=10000,
                  start_steps=50000, epsilon_train=0.01, epsilon_eval=0.001,
@@ -21,18 +21,6 @@ class BaseAgent(ABC):
                  max_episode_steps=27000, grad_cliping=5.0, cuda=True):
 
         self.env = env
-
-
-        # torch.manual_seed(seed)
-        # np.random.seed(seed)
-
-        # torch.manual_seed(seed)
-        # np.random.seed(seed)
-
-        # self.env.seed(seed)
-        # self.test_env.seed(2**31-1-seed)
-        # torch.backends.cudnn.deterministic = True  # It harms a performance.
-        # torch.backends.cudnn.benchmark = False  # It harms a performance.
 
         self.device = torch.device(
             "cuda" if cuda and torch.cuda.is_available() else "cpu")
@@ -205,8 +193,3 @@ class BaseAgent(ABC):
 
         if self.is_update():
             self.learn()
-
-    def __del__(self):
-        self.env.close()
-        # self.test_env.close()
-        # self.writer.close()

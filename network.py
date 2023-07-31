@@ -26,23 +26,23 @@ class Flatten(nn.Module):
 
 class DQNBase(nn.Module):
 
-    def __init__(self, num_channels, embedding_dim=7*7*64):
+    def __init__(self, num_channels, num_actions=37, embedding_dim=32*5):   # batch_size x channels
         super(DQNBase, self).__init__()
 
         self.net = nn.Sequential(
-            nn.Conv2d(num_channels, 32, kernel_size=8, stride=4, padding=0),
+            nn.Linear(embedding_dim, 64),   # here
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.Linear(64, 32),
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
-            nn.ReLU(),
-            Flatten(),
+            nn.Linear(32, num_actions)
         ).apply(initialize_weights_he)
 
         self.embedding_dim = embedding_dim
+        self.num_action = num_actions
+        self.num_channels = num_channels
 
     def forward(self, states):
-        batch_size = states.shape[0]
+        batch_size = states.shape[0]    # here
 
         # Calculate embeddings of states.
         state_embedding = self.net(states)
@@ -51,7 +51,7 @@ class DQNBase(nn.Module):
         return state_embedding
 
 
-class FractionProposalNetwork(nn.Module):
+class FractionProposalNetwork(nn.Module):   # only FQF
 
     def __init__(self, N=32, embedding_dim=7*7*64):
         super(FractionProposalNetwork, self).__init__()

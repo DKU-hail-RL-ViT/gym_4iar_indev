@@ -179,7 +179,8 @@ class FQFAgent(BaseAgent):
         gradient_of_taus = (
             torch.where(signs_1, values_1, -values_1)
             + torch.where(signs_2, values_2, -values_2)
-        ).view(batch_size, self.N-1)
+        ).view(batch_size, self.N)
+
         assert not gradient_of_taus.requires_grad
         assert gradient_of_taus.shape == taus[:, 1:-1].shape
 
