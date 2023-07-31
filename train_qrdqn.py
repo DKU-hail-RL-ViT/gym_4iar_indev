@@ -29,7 +29,7 @@ if __name__ == '__main__':
         '--config', type=str, default=os.path.join('config', 'qrdqn.yaml'))
     parser.add_argument('--env_id', type=str, default='gym_fiar_env')
     parser.add_argument('--cuda', action='store_true')
-    num_trials = 10
+    num_trials = 1
     env = fiar_env.Fiar()
 
     done = False
