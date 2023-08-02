@@ -27,7 +27,7 @@ def action1d_ize(action):
     return map[action[0],action[1]]
 
 def winning(state, player=0):
-    return 1 if np.all(state[TURN_CHNL] == player) else -1 # winning of player
+    return 1 if np.all(state[TURN_CHNL] == player) else -1  # winning of player
 
 
 def turn(state):
@@ -66,7 +66,7 @@ def areas(state):
 
 def fiar_check(state, loc=False):
     # check four in a row
-    black_white = 1 if np.all(state[2]==1) else 0 # 0:black 1:white
+    black_white = 1 if np.all(state[2]==1) else 0   # 0:black 1:white
 
     state = np.copy(state[black_white,:,:])
 
@@ -310,8 +310,8 @@ def action_size(state=None, board_size: int = None):
     return m * n + 1
 
 class Fiar(gym.Env):
-    def __init__(self, player = 0):
-        self.player = player #  0: black,  1: white
+    def __init__(self, player=0):
+        self.player = player    #  0: black,  1: white
 
         self.state_ = self.init_state()
         self.observation_space = spaces.Box(np.float32(0), np.float32(NUM_CHNLS),
