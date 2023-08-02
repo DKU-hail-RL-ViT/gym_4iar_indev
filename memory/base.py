@@ -96,6 +96,7 @@ class LazyMemory(dict):
 
         states = np.empty(
             (batch_size, *self.state_shape), dtype=np.uint8)
+
         next_states = np.empty(
             (batch_size, *self.state_shape), dtype=np.uint8)
 

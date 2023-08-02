@@ -6,13 +6,13 @@ from gym_4iar.network import DQNBase, NoisyLinear
 
 class QRDQN(BaseModel):
 
-    def __init__(self, num_channels, num_actions=37, N=32, embedding_dim=32*5,
+    def __init__(self, num_channels, num_actions=37, embedding_dim=5*9*4, N=32,
                  dueling_net=False, noisy_net=False):
         super(QRDQN, self).__init__()
         linear = NoisyLinear if noisy_net else nn.Linear
 
         # Feature extractor of DQN.
-        self.dqn_net = DQNBase(num_channels=num_channels)
+        self.dqn_net = DQNBase(num_channels=num_channels, num_actions=num_actions, embedding_dim=embedding_dim)
 
         # Quantile network.
         if not dueling_net:
@@ -34,7 +34,7 @@ class QRDQN(BaseModel):
             )
 
         self.N = N
-        self.num_channels = num_channels
+        self.num_channels = 5
         self.num_actions = num_actions
         self.embedding_dim = embedding_dim
         self.dueling_net = dueling_net
