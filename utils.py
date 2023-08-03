@@ -64,6 +64,7 @@ def evaluate_quantile_at_action(s_quantiles, actions):
 
     # Expand actions into (batch_size, N, 1).
     action_index = actions[..., None].expand(batch_size, N, 1)
+    # action_index = torch.clamp(actions[..., None], max=36).expand(batch_size, N, 1)
 
     # Calculate quantile values at specified actions.
     sa_quantiles = s_quantiles.gather(dim=2, index=action_index)
