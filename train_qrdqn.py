@@ -14,9 +14,6 @@ def run(args):
     with open(args.config) as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
 
-    # Create environments.
-    env = fiar_env.Fiar()
-
     # Create the agent and run.
     agent = QRDQNAgent(
         env=env, cuda=args.cuda, **config)
@@ -64,7 +61,7 @@ if __name__ == '__main__':
         while True:
             action = np.random.randint(len(map_1d))
             action2d = np.where(map==action)
-            action2d = (action2d[0][0],action2d[1][0])
+            action2d = (action2d[0][0], action2d[1][0])
             if map_taken[action2d] != -1:
                 break
 
@@ -76,7 +73,7 @@ if __name__ == '__main__':
             env.render(mode="terminal")
             print("*" * 20)
             print('Game ended! [' + ('WHITE' if np.all(env.state_[2] == 1) else 'BLACK') + '] won!')
-            SWITCHERS, STRRS = fiar_env.fiar_check(env.state_,loc=True)
+            SWITCHERS, STRRS = fiar_env.fiar_check(env.state_, loc=True)
             print("*" * 20)
             print('winning streak: ', STRRS)
             print('\n')

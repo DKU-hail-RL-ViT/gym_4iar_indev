@@ -203,17 +203,25 @@ def next_state(state, action1d):
     # Initialize basic variables
     board_shape = state.shape[1:]
     pass_idx = np.prod(board_shape)
-    action2d = action1d % board_shape[0], action1d % board_shape[1]
+    # action2d = action1d % board_shape[0], action1d // board_shape[1]
+    action2d = action1d % board_shape[0], action1d // board_shape[0]
+
+    # action2d = (action1d) % board_shape[0], action1d // board_shape[1]
+
+    check_completeness = [[(i) % board_shape[0], (i) // board_shape[0]] for i in range(36)]
     # action2d = action2d_ize(action1d)
 
     player = turn(state)
     ko_protect = None
 
     # Assert move is valid
-    assert state[INVD_CHNL, action2d[0], action2d[1]] == 0, ("Invalid move", action2d)
+    assert 0 <= action2d[0] < state.shape[1] and 0 <= action2d[1] < state.shape[2], ("Invalid move", action2d)
+    # print(action2d)
 
     # Add piece
     state[player, action2d[0], action2d[1]] = 1
+    # 예를 들어, player가 0, action2d[0]가 2, action2d[1]이 3이라면, state[0, 2, 3] 위치에 1이 할당된다.
+
 
     # # Get adjacent location and check whether the piece will be surrounded by opponent's piece
     # adj_locs, surrounded = state_utils.adj_data(state, action2d, player)
@@ -307,7 +315,8 @@ def action_size(state=None, board_size: int = None):
         m, n = board_size, board_size
     else:
         raise RuntimeError('No argument passed')
-    return m * n + 1
+    # return m * n + 1
+    return m * n
 
 class Fiar(gym.Env):
     def __init__(self, player=0):

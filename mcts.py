@@ -1,44 +1,10 @@
-"""
-Where we use Numpy arrays to store node statistics,
-and create child node on demand.
-
-The positions are evaluated from the current player (or to move) perspective.
-
-        A           Black to move
-
-    B       C       White to move
-
-  D   E             Black to move
-
-For example, in the above two-player, zero-sum games search tree. 'A' is the root node,
-and when the game is in state corresponding to node 'A', it's black's turn to move.
-However the children nodes of 'A' are evaluated from white player's perspective.
-So if we select the best child for node 'A', without further consideration,
-we'd be actually selecting the best child for white player, which is not what we want.
-
-Let's look at an simplified example where we don't consider number of visits and total values,
-just the raw evaluation scores, if the evaluated scores (from white's perspective)
-for 'B' and 'C' are 0.8 and 0.3 respectively. Then according to these results,
-the best child of 'A' max(0.8, 0.3) is 'B', however this is done from white player's perspective.
-But node 'A' represents black's turn to move, so we need to select the best child from black player's perspective,
-which should be 'C' - the worst move for white, thus a best move for black.
-
-One way to resolve this issue is to always switching the signs of the child node's Q values when we select the best child.
-
-For example:
-    ucb_scores = -node.child_Q() + node.child_U()
-
-In this case, a max(-0.8, -0.3) will give us the correct results for black player when we select the best child for node 'A'.
-
-"""
-
 import copy
 import collections
 import math
 from typing import Callable, Tuple, Mapping, Iterable, Any
 import numpy as np
 
-# from envs.base import fiar_env # 여긴 코드보고 좀 변경해야할 부분이 많음
+from fiar_env import Fiar # 여긴 코드보고 좀 변경해야할 부분이 많음
 
 class DummyNode(object):
     """A place holder to make computation possible for the root node."""
@@ -274,7 +240,7 @@ def generate_search_policy(child_N: np.ndarray, temperature: float, legal_action
 
 
 def uct_search(
-    env: BoardGameEnv,
+    env: Fiar,
     eval_func: Callable[[np.ndarray, bool], Tuple[Iterable[np.ndarray], Iterable[float]]],
     root_node: Node,
     c_puct_base: float,
@@ -284,51 +250,8 @@ def uct_search(
     warm_up: bool = False,
     deterministic: bool = False,
 ) -> Tuple[int, np.ndarray, float, float, Node]:
-    """Single-threaded Upper Confidence Bound (UCB) for Trees (UCT) search without any rollout.
 
-    It follows the following general UCT search algorithm, except here we don't do rollout.
-    ```
-    function UCTSEARCH(r,m)
-      i←1
-      for i ≤ m do
-          n ← select(r)
-          n ← expand(n)
-          ∆ ← rollout(n)
-          backup(n,∆)
-      end for
-      return end function
-    ```
-
-    Args:
-        env: a gym like custom BoardGameEnv environment.
-        eval_func: a evaluation function when called returns the
-            action probabilities and predicted value from
-            current player's perspective.
-        root_node: root node of the search tree, this comes from reuse sub-tree.
-        c_puct_base: a float constant determining the level of exploration.
-        c_puct_init: a float constant determining the level of exploration.
-        num_simulations: number of simulations to run, default 800.
-        root_noise: whether add dirichlet noise to root node to encourage exploration, default off.
-        warm_up: if true, use temperature 1.0 to generate play policy, other wise use 0.1, default off.
-        deterministic: after the MCTS search, choose the child node with most visits number to play in the game,
-            instead of sample through a probability distribution, default off.
-
-    Returns:
-        tuple contains:
-            a integer indicate the sampled action to play in the environment.
-            a 1D numpy.array search policy action probabilities from the MCTS search result.
-            a float indicate the root node value
-            a float indicate the best child value
-            a Node instance represent subtree of this MCTS search, which can be used as next root node for MCTS search.
-
-    Raises:
-        ValueError:
-            if input argument `env` is not valid BoardGameEnv instance.
-            if input argument `num_simulations` is not a positive integer.
-        RuntimeError:
-            if the game is over.
-    """
-    if not isinstance(env, BoardGameEnv):
+    if not isinstance(env, Fiar):
         raise ValueError(f'Expect `env` to be a valid BoardGameEnv instance, got {env}')
     if not 1 <= num_simulations:
         raise ValueError(f'Expect `num_simulations` to a positive integer, got {num_simulations}')
@@ -452,7 +375,7 @@ def revert_virtual_loss(node: Node) -> None:
 
 
 def parallel_uct_search(
-    env: BoardGameEnv,
+    env: Fiar,
     eval_func: Callable[[np.ndarray], Tuple[Iterable[np.ndarray], Iterable[float]]],
     root_node: Node,
     c_puct_base: float,
@@ -512,7 +435,7 @@ def parallel_uct_search(
         RuntimeError:
             if the game is over.
     """
-    if not isinstance(env, BoardGameEnv):
+    if not isinstance(env, Fiar):
         raise ValueError(f'Expect `env` to be a valid BoardGameEnv instance, got {env}')
     if not 1 <= num_simulations:
         raise ValueError(f'Expect `num_simulations` to a positive integer, got {num_simulations}')
