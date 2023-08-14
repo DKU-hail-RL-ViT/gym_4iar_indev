@@ -19,8 +19,8 @@ Task : four in a row (9 x 4)
 
 ### Todo
 
-1. next_state에서 black이 둘때는 white는 -1로 만들고, white가 둘 때는 black을 -1로 만드는 식으로 state 들이 서로 겹치지 않도록
-2. MCTS 알고리즘 수정
+1. 
+2. 
 3. distribution RL 들끼리 비교도 좋지만 일반적인 DQN과 비교도 해보는 것과 planning을 했을 때 안했을 때 비교도 해보고 싶기 떄문에 
 4. forward planning 방식 추가 (여기까지 하는걸 최우선으로)
 5. hyperparameter 적용
