@@ -221,25 +221,6 @@ def next_state(state, action1d):
     # 예를 들어, player가 0, action2d[0]가 2, action2d[1]이 3이라면, state[0, 2, 3] 위치에 1이 할당된다.
 
 
-    # # Get adjacent location and check whether the piece will be surrounded by opponent's piece
-    # adj_locs, surrounded = state_utils.adj_data(state, action2d, player)
-    # surrounded = False
-    #
-    # # Update pieces
-    # killed_groups = state_utils.update_pieces(state, adj_locs, player)
-    # killed_groups = []
-    #
-    # # If only killed one group, and that one group was one piece, and piece set is surrounded,
-    # # activate ko protection
-    # if len(killed_groups) == 1 and surrounded:
-    #     killed_group = killed_groups[0]
-    #     if len(killed_group) == 1:
-    #         ko_protect = killed_group[0]
-
-    # Update invalid moves
-    # state[INVD_CHNL] = state_utils.compute_invalid_moves(state, player, ko_protect)
-    # state[INVD_CHNL] = state_utils.compute_invalid_moves(state, player, ko_protect)
-
     # Update FIAR ending status
     state[DONE_CHNL] = fiar_check(state)
 
@@ -330,22 +311,7 @@ class Fiar(gym.Env):
         self.reward_history = []
 
         self.prev_action1d = None  # 이전에 선택한 action1d를 저장하는 변수
-        # NOTICE: the visualize option in here is commented since I changed my mind to use pygame.
-        # However, if someone need to wants to visualize with matplotlib for dependency or setting issue,
-        # then it can be helpful using 'terminal' mode with the following code.
-        # if visualize is True:
-        #     self.figure = plt.figure(1, figsize=(9, 4))
-        #     fig = plt.figure(1, figsize=(9, 4))
-        #     axs = plt.axes()
-        #     axs.axis('equal')
-        #     # plt.title("Scatter plot")
-        #     plt.xlim([0, 9])
-        #     plt.ylim([0, 4])
-        #     plt.xticks(np.int16(np.linspace(0, 9, 10)))
-        #     plt.yticks(np.int16(np.linspace(0, 4, 5)))
-        #
-        #     plt.grid(True)
-        #     plt.show()
+
 
     def init_state(self):
         """
@@ -386,11 +352,9 @@ class Fiar(gym.Env):
 
         self.state_ = next_state(self.state_, action1d)
         self.done = game_ended(self.state_)
-        self.prev_action1d = action1d  # 현재 선택한 action1d를 이전 값으로 저장
 
         return np.copy(self.state_), self.reward(), self.done, self.info()
 
-        return np.copy(self.state_), self.reward(), self.done, self.info()
 
 
     def reset(self):
