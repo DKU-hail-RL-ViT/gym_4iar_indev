@@ -19,6 +19,8 @@ NUM_CHNLS = 5
 
 def action2d_ize(action):
     map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
+    print(map)
+
     action2d = np.where(map == action)
     return int(action2d[0]), int(action2d[1])
 
@@ -203,8 +205,8 @@ def next_state(state, action1d):
     # Initialize basic variables
     board_shape = state.shape[1:]
     pass_idx = np.prod(board_shape)
-    # action2d = action1d % board_shape[0], action1d // board_shape[1]
-    action2d = action1d % board_shape[0], action1d // board_shape[0]
+    action2d = action1d % board_shape[0], action1d // board_shape[0]  # previous
+
 
     # action2d = (action1d) % board_shape[0], action1d // board_shape[1]
 
@@ -275,19 +277,19 @@ def str_(state):
 
     size_x = state.shape[1]
     size_y = state.shape[2]
-    for i in range(size_x):
+    for i in range(size_y):  # 행 수에 따라 반복
         board_str += '   {}'.format(i)
     board_str += '\n  '
-    board_str += '----' * size_x + '-'
+    board_str += '----' * size_y + '-'
     board_str += '\n'
-    for j in range(size_y):
+    for j in range(size_x):  # 열 수에 따라 반복
         board_str += '{} |'.format(j)
-        for i in range(size_x):
-            if state[0, i, j] == 1:
+        for i in range(size_y):
+            if state[0, j, i] == 1:
                 board_str += ' B'
-            elif state[1, i, j] == 1:
+            elif state[1, j, i] == 1:
                 board_str += ' W'
-            elif state[2, i, j] == 1:
+            elif state[2, j, i] == 1:
                 board_str += ' .'
             else:
                 board_str += '  '
@@ -295,16 +297,14 @@ def str_(state):
             board_str += ' |'
 
         board_str += '\n  '
-        board_str += '----' * size_x + '-'
+        board_str += '----' * size_y + '-'
         board_str += '\n'
 
-    # black_area, white_area = areas(state)
     done = game_ended(state)
-
     t = turn(state)
     board_str += '\tTurn: {}, Game Over: {}\n'.format('B' if t == 0 else 'W', done)
-    # board_str += '\tBlack Area: {}, White Area: {}\n'.format(black_area, white_area)
     return board_str
+
 
 
 def action_size(state=None, board_size: int = None):
@@ -332,6 +332,8 @@ class Fiar(gym.Env):
         self.state_history = []
         self.action_history = []
         self.reward_history = []
+
+        self.prev_action1d = None  # 이전에 선택한 action1d를 저장하는 변수
         # NOTICE: the visualize option in here is commented since I changed my mind to use pygame.
         # However, if someone need to wants to visualize with matplotlib for dependency or setting issue,
         # then it can be helpful using 'terminal' mode with the following code.
@@ -367,25 +369,30 @@ class Fiar(gym.Env):
         """
         return np.zeros((5,9,4))
 
-    def step(self, action):
+    def step(self, action=None):
         '''
         Assumes the correct player is making a move. Black goes first.
         return observation, reward, done, info
         '''
         assert not self.done
-        if isinstance(action, tuple) or isinstance(action, list) or isinstance(action, np.ndarray):
-            assert 0 <= action[0] < 9 #self.size
-            assert 0 <= action[1] < 4 #self.size
-            # action = 9 * action[0] + action[1] # self.size * action[0] + action[1]
-            action = action1d_ize(action)
 
-        elif action is None:
-            action = 9*4 # self.size**2
+        if action is None:
+            # Generate a random action1d that is not equal to the previous one
+            possible_actions = list(range(action_size(self.state_)))
+            if self.prev_action1d is not None:
+                possible_actions.remove(self.prev_action1d)
+            action1d = np.random.choice(possible_actions)
+        else:
+            if isinstance(action, tuple):  # Check if action is a tuple
+                action1d = action[0] + action[1] * 9  # Convert 2D to 1D
+            else:
+                action1d = action
 
-        self.state_ = next_state(self.state_, action)
+        self.state_ = next_state(self.state_, action1d)
         self.done = game_ended(self.state_)
+        self.prev_action1d = action1d  # 현재 선택한 action1d를 이전 값으로 저장
 
-
+        return np.copy(self.state_), self.reward(), self.done, self.info()
 
         return np.copy(self.state_), self.reward(), self.done, self.info()
 
