@@ -495,21 +495,27 @@ class Fiar(gym.Env):
                 pyglet.gl.glLineWidth(3)
                 batch = pyglet.graphics.Batch()
 
-                # draw the grid and labels
-                rendering.draw_grid(batch, delta, [9,4], [lower_x_grid_coord,upper_x_grid_coord], [lower_y_grid_coord,upper_y_grid_coord])
+                # Define the new grid dimensions
+                grid_size = (9, 4)
 
-                # info on top of the board
-                rendering.draw_info(batch, window_width, window_height, upper_y_grid_coord, self.state_) # only requires y upper coordinate
+                # Update the grid rendering
+                rendering.draw_grid(batch, delta, grid_size, [lower_x_grid_coord, upper_x_grid_coord],
+                                    [lower_y_grid_coord, upper_y_grid_coord])
+
+                # Info on top of the board
+                rendering.draw_info(batch, window_width, window_height, upper_y_grid_coord, self.state_)
 
                 # Inform user what they can do
                 rendering.draw_command_labels(batch, window_width, window_height)
 
+                # Draw the title
                 rendering.draw_title(batch, window_width, window_height)
 
-                batch.draw()
+                # Draw the pieces
+                rendering.draw_pieces(batch, [lower_x_grid_coord, lower_y_grid_coord], delta, piece_r, grid_size,
+                                      self.state_)
 
-                # draw the pieces
-                rendering.draw_pieces(batch, [lower_x_grid_coord, lower_y_grid_coord], delta, piece_r, [9,4], self.state_)
+                batch.draw()
 
             @window.event
             def on_mouse_press(x, y, button, modifiers):
