@@ -6,6 +6,7 @@ import numpy as np
 
 from fiar_env import Fiar # 여긴 코드보고 좀 변경해야할 부분이 많음
 
+
 class DummyNode(object):
     """A place holder to make computation possible for the root node."""
 

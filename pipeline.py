@@ -20,17 +20,14 @@ import numpy as np
 from copy import copy, deepcopy
 
 # from mcts_v1 import Node, parallel_uct_search, uct_search
-
 from mcts import Node, parallel_uct_search, uct_search
 
 # from envs.base import BoardGameEnv  previous
 from fiar_env import Fiar
 # from eval_dataset import build_eval_dataset
 # from rating import EloRating
-# from csv_writer import CsvWriter
 # from replay import UniformReplay, Transition
 # from transformation import apply_random_transformation
-# from util import Timer, create_logger, get_time_stamp
 
 
 # =================================================================
@@ -127,169 +124,6 @@ def create_mcts_player(
 
 
 # =================================================================
-# Selfplay
-# =================================================================
-
-
-def run_selfplay_actor_loop(
-    seed: int,
-    rank: int,
-    network: torch.nn.Module,
-    device: torch.device,
-    data_queue: mp.Queue,
-    env: Fiar,
-    num_simulations: int,
-    num_parallel: int,
-    c_puct_base: float,
-    c_puct_init: float,
-    warm_up_steps: int,
-    check_resign_after_steps: int,
-    disable_resign_ratio: float,
-    save_sgf_dir: str,
-    save_sgf_interval: int,
-    logs_dir: str,
-    load_ckpt: str,
-    log_level: str,
-    var_ckpt: mp.Value,
-    var_resign_threshold: mp.Value,
-    ckpt_event: mp.Event,
-    stop_event: mp.Event,
-) -> None:
-    """Use the latest neural network to play against itself, and record the transitions for training."""
-    assert num_simulations > 1
-
-    set_seed(int(seed + rank))
-    logger = create_logger(log_level)
-    writer = CsvWriter(os.path.join(logs_dir, f'actor{rank}.csv'))
-    timer = Timer()
-
-    played_games = training_steps = 0
-    last_ckpt = None
-
-    should_save_sgf = False
-    if save_sgf_dir is not None and os.path.isdir(save_sgf_dir) and os.path.exists(save_sgf_dir):
-        should_save_sgf = True
-
-    disable_auto_grad(network)
-    network = network.to(device=device)
-
-    if load_ckpt is not None and os.path.exists(load_ckpt):
-        loaded_state = torch.load(load_ckpt, map_location=device)
-        network.load_state_dict(loaded_state['network'])
-        training_steps = loaded_state['training_steps']
-        logger.debug(f'Actor{rank} loaded state from checkpoint "{load_ckpt}"')
-
-    network.eval()
-
-    # resign_threshold <= -1 means no resign
-    resign_threshold = var_resign_threshold.value if env.has_resign_move else -1
-    mcts_player = create_mcts_player(
-        network=network,
-        device=device,
-        num_simulations=num_simulations,
-        num_parallel=num_parallel,
-        root_noise=True,
-        deterministic=False,
-    )
-
-
-def play_and_record_one_game(
-    env: Fiar,
-    mcts_player: Any,
-    resign_disabled: bool,
-    c_puct_base: float,
-    c_puct_init: float,
-    warm_up_steps: int,
-    check_resign_after_steps: int,
-    resign_threshold: float,
-    logger: Any,
-) -> Tuple[Iterable[Transition], Mapping[Text, Any]]:
-    obs = env.reset()
-    done = False
-
-    episode_states = []
-    episode_search_pis = []
-    episode_values = []
-    to_plays = []
-
-    root_node = None
-    marked_resign_player = None
-    is_marked_for_resign = False
-    is_could_won = False
-    num_passes = 0
-
-    while not done:  # For each step
-        (move, search_pi, root_Q, best_child_Q, root_node) = mcts_player(
-            env=env,
-            root_node=root_node,
-            c_puct_base=c_puct_base,
-            c_puct_init=c_puct_init,
-            warm_up=False if env.steps > warm_up_steps else True,
-        )
-
-        episode_states.append(obs)
-        episode_search_pis.append(search_pi)
-        episode_values.append(0.0)
-        to_plays.append(env.to_play)
-
-        if (
-            env.has_resign_move
-            and env.steps > check_resign_after_steps
-            and root_Q < resign_threshold
-            and best_child_Q < resign_threshold
-        ):
-            # Mark resigned player so we can compute false positive
-            if marked_resign_player is None:
-                marked_resign_player = copy(env.to_play)
-
-            logger.debug(f'Search root value: {root_Q}, best child value: {best_child_Q}')
-            # Only take the resign move for game where resignation is enabled
-            if not resign_disabled:
-                move = env.resign_move
-
-        obs, reward, done, _ = env.step(move)
-
-        if env.has_pass_move and move == env.pass_move:
-            num_passes += 1
-
-    # Do nothing if the game finished with draw
-    if reward != 0.0:
-        for i, play_id in enumerate(to_plays):
-            if play_id == env.last_player:
-                episode_values[i] = reward
-            else:
-                episode_values[i] = -reward
-
-    game_seq = [
-        Transition(state=x, pi_prob=pi, value=v) for x, pi, v in zip(episode_states, episode_search_pis, episode_values)
-    ]
-
-    # Use samples from those 10% games where resign is disabled to compute resignation false positive
-    if env.has_resign_move and resign_disabled and marked_resign_player is not None:
-        is_marked_for_resign = True
-        # Despite marked for resign (not taking it as the move is disabled), but the game ended up won by the marked resign player
-        if env.winner == marked_resign_player:
-            is_could_won = True
-
-    stats = {
-        'game_length': len(game_seq),
-        'game_result': env.get_result_string(),
-    }
-
-    if env.has_pass_move:
-        stats['num_passes'] = num_passes
-
-    if env.has_resign_move:
-        stats['is_resign_disabled'] = resign_disabled
-        stats['is_marked_for_resign'] = is_marked_for_resign
-        stats['is_could_won'] = is_could_won
-        stats['marked_resign_player'] = env.get_player_name_by_id(marked_resign_player)
-        stats['resign_threshold'] = resign_threshold
-
-    return game_seq, stats
-
-
-# =================================================================
 # Learner
 # =================================================================
 
@@ -300,7 +134,6 @@ def run_learner_loop(  # noqa: C901
     optimizer: torch.optim.Optimizer,
     lr_scheduler: torch.optim.lr_scheduler.MultiStepLR,
     device: torch.device,
-    replay: UniformReplay,
     logger: Any,
     argument_data: bool,
     batch_size: int,
@@ -316,8 +149,6 @@ def run_learner_loop(  # noqa: C901
     log_interval: int,
     save_replay_interval: int,
     max_training_steps: int,
-    ckpt_dir: str,
-    logs_dir: str,
     load_ckpt: str,
     load_replay: str,
     data_queue: mp.SimpleQueue,
