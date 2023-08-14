@@ -144,8 +144,8 @@ def draw_pieces(batch, lower_grid_coord, delta, piece_r, size, state):
     size_x, size_y = size
     lower_x_grid_coord, lower_y_grid_coord = lower_grid_coord
 
-    for i in range(size_y):
-        for j in range(size_x):
+    for j in range(size_y):
+        for i in range(size_x):
             # black piece
             if state[0, j, i] == 1:
                 draw_circle(lower_x_grid_coord + i * delta, lower_y_grid_coord + j * delta,
