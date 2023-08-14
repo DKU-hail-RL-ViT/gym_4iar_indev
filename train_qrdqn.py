@@ -17,7 +17,7 @@ def embedding_function(N):
     # For simplicity, let's assume it's a linear function for now
     return N
 
-
+"""
 def planning_algorithm(Kmax, Kmin, theta, R, M, T):
     for episode in range(1, M + 1):
         for t in range(1, T + 1):
@@ -47,14 +47,14 @@ def planning_algorithm(Kmax, Kmin, theta, R, M, T):
                 else:
                     P += 1
 
-                Rrem -= K * Na  # Deduct remaining resources
+                Rrem = K * Na  # Deduct remaining resources
 
             # Compute estimated and target values, compute loss L1, L2
             # Minimize L1 + L2
 
         # End of inner loop (for t)
     # End of outer loop (for episode)
-
+"""
 
 
 def run(args):
@@ -71,18 +71,6 @@ def run(args):
 
 if __name__ == '__main__':
 
-    # Define other necessary functions and variables as needed
-
-    # Example usage
-    Kmax = 100
-    Kmin = 1
-    theta = 0.1
-    R = 10
-    M = 5
-    T = 100
-    planning_algorithm(Kmax, Kmin, theta, R, M, T)
-
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--config', type=str, default=os.path.join('config', 'qrdqn.yaml'))
@@ -92,6 +80,18 @@ if __name__ == '__main__':
     env = fiar_env.Fiar()
 
     done = False
+
+    """
+        # Define other necessary functions and variables as needed
+        # Example usage
+        Kmin = 1
+        Kmax = 100
+        theta = 0.1
+        R = 10
+        M = 5
+        T = 100
+        planning_algorithm(Kmax, Kmin, theta, R, M, T)
+    """
 
     map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
     map_taken = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
