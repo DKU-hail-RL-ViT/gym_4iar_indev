@@ -8,6 +8,14 @@ from gym_4iar.memory import LazyMultiStepMemory, \
     LazyPrioritizedMultiStepMemory
 from gym_4iar.utils import RunningMeanStats, LinearAnneaer
 
+from gym_4iar.pipeline import (
+    run_learner_loop,
+    run_evaluator_loop,
+    run_selfplay_actor_loop,
+    set_seed,
+    maybe_create_dir,
+)
+
 
 class BaseAgent(ABC):
 
