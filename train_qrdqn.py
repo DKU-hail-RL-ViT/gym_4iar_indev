@@ -93,20 +93,26 @@ if __name__ == '__main__':
         planning_algorithm(Kmax, Kmin, theta, R, M, T)
     """
 
-    map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
-    map_taken = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
+    map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(4, 9).T)
+    map_taken = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(4, 9).T)
     map_1d = np.int16(np.linspace(0,4*9-1, 4*9)).tolist()
+    episode_steps = 0
 
     while not done:
         action = env.render(mode="terminal")
         while True:
-            action = np.random.randint(len(map_1d))
-            action2d = np.where(map==action)
-            action2d = (action2d[0][0],action2d[1][0])
+            action = np.random.choice(map_1d)
+            action2d = np.where(map == action)
+            action2d = (action2d[0], action2d[1])
             if map_taken[action2d] != -1:
+                map_1d.remove(action)  # 뽑은 정수 제거
                 break
+            else:
+                episode_steps -= 1
+
         map_taken[action2d] = -1
         env.player = 0
+        episode_steps += 1
         state, reward, done, info = env.step(action2d)
 
         if env.game_ended():
@@ -118,17 +124,22 @@ if __name__ == '__main__':
             print('winning streak: ', STRRS)
             print('\n')
             break
+
         action = env.render(mode="terminal")
 
         while True:
-            action = np.random.randint(len(map_1d))
-            action2d = np.where(map==action)
-            action2d = (action2d[0][0], action2d[1][0])
+            action = np.random.choice(map_1d)
+            action2d = np.where(map == action)
+            action2d = (action2d[0], action2d[1])
             if map_taken[action2d] != -1:
+                map_1d.remove(action)  # 뽑은 정수 제거
                 break
+            else:
+                episode_steps -= 1
 
         env.player = 1
         map_taken[action2d] = -1
+        episode_steps += 1
         state, reward, done, info = env.step(action2d)
 
         if env.game_ended():
@@ -139,6 +150,7 @@ if __name__ == '__main__':
             print("*" * 20)
             print('winning streak: ', STRRS)
             print('\n')
+            print('episode_steps : ', episode_steps)
             break
 
     args = parser.parse_args()

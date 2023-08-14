@@ -129,7 +129,7 @@ class BaseAgent(ABC):
 
         self.episodes += 1
         episode_return = 0.
-        episode_steps = -1  # The reason for setting it to -1 is because it adds one more after it has finished
+        episode_steps = 0
 
         done = False
         state = self.env.reset()
