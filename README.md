@@ -12,6 +12,7 @@ pip install gym==0.26.2
 pip install pyglet==2.0.8
 pip install pyyaml
 pip install tensorboard
+pip install mcts
 ```
 
 Task : four in a row (9 x 4)

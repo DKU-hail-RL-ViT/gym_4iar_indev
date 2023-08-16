@@ -108,6 +108,7 @@ if __name__ == '__main__':
                 map_1d.remove(action)  # 뽑은 정수 제거
                 break
             else:
+                map_1d.remove(action)
                 episode_steps -= 1
 
         map_taken[action2d] = -1
@@ -135,6 +136,7 @@ if __name__ == '__main__':
                 map_1d.remove(action)  # 뽑은 정수 제거
                 break
             else:
+                map_1d.remove(action)
                 episode_steps -= 1
 
         env.player = 1

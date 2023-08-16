@@ -8,16 +8,12 @@ from gym_4iar.memory import LazyMultiStepMemory, \
     LazyPrioritizedMultiStepMemory
 from gym_4iar.utils import RunningMeanStats, LinearAnneaer
 
-from gym_4iar.pipeline import (
-    run_learner_loop,
-    run_evaluator_loop,
-    set_seed,
-)
-
+from gym_4iar.mcts import MCTSPlayer
+# from gym_4iar.mcts_v2 import MCTSPlayer
 
 class BaseAgent(ABC):
 
-    def __init__(self, env, num_steps=5*(10**7), num_actions=37,
+    def __init__(self, env, num_steps=5*(10**7), num_actions=36,
                  batch_size=32, memory_size=10**6, gamma=0.99, multi_step=1,
                  update_interval=4, target_update_interval=10000,
                  start_steps=50000, epsilon_train=0.01, epsilon_eval=0.001,
@@ -45,17 +41,6 @@ class BaseAgent(ABC):
                 memory_size, self.env.observation_space.shape,
                 self.device, gamma, multi_step)
 
-        # self.log_dir = log_dir
-        # self.model_dir = os.path.join(log_dir, 'model')
-        # self.summary_dir = os.path.join(log_dir, 'summary')
-        # if not os.path.exists(self.model_dir):
-        #    os.makedirs(self.model_dir)
-        # if not os.path.exists(self.summary_dir):
-        #    os.makedirs(self.summary_dir)
-
-        # self.writer = SummaryWriter(log_dir=self.summary_dir)
-        # self.train_return = RunningMeanStats(log_interval)
-
         self.steps = 0
         self.learning_steps = 0
         self.episodes = 0
@@ -82,6 +67,20 @@ class BaseAgent(ABC):
         self.max_episode_steps = max_episode_steps
         self.grad_cliping = grad_cliping
 
+    def mcts_choose_action(self, state_representation):
+        mcts_player = MCTSPlayer()  # MCTSPlayer의 인스턴스 생성
+        mcts_player.set_player_ind(0)  # 플레이어 인덱스 설정 (첫 번째 플레이어는 0)
+        mcts_player.reset_player()  # 새로운 움직임을 위해 MCTS 트리 리셋
+
+        chosen_action = mcts_player.get_action(state_representation)
+        return chosen_action
+
+    def get_state_representation(self):
+        # Convert the raw state to a 9 x 4 matrix
+        state_matrix = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(4, 9).T)
+
+        return state_matrix
+
     def run(self):
         while True:
             self.train_episode()
@@ -92,24 +91,19 @@ class BaseAgent(ABC):
         return self.steps % self.update_interval == 0\
             and self.steps >= self.start_steps
 
-    def is_random(self, eval=False):
-        # Use e-greedy for evaluation.
-        if self.steps < self.start_steps:
-            return True
-        if eval:
-            return np.random.rand() < self.epsilon_eval
-        if self.noisy_net:
-            return False
-        return np.random.rand() < self.epsilon_train.get()
-
     def update_target(self):
         self.target_net.load_state_dict(
             self.online_net.state_dict())
 
-    def explore(self):
-        # Act with randomness.
-        action = self.env.action_space.sample()
-        return action
+    def exploit(self, state):
+        state_representation = self.get_state_representation()  # Implement this method
+        mcts_player = MCTSPlayer()
+        mcts_player.set_player_ind(0)
+        mcts_player.reset_player()
+
+        chosen_action = mcts_player.get_action(state_representation)
+
+        return chosen_action
 
     def exploit(self, state):
         # Act without randomness.
@@ -119,9 +113,23 @@ class BaseAgent(ABC):
             action = self.online_net.calculate_q(states=state).argmax().item()
         return action
 
+    def exploit(self, state):
+        state_representation = torch.ByteTensor(
+            state).unsqueeze(0).to(self.device).float() / 255.
+        with torch.no_grad():
+            chosen_action = mcts_player.get_action(state_representation)
+        mcts_player = MCTSPlayer()
+        mcts_player.set_player_ind(0)
+        mcts_player.reset_player()
+
+        chosen_action = mcts_player.get_action(state_representation)
+
+        return chosen_action
+
     @abstractmethod
     def learn(self):
         pass
+
 
     def train_episode(self):
         self.online_net.train()
@@ -134,17 +142,18 @@ class BaseAgent(ABC):
         done = False
         state = self.env.reset()
 
+        # Create a list of all possible actions
+        possible_actions = list(range(self.env.action_space.n))
+
         while (not done) and episode_steps <= self.max_episode_steps:
             # NOTE: Noises can be sampled only after self.learn(). However, I
-            # sample noises before every action, which seems to lead better
-            # performances.
+            # sample noises before every action, which seems to lead better performances.
             self.online_net.sample_noise()
 
-            if self.is_random(eval=False):
-                action = self.explore()
-            else:
-                action = self.exploit(state)
+            state_representation = self.get_state_representation()  # 상태를 MCTS 형식으로 변환
+            action = self.mcts_choose_action(state_representation)  # MCTS 알고리즘으로 동작 선택
 
+            possible_actions.remove(action)
             next_state, reward, done, _ = self.env.step(action)
 
             # To calculate efficiently, I just set priority=max_priority here.
@@ -157,23 +166,20 @@ class BaseAgent(ABC):
 
             self.train_step_interval()
 
-        # We log running mean of stats.
-        # self.train_return.append(episode_return)
 
-        # We log evaluation results along with training frames = 4 * steps.
-        # if self.episodes % self.log_interval == 0:
-        #     self.writer.add_scalar(
-        #         'return/train', self.train_return.get(), 4 * self.steps)
-        if episode_steps % 2 == 0:
+        if (episode_steps % 2 == 0) and (episode_steps <= 36):
             print(f'Episode: {self.episodes:<4}  '
                   f'episode steps: {episode_steps:<4}  '
                   f'return: {episode_return:<5.1f}  '
                   f'win: white')
-        else:
+
+        elif(episode_steps % 2 == 1) and (episode_steps <= 36):
             print(f'Episode: {self.episodes:<4}  '
                   f'episode steps: {episode_steps:<4}  '
                   f'return: {episode_return:<5.1f}  '
                   f'win: black')
+        else :
+            print(f'win: draw')
 
     def train_step_interval(self):
         self.epsilon_train.step()
