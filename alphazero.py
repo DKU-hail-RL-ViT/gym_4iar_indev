@@ -1,6 +1,9 @@
+# -*- coding: utf-8 -*-
 """
 Monte Carlo Tree Search in AlphaGo Zero style, which uses a policy-value
 network to guide the tree search and evaluate the leaf nodes
+
+@author: Junxiao Song
 """
 
 import numpy as np
@@ -196,7 +199,8 @@ class MCTSPlayer(object):
                 # update the root node and reuse the search tree
                 self.mcts.update_with_move(move)
             else:
-
+                # with the default temp=1e-3, it is almost equivalent
+                # to choosing the move with the highest prob
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
                 self.mcts.update_with_move(-1)

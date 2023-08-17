@@ -95,41 +95,35 @@ class BaseAgent(ABC):
         self.target_net.load_state_dict(
             self.online_net.state_dict())
 
-    def exploit(self, state):
-        state_representation = self.get_state_representation()  # Implement this method
-        mcts_player = MCTSPlayer()
-        mcts_player.set_player_ind(0)
-        mcts_player.reset_player()
+    def explore(self):
+        mcts_player = MCTSPlayer()  # Create an instance of the MCTSPlayer
+        mcts_player.set_player_ind(0)  # Set the player index (0 for the first player)
+        mcts_player.reset_player()  # Reset the MCTS tree for a new move
 
+        # Get the current state representation (convert to the format expected by MCTS)
+        state_representation = self.get_state_representation()  # Implement this method
+
+        # Get the chosen action using MCTS
         chosen_action = mcts_player.get_action(state_representation)
 
         return chosen_action
 
     def exploit(self, state):
-        # Act without randomness.
-        state = torch.ByteTensor(
-            state).unsqueeze(0).to(self.device).float() / 255.
-        with torch.no_grad():
-            action = self.online_net.calculate_q(states=state).argmax().item()
-        return action
-
-    def exploit(self, state):
         state_representation = torch.ByteTensor(
             state).unsqueeze(0).to(self.device).float() / 255.
-        with torch.no_grad():
-            chosen_action = mcts_player.get_action(state_representation)
-        mcts_player = MCTSPlayer()
+
+        mcts_player = MCTSPlayer()  # Move this line here to create the MCTSPlayer instance
         mcts_player.set_player_ind(0)
         mcts_player.reset_player()
 
-        chosen_action = mcts_player.get_action(state_representation)
+        with torch.no_grad():
+            chosen_action = mcts_player.get_action(state_representation)
 
         return chosen_action
 
     @abstractmethod
     def learn(self):
         pass
-
 
     def train_episode(self):
         self.online_net.train()
@@ -142,9 +136,6 @@ class BaseAgent(ABC):
         done = False
         state = self.env.reset()
 
-        # Create a list of all possible actions
-        possible_actions = list(range(self.env.action_space.n))
-
         while (not done) and episode_steps <= self.max_episode_steps:
             # NOTE: Noises can be sampled only after self.learn(). However, I
             # sample noises before every action, which seems to lead better performances.
@@ -153,7 +144,6 @@ class BaseAgent(ABC):
             state_representation = self.get_state_representation()  # 상태를 MCTS 형식으로 변환
             action = self.mcts_choose_action(state_representation)  # MCTS 알고리즘으로 동작 선택
 
-            possible_actions.remove(action)
             next_state, reward, done, _ = self.env.step(action)
 
             # To calculate efficiently, I just set priority=max_priority here.
@@ -166,20 +156,23 @@ class BaseAgent(ABC):
 
             self.train_step_interval()
 
-
         if (episode_steps % 2 == 0) and (episode_steps <= 36):
             print(f'Episode: {self.episodes:<4}  '
                   f'episode steps: {episode_steps:<4}  '
                   f'return: {episode_return:<5.1f}  '
                   f'win: white')
 
-        elif(episode_steps % 2 == 1) and (episode_steps <= 36):
+        elif (episode_steps % 2 == 1) and (episode_steps <= 36):
             print(f'Episode: {self.episodes:<4}  '
                   f'episode steps: {episode_steps:<4}  '
                   f'return: {episode_return:<5.1f}  '
                   f'win: black')
-        else :
-            print(f'win: draw')
+        else:
+            print(f'Episode: {self.episodes:<4}  '
+                  f'episode steps: {episode_steps:<4}  '
+                  f'return: {episode_return:<5.1f}  '
+                  f'win: draw')
+
 
     def train_step_interval(self):
         self.epsilon_train.step()
