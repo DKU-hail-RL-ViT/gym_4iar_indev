@@ -18,19 +18,21 @@ NUM_CHNLS = 5
 
 
 def action2d_ize(action):
-    map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
+    map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4).T)
     print(map)
 
     action2d = np.where(map == action)
     return int(action2d[0]), int(action2d[1])
 
 def action1d_ize(action):
-    map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
-    return map[action[0],action[1]]
+    map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4).T)
+    return map[action[0], action[1]]
 
 def winning(state, player=0):
-    return 1 if np.all(state[TURN_CHNL] == player) else -1  # winning of player
-
+    if np.all(state[TURN_CHNL] == player):
+        return 1
+    else:
+        return -1
 
 def turn(state):
     """
@@ -213,13 +215,11 @@ def next_state(state, action1d):
     ko_protect = None
 
     # Assert move is valid
-    assert 0 <= action2d[0] < state.shape[1] and 0 <= action2d[1] < state.shape[2], ("Invalid move", action2d)
-    # print(action2d)
+    if not ((0 <= action2d[0][0] < state.shape[1]) and (0 <= action2d[1][0] < state.shape[2])):
+        raise ValueError("Invalid move", action2d)
 
     # Add piece
     state[player, action2d[0], action2d[1]] = 1
-    # 예를 들어, player가 0, action2d[0]가 2, action2d[1]이 3이라면, state[0, 2, 3] 위치에 1이 할당된다.
-
 
     # Update FIAR ending status
     state[DONE_CHNL] = fiar_check(state)
@@ -241,7 +241,7 @@ def game_ended(state):
     """
     m, n = state.shape[1:]
     return int(np.count_nonzero(state[4] == 1) >= 1)
-    # return int(np.count_nonzero(state[4] == 1) == m * n)
+
 
 def invalid_moves(state):
     # return a fixed size binary vector
@@ -304,14 +304,38 @@ class Fiar(gym.Env):
                                                 shape=(NUM_CHNLS, 9, 4))
         self.action_space = spaces.Discrete(action_size(self.state_))
         self.done = False
-
         self.action = None
-        self.state_history = []
-        self.action_history = []
-        self.reward_history = []
 
-        self.prev_action1d = None  # 이전에 선택한 action1d를 저장하는 변수
+        end, winner = self.game_end()
 
+
+    def do_move(self, move):
+        self.map[move] = self.player
+        self.map_1d.remove(move)
+        self.player = (
+            self.players[0] if self.current_player == self.players[1]
+            else self.players[1]
+        )
+        self.last_move = move
+
+    def game_end(self):
+        """Check whether the game is ended or not"""
+        winner = winning(self.state_, self.player)
+        if winner != 0:
+            return True, winner
+        elif not len(self.observation_space.shape):
+            return True, -1
+        return False, -1
+
+    def winner(self):
+        """
+        Get's the winner in BLACK's perspective
+        :return: 1 for black's win, -1 for white's win
+        """
+        if self.game_ended():
+            return winning(self.state_, self.player )
+        else:
+            return 0
 
     def init_state(self):
         """
@@ -341,9 +365,8 @@ class Fiar(gym.Env):
         if action is None:
             # Generate a random action1d that is not equal to the previous one
             possible_actions = list(range(action_size(self.state_)))
-            if self.prev_action1d is not None:
-                possible_actions.remove(self.prev_action1d)
-            action1d = np.random.choice(possible_actions)
+            if self.action is not None:
+                action1d = np.random.choice(possible_actions)
         else:
             if isinstance(action, tuple):  # Check if action is a tuple
                 action1d = action[0] + action[1] * 9  # Convert 2D to 1D
@@ -385,19 +408,11 @@ class Fiar(gym.Env):
     def game_ended(self):
         return self.done
 
+
     def __str__(self):
         return str_(self.state_)
 
-    def winner(self):
-        """
-        Get's the winner in BLACK's perspective
-        :return: 1 for black's win, -1 for white's win
-        """
 
-        if self.game_ended():
-            return winning(self.state_, self.player)
-        else:
-            return 0
 
     def reward(self):
         return self.winner()
@@ -447,11 +462,6 @@ class Fiar(gym.Env):
             board_y_size = window_height * 0.85 # 459
             upper_y_grid_coord = lower_y_grid_coord + delta*(4.0-1) # [1920,1080] monitor --> [81,40.5] and [999,499.5]
 
-            # lower_y_grid_coord = window_height * 0.075 # [1920,1080] monitor --> [81,40.5] and [999,499.5]
-            # board_y_size = window_height * 0.85 # 459
-            # upper_y_grid_coord = board_y_size + lower_y_grid_coord # [1920,1080] monitor --> [81,40.5] and [999,499.5]
-            #
-            # delta = board_x_size / (9.0 - 1) # board_size / (self.size - 1)
             piece_r = delta / 3.3  # radius
 
             @window.event
