@@ -110,7 +110,7 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=10000):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=100):
         """
         policy_value_fn: a function that takes in a map state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -136,9 +136,9 @@ class MCTS(object):
         node = self._root
         while(1):
             if node.is_leaf():
-
                 break
             # Greedily select next move.
+
             action, node = node.select(self._c_puct)
             state.do_move(action)
 

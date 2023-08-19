@@ -67,8 +67,6 @@ def run(args):
     agent.run()
 
 
-
-
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -95,20 +93,20 @@ if __name__ == '__main__':
 
     map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(4, 9).T)
     map_taken = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(4, 9).T)
-    map_1d = np.int16(np.linspace(0,4*9-1, 4*9)).tolist()
+    availables = np.int16(np.linspace(0, 4*9-1, 4*9)).tolist()
     episode_steps = 0
 
     while not done:
         action = env.render(mode="terminal")
         while True:
-            action = np.random.choice(map_1d)
+            action = np.random.choice(availables)
             action2d = np.where(map == action)
             action2d = (action2d[0], action2d[1])
             if map_taken[action2d] != -1:
-                map_1d.remove(action)  # 뽑은 정수 제거
+                availables.remove(action)  # 뽑은 정수 제거
                 break
             else:
-                map_1d.remove(action)
+                availables.remove(action)
                 episode_steps -= 1
 
         map_taken[action2d] = -1
@@ -129,14 +127,14 @@ if __name__ == '__main__':
         action = env.render(mode="terminal")
 
         while True:
-            action = np.random.choice(map_1d)
+            action = np.random.choice(availables)
             action2d = np.where(map == action)
             action2d = (action2d[0], action2d[1])
             if map_taken[action2d] != -1:
-                map_1d.remove(action)  # 뽑은 정수 제거
+                availables.remove(action)  # 뽑은 정수 제거
                 break
             else:
-                map_1d.remove(action)
+                availables.remove(action)
                 episode_steps -= 1
 
         env.player = 1

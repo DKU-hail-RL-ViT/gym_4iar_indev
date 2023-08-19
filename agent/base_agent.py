@@ -77,9 +77,8 @@ class BaseAgent(ABC):
 
     def get_state_representation(self):
         # Convert the raw state to a 9 x 4 matrix
-        state_matrix = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(4, 9).T)
-
-        return state_matrix
+        map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9)).tolist()
+        return map
 
     def run(self):
         while True:
@@ -120,10 +119,6 @@ class BaseAgent(ABC):
             chosen_action = mcts_player.get_action(state_representation)
 
         return chosen_action
-
-    @abstractmethod
-    def learn(self):
-        pass
 
     def train_episode(self):
         self.online_net.train()

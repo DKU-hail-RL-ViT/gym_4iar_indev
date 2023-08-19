@@ -215,7 +215,7 @@ def next_state(state, action1d):
     ko_protect = None
 
     # Assert move is valid
-    if not ((0 <= action2d[0][0] < state.shape[1]) and (0 <= action2d[1][0] < state.shape[2])):
+    if not ((0 <= action2d[0] < state.shape[1]) and (0 <= action2d[1] < state.shape[2])):
         raise ValueError("Invalid move", action2d)
 
     # Add piece
@@ -305,13 +305,17 @@ class Fiar(gym.Env):
         self.action_space = spaces.Discrete(action_size(self.state_))
         self.done = False
         self.action = None
+        self.states = {}
+        self.availables = np.int16(np.linspace(0, 4*9-1, 4*9)).tolist()
+        self.current_player = self.state_[0]
+        self.players = [0, 1]  # player1 and player2
 
         end, winner = self.game_end()
 
 
     def do_move(self, move):
-        self.map[move] = self.player
-        self.map_1d.remove(move)
+        self.states[move] = self.player
+        self.availables.remove(move)
         self.player = (
             self.players[0] if self.current_player == self.players[1]
             else self.players[1]
@@ -411,8 +415,6 @@ class Fiar(gym.Env):
 
     def __str__(self):
         return str_(self.state_)
-
-
 
     def reward(self):
         return self.winner()
