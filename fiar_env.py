@@ -382,8 +382,6 @@ class Fiar(gym.Env):
 
         return np.copy(self.state_), self.reward(), self.done, self.info()
 
-
-
     def reset(self):
         '''
         Reset state, go_board, curr_player, prev_player_passed,

@@ -149,8 +149,6 @@ if __name__ == '__main__':
             SWITCHERS, STRRS = fiar_env.fiar_check(env.state_, loc=True)
             print("*" * 20)
             print('winning streak: ', STRRS)
-            print('\n')
-            print('episode_steps : ', episode_steps)
             break
 
     args = parser.parse_args()
