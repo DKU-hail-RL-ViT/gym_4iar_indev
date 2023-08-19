@@ -73,8 +73,8 @@ class LazyMemory(dict):
     def _append(self, state, action, reward, next_state, done):
         self['state'].append(state)
         self['next_state'].append(next_state)
-        # self['action'][self._p] = action[0]
-        self['action'][self._p] = action # 이거 뭔가 이상함 왜 action 튜퓰 출력이 뭔가 이상한거 같은데
+        self['action'][self._p] = action[0]
+        # self['action'][self._p] = action # 이거 뭔가 이상함 왜 action 튜퓰 출력이 뭔가 이상한거 같은데
         self['reward'][self._p] = reward
         self['done'][self._p] = done
 
