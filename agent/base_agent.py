@@ -9,12 +9,11 @@ from gym_4iar.memory import LazyMultiStepMemory, \
 from gym_4iar.utils import RunningMeanStats, LinearAnneaer
 
 from gym_4iar.mcts import MCTSPlayer
-# from gym_4iar.mcts_v2 import MCTSPlayer
 
 class BaseAgent(ABC):
 
     def __init__(self, env, num_steps=5*(10**7), num_actions=36,
-                 batch_size=32, memory_size=10**6, gamma=0.99, multi_step=1,
+                 batch_size=512, memory_size=10**6, gamma=0.99, multi_step=1,
                  update_interval=4, target_update_interval=10000,
                  start_steps=50000, epsilon_train=0.01, epsilon_eval=0.001,
                  epsilon_decay_steps=250000, double_q_learning=False,
@@ -149,23 +148,24 @@ class BaseAgent(ABC):
             episode_return += reward
             state = next_state
 
+            if episode_steps > 36:
+                break
+
             self.train_step_interval()
 
         if (episode_steps % 2 == 0) and (episode_steps <= 36):
             print(f'Episode: {self.episodes:<4}  '
-                  f'episode steps: {episode_steps:<4}  '
+                  f'episode steps: {episode_steps:<4}     '
                   f'return: {episode_return:<5.1f}  '
                   f'win: white')
 
         elif (episode_steps % 2 == 1) and (episode_steps <= 36):
             print(f'Episode: {self.episodes:<4}  '
-                  f'episode steps: {episode_steps:<4}  '
+                  f'episode steps: {episode_steps:<4}     '
                   f'return: {episode_return:<5.1f}  '
                   f'win: black')
         else:
             print(f'Episode: {self.episodes:<4}  '
-                  f'episode steps: {episode_steps:<4}  '
-                  f'return: {episode_return:<5.1f}  '
                   f'win: draw')
 
 

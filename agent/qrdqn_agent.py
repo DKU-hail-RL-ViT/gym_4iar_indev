@@ -11,7 +11,7 @@ from .base_agent import BaseAgent
 class QRDQNAgent(BaseAgent):
 
     def __init__(self, env,  num_steps=5*(10**7), num_actions=36,
-                 batch_size=32, N=32, kappa=1.0, lr=5e-5, memory_size=10**6,
+                 batch_size=512, N=32, kappa=1.0, lr=5e-5, memory_size=10**6,
                  gamma=0.99, multi_step=1, update_interval=4,
                  target_update_interval=10000, start_steps=50000,
                  epsilon_train=0.01, epsilon_eval=0.001,
@@ -19,6 +19,7 @@ class QRDQNAgent(BaseAgent):
                  dueling_net=False, noisy_net=False, use_per=False,
                  log_interval=100, eval_interval=250000, num_eval_steps=125000,
                  max_episode_steps=27000, grad_cliping=None, cuda=True):
+
         super(QRDQNAgent, self).__init__(
             env, num_steps, num_actions, batch_size, memory_size,
             gamma, multi_step, update_interval, target_update_interval,
