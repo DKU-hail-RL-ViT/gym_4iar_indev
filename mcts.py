@@ -146,7 +146,6 @@ class MCTS(object):
         # Check for end of game
         fiar_instance = Fiar()  # 클래스의 인스턴스 생성
         end, winner = fiar_instance.game_end()  # 클래스의 인스턴스에서 메서드 호출
-        # real_end = fiar_instance.game_ended()  # 클래스의 인스턴스에서 메서드 호출
 
         if not end:
             node.expand(action_probs)
@@ -156,29 +155,28 @@ class MCTS(object):
                 leaf_value = 0.0
             else:
                 leaf_value = (
-                    1.0 if winner == Fiar.player() else -1.0
+                    1.0 if winner == fiar_instance.reward() else -1.0
                 )
 
         # Update value and visit count of nodes in this traversal.
         node.update_recursive(-leaf_value)
 
-    def get_move_probs(self, state, temp=1e-3):
+    def get_move(self, state, temp=1e-3):
         """Runs all playouts sequentially and returns the most visited action.
         state: the current game state
 
         Return: the selected action
         """
         for n in range(self._n_playout):
-            state_copy = copy.deepcopy(state)
-            self._playout(state_copy)
+            map_1d = copy.deepcopy(state)
+            self._playout(map_1d)
 
-        # calc the move probabilities based on visit counts at the root node
-        act_visits = [(act, node._n_visits)
-                      for act, node in self._root._children.items()]
-        acts, visits = zip(*act_visits)
-        act_probs = softmax(1.0 / temp * np.log(np.array(visits) + 1e-10))
-
-        return acts, act_probs
+        if self._root._children:
+            return max(self._root._children.items(),
+                       key=lambda act_node: act_node[1]._n_visits)[0]
+        else:
+            map_1d = copy.deepcopy(state)
+            return random.choice(map_1d)
 
     def update_with_move(self, last_move):
         """Step forward in the tree, keeping everything we already know
@@ -205,28 +203,14 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, map_1d, temp=1e-3, return_prob=0):
-        move_probs = np.zeros(4 * 9)
-        if len(map_1d) > 0:
-            acts, probs = self.mcts.get_move_probs(map_1d, temp)
-            move_probs[list(acts)] = probs
-            if self._is_selfplay:
-                move = np.random.choice(
-                    acts,
-                    p=0.75*probs + 0.25*np.random.dirichlet(0.3*np.ones(len(probs)))
-                )
-                # update the root node and reuse the search tree
-                self.mcts.update_with_move(move)
-            else:
-                # with the default temp=1e-3, it is almost equivalent
-                # to choosing the move with the highest prob
-                move = np.random.choice(acts, p=probs)
-                # reset the root node
-                self.mcts.update_with_move(-1)
-            #                location = board.move_to_location(move)
-            #                print("AI move: %d,%d\n" % (location[0], location[1]))
-
+    def get_action(self, map_1d):
+        sensible_moves = map_1d
+        if len(sensible_moves) > 0:
+            move = self.mcts.get_move(map_1d)
+            self.mcts.update_with_move(-1)
             return move
+        else:
+            print("WARNING: the board is full")
 
     def __str__(self):
         return "MCTS {}".format(self.player)
