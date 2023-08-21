@@ -110,7 +110,7 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=100):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=6):
         """
         policy_value_fn: a function that takes in a map state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -144,9 +144,10 @@ class MCTS(object):
 
         action_probs, leaf_value = self._policy(state)
 
-        # Check for end of game
-        fiar_instance = Fiar()
-        end, winner = fiar_instance.game_end()
+        board = Fiar()
+        end = board.game_end()
+        winner = board.reward()
+
 
         if not end:
             node.expand(action_probs)
@@ -156,7 +157,7 @@ class MCTS(object):
                 leaf_value = 0.0
             else:
                 leaf_value = (
-                    1.0 if winner == fiar_instance.reward() else -1.0
+                    1.0 if winner == board.reward() else -1.0
                 )
 
         # Update value and visit count of nodes in this traversal.
@@ -195,7 +196,7 @@ class MCTS(object):
 
 class MCTSPlayer(object):
     """AI player based on MCTS"""
-    def __init__(self, c_puct=5, n_playout=2000):
+    def __init__(self, c_puct=5, n_playout=2):
         self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
 
     def set_player_ind(self, p):

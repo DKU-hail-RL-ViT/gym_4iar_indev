@@ -73,6 +73,8 @@ class BaseAgent(ABC):
         mcts_player.reset_player()  # 새로운 움직임을 위해 MCTS 트리 리셋
 
         chosen_action = mcts_player.get_action(state_representation)
+        state_representation.remove(chosen_action)
+
         return chosen_action
 
     def get_state_representation(self):
@@ -142,7 +144,7 @@ class BaseAgent(ABC):
 
             state_representation = self.get_state_representation()
             action = self.mcts_choose_action(state_representation)
-            state_representation.remove(action)
+            # state_representation.remove(action)
 
             next_state, reward, done, _ = self.env.step(action)
 
