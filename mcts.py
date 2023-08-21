@@ -9,6 +9,13 @@ import random
 from operator import itemgetter
 from fiar_env import Fiar
 
+BLACK = 0
+WHITE = 1
+TURN_CHNL = 2
+INVD_CHNL = 3
+DONE_CHNL = 4
+NUM_CHNLS = 5
+
 
 def softmax(x):
     probs = np.exp(x - np.max(x))
@@ -26,6 +33,8 @@ def rollout_policy_fn(map):
 def policy_value_fn(state_map):
     """a function that takes in a state and outputs a list of (action, probability)
     tuples and a score for the state"""
+    # return uniform probabilities and 0 score for pure MCTS
+    # action_probs = np.ones(len(board.availables)) / len(board.availables)
     action_probs = np.ones(len(state_map))/len(state_map)
     return zip(state_map, action_probs), 0
 
@@ -134,42 +143,40 @@ class MCTS(object):
             state.do_move(action)
 
         action_probs, leaf_value = self._policy(state)
-        # Check for end of game
 
-        state = Fiar(player=0)
-        end, winner = state.game_end()  # 클래스의 인스턴스에서 메서드 호출
+        # Check for end of game
+        fiar_instance = Fiar()
+        end, winner = fiar_instance.game_end()
 
         if not end:
             node.expand(action_probs)
-
         else:
             # for end state，return the "true" leaf_value
             if winner == -1:  # tie
                 leaf_value = 0.0
             else:
                 leaf_value = (
-                    1.0 if winner == state.reward() else -1.0
+                    1.0 if winner == fiar_instance.reward() else -1.0
                 )
 
         # Update value and visit count of nodes in this traversal.
         node.update_recursive(-leaf_value)
 
-    def get_move(self, state):
+    def get_move(self, state, temp=1e-3):
         """Runs all playouts sequentially and returns the most visited action.
         state: the current game state
 
         Return: the selected action
         """
-        for p in range(2, 7):
-            for k in range(2 ** p):
-                map_1d = copy.deepcopy(state)
-                self._playout(map_1d)
+        for n in range(self._n_playout):
+            map_1d = copy.deepcopy(state)
+            self._playout(map_1d)
 
         if self._root._children:
             return max(self._root._children.items(),
                        key=lambda act_node: act_node[1]._n_visits)[0]
         else:
-            map_1d = np.copy(state)
+            map_1d = copy.deepcopy(state)
             return random.choice(map_1d)
 
     def update_with_move(self, last_move):
@@ -188,7 +195,7 @@ class MCTS(object):
 
 class MCTSPlayer(object):
     """AI player based on MCTS"""
-    def __init__(self, c_puct=5, n_playout=100):
+    def __init__(self, c_puct=5, n_playout=2000):
         self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
 
     def set_player_ind(self, p):
@@ -198,7 +205,8 @@ class MCTSPlayer(object):
         self.mcts.update_with_move(-1)
 
     def get_action(self, map_1d):
-        if len(map_1d) > 0:
+        sensible_moves = map_1d
+        if len(sensible_moves) > 0:
             move = self.mcts.get_move(map_1d)
             self.mcts.update_with_move(-1)
             return move

@@ -66,6 +66,7 @@ class BaseAgent(ABC):
         self.max_episode_steps = max_episode_steps
         self.grad_cliping = grad_cliping
 
+
     def mcts_choose_action(self, state_representation):
         mcts_player = MCTSPlayer()  # MCTSPlayer의 인스턴스 생성
         mcts_player.set_player_ind(0)  # 플레이어 인덱스 설정 (첫 번째 플레이어는 0)
@@ -139,8 +140,9 @@ class BaseAgent(ABC):
             # sample noises before every action, which seems to lead better performances.
             self.online_net.sample_noise()
 
-            state_representation = self.get_state_representation()  # 상태를 MCTS 형식으로 변환
-            action = self.mcts_choose_action(state_representation)  # MCTS 알고리즘으로 동작 선택
+            state_representation = self.get_state_representation()
+            action = self.mcts_choose_action(state_representation)
+            state_representation.remove(action)
 
             next_state, reward, done, _ = self.env.step(action)
 
