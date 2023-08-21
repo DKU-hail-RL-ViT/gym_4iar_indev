@@ -9,7 +9,6 @@ from .base_agent import BaseAgent
 
 
 class QRDQNAgent(BaseAgent):
-
     def __init__(self, env,  num_steps=5*(10**7), num_actions=36,
                  batch_size=512, N=32, kappa=1.0, lr=5e-5, memory_size=10**6,
                  gamma=0.99, multi_step=1, update_interval=4,
@@ -54,6 +53,7 @@ class QRDQNAgent(BaseAgent):
 
         self.N = N
         self.kappa = kappa
+
 
     def learn(self):
         self.learning_steps += 1

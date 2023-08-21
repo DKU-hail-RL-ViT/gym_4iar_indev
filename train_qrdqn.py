@@ -103,7 +103,6 @@ if __name__ == '__main__':
 
 
 
-
         action = env.render(mode="terminal")
         while True:
             action = np.random.choice(availables)

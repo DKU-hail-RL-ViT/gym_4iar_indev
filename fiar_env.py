@@ -226,11 +226,8 @@ def next_state(state, action1d):
         # Switch turn
         state_utils.set_turn(state)
 
-    # if canonical:
-    #     # Set canonical form
-    #     state = canonical_form(state)
-
     return state
+
 
 def game_ended(state):
     """
@@ -305,14 +302,15 @@ class Fiar(gym.Env):
         self.done = False
         self.action = None
         self.states = {}
-        self.availables = np.int16(np.linspace(0, 4*9-1, 4*9)).tolist()
         self.current_player = self.state_[0]
         self.players = [0, 1]  # player1 and player2
 
-        end, winner = self.game_end()
+        # end, winner = self.game_end()
 
 
     def do_move(self, move):
+
+        self.availables = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9)).tolist()
         self.states[move] = self.player
         self.availables.remove(move)
         self.player = (
@@ -327,8 +325,8 @@ class Fiar(gym.Env):
         if winner != 0:
             return True, winner
         elif not len(self.observation_space.shape):
-            return True, -1
-        return False, -1
+            return True
+        return False
 
     def winner(self):
         """
