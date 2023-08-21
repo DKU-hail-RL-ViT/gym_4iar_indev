@@ -209,8 +209,6 @@ def next_state(state, action1d):
     pass_idx = np.prod(board_shape)
     action2d = action1d % board_shape[0], action1d // board_shape[0]  # previous
 
-    check_completeness = [[(i) % board_shape[0], (i) // board_shape[0]] for i in range(36)]
-
     player = turn(state)
     ko_protect = None
 
@@ -294,6 +292,7 @@ def action_size(state=None, board_size: int = None):
         raise RuntimeError('No argument passed')
     # return m * n + 1
     return m * n
+
 
 class Fiar(gym.Env):
     def __init__(self, player=0):

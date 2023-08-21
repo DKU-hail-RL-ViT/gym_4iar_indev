@@ -119,6 +119,10 @@ class BaseAgent(ABC):
 
         return chosen_action
 
+    @abstractmethod
+    def learn(self):
+        pass
+
     def train_episode(self):
         self.online_net.train()
         self.target_net.train()
