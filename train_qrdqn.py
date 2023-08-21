@@ -97,6 +97,13 @@ if __name__ == '__main__':
     episode_steps = 0
 
     while not done:
+
+
+        break
+
+
+
+
         action = env.render(mode="terminal")
         while True:
             action = np.random.choice(availables)

@@ -321,8 +321,8 @@ class Fiar(gym.Env):
         )
         self.last_move = move
 
+
     def game_end(self):
-        """Check whether the game is ended or not"""
         winner = winning(self.state_, self.player)
         if winner != 0:
             return True, winner
