@@ -110,7 +110,7 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=6):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=100):
         """
         policy_value_fn: a function that takes in a map state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -196,7 +196,7 @@ class MCTS(object):
 
 class MCTSPlayer(object):
     """AI player based on MCTS"""
-    def __init__(self, c_puct=5, n_playout=2):
+    def __init__(self, c_puct=5, n_playout=100):
         self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
 
     def set_player_ind(self, p):
