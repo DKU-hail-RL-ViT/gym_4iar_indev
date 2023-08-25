@@ -94,7 +94,6 @@ class LinearAnneaer:
         self.start_value = start_value
         self.end_value = end_value
         self.num_steps = num_steps
-
         self.a = (self.end_value - self.start_value) / self.num_steps
         self.b = self.start_value
 

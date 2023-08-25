@@ -1,10 +1,9 @@
 from enum import Enum
 import numpy as np
-# import matplotlib.pyplot as plt
 import gym
+
 from gym import spaces
 from scipy import ndimage
-import rendering
 import state_utils
 
 # from numpy.random import choice_
@@ -304,21 +303,7 @@ class Fiar(gym.Env):
         self.states = {}
         self.current_player = self.state_[0]
         self.players = [0, 1]  # player1 and player2
-
         # end, winner = self.game_end()
-
-
-    def do_move(self, move):
-
-        self.availables = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9)).tolist()
-        self.states[move] = self.player
-        self.availables.remove(move)
-        self.player = (
-            self.players[0] if self.current_player == self.players[1]
-            else self.players[1]
-        )
-        self.last_move = move
-
 
     def game_end(self):
         winner = winning(self.state_, self.player)
@@ -413,116 +398,3 @@ class Fiar(gym.Env):
 
     def reward(self):
         return self.winner()
-
-    def close(self):
-        if hasattr(self, 'window'):
-            assert hasattr(self, 'pyglet')
-            self.window.close()
-            self.pyglet.app.exit()
-
-    def render(self,mode='terminal'):
-        if mode == 'terminal':
-            print(self.__str__())
-
-            return None
-        elif mode == 'human':
-
-            import pyglet
-            from pyglet.window import mouse
-            from pyglet.window import key
-
-            screen = pyglet.canvas.get_display().get_default_screen()
-            # window_width = int(min(screen.width, screen.height) * 2 / 3)
-            # window_height = int(window_width * 1.2)
-            window_height = int(min(screen.width, screen.height) * 2 / 4)
-            window_width = int(window_height * 2)
-            # window_height = int(window_height * 1.5)
-            window = pyglet.window.Window(window_width, window_height)
-            # [1920,1080] monitor --> [1080,540] window
-
-            self.window = window
-            self.pyglet = pyglet
-            self.user_action = None
-
-            # Set Cursor
-            cursor = window.get_system_mouse_cursor(window.CURSOR_CROSSHAIR)
-            window.set_mouse_cursor(cursor)
-
-            # Outlines
-            lower_x_grid_coord = window_width * 0.075 # [1920,1080] monitor --> [81,] and [999,]
-            board_x_size = window_width * 0.85 # 918
-            upper_x_grid_coord = board_x_size + lower_x_grid_coord  # [1920,1080] monitor --> [81,] and [999,]
-
-            delta = board_x_size / (9.0 - 1) # board_size / (self.size - 1)
-
-            lower_y_grid_coord = window_height * 0.075 # [1920,1080] monitor --> [81,40.5] and [999,499.5]
-            board_y_size = window_height * 0.85 # 459
-            upper_y_grid_coord = lower_y_grid_coord + delta*(4.0-1) # [1920,1080] monitor --> [81,40.5] and [999,499.5]
-
-            piece_r = delta / 3.3  # radius
-
-            @window.event
-            def on_draw():
-                pyglet.gl.glClearColor(0.7, 0.5, 0.3, 1)
-                window.clear()
-
-                pyglet.gl.glLineWidth(3)
-                batch = pyglet.graphics.Batch()
-
-                # Define the new grid dimensions
-                grid_size = (9, 4)
-
-                # Update the grid rendering
-                rendering.draw_grid(batch, delta, grid_size, [lower_x_grid_coord, upper_x_grid_coord],
-                                    [lower_y_grid_coord, upper_y_grid_coord])
-
-                # Info on top of the board
-                rendering.draw_info(batch, window_width, window_height, upper_y_grid_coord, self.state_)
-
-                # Inform user what they can do
-                rendering.draw_command_labels(batch, window_width, window_height)
-
-                # Draw the title
-                rendering.draw_title(batch, window_width, window_height)
-
-                # Draw the pieces
-                rendering.draw_pieces(batch, [lower_x_grid_coord, lower_y_grid_coord], delta, piece_r, grid_size,
-                                      self.state_)
-
-                batch.draw()
-
-            @window.event
-            def on_mouse_press(x, y, button, modifiers):
-                if button == mouse.LEFT:
-                    grid_x = (x - lower_x_grid_coord)
-                    grid_y = (y - lower_y_grid_coord)
-                    x_coord = round(grid_x / delta)
-                    y_coord = round(grid_y / delta)
-                    print('PRESSED:\n [' + str(x) + ',' + str(y) + ']')
-                    print('GRID:   \n [' + str(grid_x) + ',' + str(grid_y) + ']')
-                    print('COORD:  \n [' + str(x_coord) + ',' + str(y_coord) + ']')
-                    try:
-                        self.window.close()
-                        pyglet.app.exit()
-                        self.user_action = (x_coord, y_coord)
-                    except:
-                        pass
-
-            @window.event
-            def on_key_press(symbol, modifiers):
-                if symbol == key.P:
-                    self.window.close()
-                    pyglet.app.exit()
-                    self.user_action = None
-                elif symbol == key.R:
-                    self.reset()
-                    self.window.close()
-                    pyglet.app.exit()
-                elif symbol == key.E:
-                    self.window.close()
-                    pyglet.app.exit()
-                    self.user_action = -1
-
-            pyglet.app.run()
-
-            return self.user_action

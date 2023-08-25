@@ -1,8 +1,6 @@
 import torch
 from torch.optim import Adam
 
-import fiar_env
-
 from gym_4iar.model import QRDQN
 from gym_4iar.utils import calculate_quantile_huber_loss, disable_gradients, evaluate_quantile_at_action, update_params
 from .base_agent import BaseAgent
@@ -14,31 +12,27 @@ class QRDQNAgent(BaseAgent):
                  gamma=0.99, multi_step=1, update_interval=4,
                  target_update_interval=10000, start_steps=50000,
                  epsilon_train=0.01, epsilon_eval=0.001,
-                 epsilon_decay_steps=250000, double_q_learning=False,
-                 dueling_net=False, noisy_net=False, use_per=False,
-                 log_interval=100, eval_interval=250000, num_eval_steps=125000,
+                 epsilon_decay_steps=250000, use_per=False,
                  max_episode_steps=27000, grad_cliping=None, cuda=True):
 
         super(QRDQNAgent, self).__init__(
             env, num_steps, num_actions, batch_size, memory_size,
             gamma, multi_step, update_interval, target_update_interval,
             start_steps, epsilon_train, epsilon_eval, epsilon_decay_steps,
-            double_q_learning, dueling_net, noisy_net, use_per, log_interval,
-            eval_interval, num_eval_steps, max_episode_steps, grad_cliping, cuda)
+            use_per, max_episode_steps, grad_cliping, cuda)
 
         # Online network.
         self.online_net = QRDQN(
             num_channels=env.observation_space.shape[0],
-            num_actions=self.num_actions, N=N, dueling_net=dueling_net,
-            noisy_net=noisy_net).to(self.device)
+            num_actions=self.num_actions, N=N).to(self.device)
         # Target network.
         self.target_net = QRDQN(
             num_channels=env.observation_space.shape[0],
-            num_actions=self.num_actions, N=N, dueling_net=dueling_net,
-            noisy_net=noisy_net).to(self.device)
+            num_actions=self.num_actions, N=N).to(self.device)
 
         # Copy parameters of the learning network to the target network.
         self.update_target()
+
         # Disable calculations of gradients of the target network.
         disable_gradients(self.target_net)
 
@@ -54,11 +48,8 @@ class QRDQNAgent(BaseAgent):
         self.N = N
         self.kappa = kappa
 
-
     def learn(self):
         self.learning_steps += 1
-        self.online_net.sample_noise()
-        self.target_net.sample_noise()
 
         if self.use_per:
             (states, actions, rewards, next_states, dones), weights =\
@@ -90,14 +81,9 @@ class QRDQNAgent(BaseAgent):
         assert current_sa_quantiles.shape == (self.batch_size, self.N, 1)
 
         with torch.no_grad():
+
             # Calculate Q values of next states.
-            if self.double_q_learning:
-                # Sample the noise of online network to decorrelate between
-                # the action selection and the quantile calculation.
-                self.online_net.sample_noise()
-                next_q = self.online_net.calculate_q(states=next_states)
-            else:
-                next_q = self.target_net.calculate_q(states=next_states)
+            next_q = self.target_net.calculate_q(states=next_states)
 
             # Calculate greedy actions.
             next_actions = torch.argmax(next_q, dim=1, keepdim=True)

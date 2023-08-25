@@ -1,44 +1,28 @@
 from torch import nn
 
-from .base_model import BaseModel
-from gym_4iar.network import DQNBase, NoisyLinear
+from gym_4iar.network import DQNBase
 
 
-class QRDQN(BaseModel):
+class QRDQN(nn.Module):
 
-    def __init__(self, num_channels, num_actions=36, embedding_dim=5*9*4, N=32,
-                 dueling_net=False, noisy_net=False):
+    def __init__(self, num_channels, num_actions=36, embedding_dim=5*9*4, N=32):
         super(QRDQN, self).__init__()
-        linear = NoisyLinear if noisy_net else nn.Linear
+        linear = nn.Linear
 
         # Feature extractor of DQN.
         self.dqn_net = DQNBase(num_channels=num_channels, num_actions=num_actions, embedding_dim=embedding_dim)
 
         # Quantile network.
-        if not dueling_net:
-            self.q_net = nn.Sequential(
-                linear(embedding_dim, 32),
-                nn.ReLU(),
-                linear(32, num_actions * N),
-            )
-        else:
-            self.advantage_net = nn.Sequential(
-                linear(embedding_dim, 512),
-                nn.ReLU(),
-                linear(512, num_actions * N),
-            )
-            self.baseline_net = nn.Sequential(
-                linear(embedding_dim, 512),
-                nn.ReLU(),
-                linear(512, N),
-            )
+        self.q_net = nn.Sequential(
+            linear(embedding_dim, 32),
+            nn.ReLU(),
+            linear(32, num_actions * N),
+        )
 
         self.N = N
         self.num_channels = 5
         self.num_actions = num_actions
         self.embedding_dim = embedding_dim
-        self.dueling_net = dueling_net
-        self.noisy_net = noisy_net
 
     def forward(self, states=None, state_embeddings=None):
         assert states is not None or state_embeddings is not None
@@ -48,19 +32,10 @@ class QRDQN(BaseModel):
         if state_embeddings is None:
             state_embeddings = self.dqn_net(states)
 
-        if not self.dueling_net:
-            quantiles = self.q_net(
-                state_embeddings).view(batch_size, self.N, self.num_actions)
-        else:
-            advantages = self.advantage_net(
-                state_embeddings).view(batch_size, self.N, self.num_actions)
-            baselines = self.baseline_net(
-                state_embeddings).view(batch_size, self.N, 1)
-            quantiles = baselines + advantages\
-                - advantages.mean(dim=2, keepdim=True)
+        quantiles = self.q_net(
+            state_embeddings).view(batch_size, self.N, self.num_actions)
 
         assert quantiles.shape == (batch_size, self.N, self.num_actions)
-
         return quantiles
 
     def calculate_q(self, states=None, state_embeddings=None):
