@@ -9,20 +9,6 @@ import random
 from operator import itemgetter
 from fiar_env import Fiar
 
-BLACK = 0
-WHITE = 1
-TURN_CHNL = 2
-INVD_CHNL = 3
-DONE_CHNL = 4
-NUM_CHNLS = 5
-
-
-def softmax(x):
-    probs = np.exp(x - np.max(x))
-    probs /= np.sum(probs)
-    return probs
-
-
 def rollout_policy_fn(map):
     """a coarse, fast version of policy_fn used in the rollout phase."""
     # rollout randomly
@@ -110,7 +96,7 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=100):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=50):
         """
         policy_value_fn: a function that takes in a map state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -140,14 +126,12 @@ class MCTS(object):
             # Greedily select next move.
 
             action, node = node.select(self._c_puct)
-            state.do_move(action)
 
         action_probs, leaf_value = self._policy(state)
 
         board = Fiar()
         end = board.game_end()
         winner = board.reward()
-
 
         if not end:
             node.expand(action_probs)
@@ -196,7 +180,7 @@ class MCTS(object):
 
 class MCTSPlayer(object):
     """AI player based on MCTS"""
-    def __init__(self, c_puct=5, n_playout=100):
+    def __init__(self, c_puct=5, n_playout=50):
         self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
 
     def set_player_ind(self, p):

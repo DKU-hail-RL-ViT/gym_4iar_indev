@@ -2,13 +2,14 @@ from abc import ABC, abstractmethod
 import os
 import numpy as np
 import torch
+import wandb
 from torch.utils.tensorboard import SummaryWriter
 
 from gym_4iar.memory import LazyMultiStepMemory, \
     LazyPrioritizedMultiStepMemory
 from gym_4iar.utils import RunningMeanStats, LinearAnneaer
-
 from gym_4iar.mcts import MCTSPlayer
+
 
 class BaseAgent(ABC):
 
@@ -16,10 +17,8 @@ class BaseAgent(ABC):
                  batch_size=512, memory_size=10**6, gamma=0.99, multi_step=1,
                  update_interval=4, target_update_interval=10000,
                  start_steps=50000, epsilon_train=0.01, epsilon_eval=0.001,
-                 epsilon_decay_steps=250000, double_q_learning=False,
-                 dueling_net=False, noisy_net=False, use_per=False,
-                 log_interval=100, eval_interval=250000, num_eval_steps=125000,
-                 max_episode_steps=27000, grad_cliping=5.0, cuda=True):
+                 epsilon_decay_steps=250000,use_per=False,
+                 max_episode_steps=40, grad_cliping=5.0, cuda=True):
 
         self.env = env
 
@@ -48,14 +47,8 @@ class BaseAgent(ABC):
         self.num_steps = num_steps
         self.batch_size = batch_size
 
-        self.double_q_learning = double_q_learning
-        self.dueling_net = dueling_net
-        self.noisy_net = noisy_net
         self.use_per = use_per
 
-        self.log_interval = log_interval
-        self.eval_interval = eval_interval
-        self.num_eval_steps = num_eval_steps
         self.gamma_n = gamma ** multi_step
         self.start_steps = start_steps
         self.epsilon_train = LinearAnneaer(
@@ -65,7 +58,6 @@ class BaseAgent(ABC):
         self.target_update_interval = target_update_interval
         self.max_episode_steps = max_episode_steps
         self.grad_cliping = grad_cliping
-
 
     def mcts_choose_action(self, state_representation):
         mcts_player = MCTSPlayer()  # MCTSPlayer의 인스턴스 생성
@@ -138,9 +130,6 @@ class BaseAgent(ABC):
         state = self.env.reset()
 
         while (not done) and episode_steps <= self.max_episode_steps:
-            # NOTE: Noises can be sampled only after self.learn(). However, I
-            # sample noises before every action, which seems to lead better performances.
-            self.online_net.sample_noise()
 
             state_representation = self.get_state_representation()
             action = self.mcts_choose_action(state_representation)
@@ -162,20 +151,11 @@ class BaseAgent(ABC):
             self.train_step_interval()
 
         if (episode_steps % 2 == 0) and (episode_steps <= 36):
-            print(f'Episode: {self.episodes:<4}  '
-                  f'episode steps: {episode_steps:<4}     '
-                  f'return: {episode_return:<5.1f}  '
-                  f'win: white')
-
+            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps, "black & white win": episode_return})
         elif (episode_steps % 2 == 1) and (episode_steps <= 36):
-            print(f'Episode: {self.episodes:<4}  '
-                  f'episode steps: {episode_steps:<4}     '
-                  f'return: {episode_return:<5.1f}  '
-                  f'win: black')
+            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps, "black & white win": episode_return})
         else:
-            print(f'Episode: {self.episodes:<4}  '
-                  f'win: draw')
-
+            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps-1, "black & white win": episode_return})
 
     def train_step_interval(self):
         self.epsilon_train.step()
