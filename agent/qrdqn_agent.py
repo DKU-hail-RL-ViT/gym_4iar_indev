@@ -3,7 +3,7 @@ from torch.optim import Adam
 
 from gym_4iar.model import QRDQN
 from gym_4iar.utils import calculate_quantile_huber_loss, disable_gradients, evaluate_quantile_at_action, update_params
-from .base_agent import BaseAgent
+from gym_4iar.agent.base_agent import BaseAgent
 
 
 class QRDQNAgent(BaseAgent):

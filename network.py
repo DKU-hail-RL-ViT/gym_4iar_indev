@@ -25,7 +25,7 @@ class Flatten(nn.Module):
 
 class DQNBase(nn.Module):
 
-    def __init__(self, batch_size=32, num_channels=5, num_actions=37, embedding_dim=5*9*4): # channels x width x height
+    def __init__(self, batch_size=32, num_channels=5, num_actions=37, embedding_dim=5*9*4):  # channels x width x height
         super(DQNBase, self).__init__()
 
         self.fc1 = nn.Linear(embedding_dim, 64)
