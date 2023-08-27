@@ -61,6 +61,7 @@ class QRDQNAgent(BaseAgent):
 
         quantile_loss, mean_q, errors = self.calculate_loss(
             states, actions, rewards, next_states, dones, weights)
+
         assert errors.shape == (self.batch_size, 1)
 
         update_params(
