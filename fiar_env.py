@@ -312,6 +312,8 @@ class Fiar(gym.Env):
         # end, winner = self.game_end()
 
     def game_end(self):
+        # 여기 코드 좀 이상함
+        # winning 메서드 들어가보면 항상 player turn 과 board의 turn을 일치하기 때문에 항상 1을 반환함
         winner = winning(self.state_, self.player)
         if winner != 0:
             return True, winner
@@ -345,7 +347,7 @@ class Fiar(gym.Env):
 
         SIZE: 9,4 since it is 4x9 board
         """
-        return np.zeros((5,9,4))
+        return np.zeros((5, 9, 4))
 
     def step(self, action=None):
         '''
@@ -378,7 +380,6 @@ class Fiar(gym.Env):
         self.state_ = self.init_state()
         self.done = False
         return np.copy(self.state_)
-
 
     def info(self):
         """

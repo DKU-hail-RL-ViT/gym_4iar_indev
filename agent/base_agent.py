@@ -3,7 +3,7 @@ import os
 import numpy as np
 import torch
 import wandb
-from torch.utils.tensorboard import SummaryWriter
+
 
 from gym_4iar.memory import LazyMultiStepMemory, \
     LazyPrioritizedMultiStepMemory
@@ -64,9 +64,9 @@ class BaseAgent(ABC):
         self.grad_cliping = grad_cliping
 
     def mcts_choose_action(self, state_representation):
-        mcts_player = MCTSPlayer()  # MCTSPlayer의 인스턴스 생성
-        mcts_player.set_player_ind(0)  # 플레이어 인덱스 설정 (첫 번째 플레이어는 0)
-        mcts_player.reset_player()  # 새로운 움직임을 위해 MCTS 트리 리셋
+        mcts_player = MCTSPlayer()
+        mcts_player.set_player_ind(0)
+        mcts_player.reset_player()
 
         chosen_action = mcts_player.get_action(state_representation)
         state_representation.remove(chosen_action)

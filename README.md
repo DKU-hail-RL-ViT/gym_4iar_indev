@@ -21,8 +21,9 @@ Task : four in a row (9 x 4)
 
 ### Todo
 
-1. node
+1. node 이거 부터 할래
 2. quantile optimizer
+3. game_end 메서드 이상함 항상 winner가 1로 반환되는 거
 
 
 
