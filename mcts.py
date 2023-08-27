@@ -20,7 +20,6 @@ def policy_value_fn(state_map):
     """a function that takes in a state and outputs a list of (action, probability)
     tuples and a score for the state"""
     # return uniform probabilities and 0 score for pure MCTS
-    # action_probs = np.ones(len(board.availables)) / len(board.availables)
     action_probs = np.ones(len(state_map))/len(state_map)
     return zip(state_map, action_probs), 0
 
@@ -112,7 +111,6 @@ class MCTS(object):
         self._n_playout = n_playout
         self.map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(4, 9).T)
         self.map_1d = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9)).tolist()
-        self.possible_actions = list(range(self.map.size))
 
     def _playout(self, state):
         """Run a single playout from the root to the leaf, getting a value at
