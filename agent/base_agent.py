@@ -42,6 +42,10 @@ class BaseAgent(ABC):
         self.steps = 0
         self.learning_steps = 0
         self.episodes = 0
+
+        self.b_win = 0
+        self.w_win = 0
+
         self.best_eval_score = -np.inf
         self.num_actions = self.env.action_space.n
         self.num_steps = num_steps
@@ -150,12 +154,23 @@ class BaseAgent(ABC):
 
             self.train_step_interval()
 
+        if episode_return == 1.0:
+            self.b_win += 1
+        elif episode_return == -1.0:
+            self.w_win += 1
+
+        b_win = self.b_win / self.episodes
+        w_win = self.w_win / self.episodes
+
         if (episode_steps % 2 == 0) and (episode_steps <= 36):
-            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps, "black & white win": episode_return})
+            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps,
+                       "black win (%)": b_win * 100, "white win (%)": w_win * 100})
         elif (episode_steps % 2 == 1) and (episode_steps <= 36):
-            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps, "black & white win": episode_return})
+            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps,
+                       "black win (%)": b_win * 100, "white win (%)": w_win * 100})
         else:
-            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps-1, "black & white win": episode_return})
+            wandb.log({"Episode ": self.episodes, "episode steps": episode_steps-1,
+                       "black win (%)": b_win * 100, "white win (%)": w_win * 100})
 
     def train_step_interval(self):
         self.epsilon_train.step()
