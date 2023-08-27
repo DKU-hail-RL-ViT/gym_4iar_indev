@@ -26,7 +26,6 @@ if __name__ == '__main__':
     wandb.init(project="4iar_QR-DQN",
                entity='hails')
 
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--config', type=str, default=os.path.join('config', 'qrdqn.yaml'))

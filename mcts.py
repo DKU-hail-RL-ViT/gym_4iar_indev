@@ -190,8 +190,7 @@ class MCTSPlayer(object):
         self.mcts.update_with_move(-1)
 
     def get_action(self, map_1d):
-        sensible_moves = map_1d
-        if len(sensible_moves) > 0:
+        if len(map_1d) > 0:
             move = self.mcts.get_move(map_1d)
             self.mcts.update_with_move(-1)
             return move

@@ -23,9 +23,11 @@ def action2d_ize(action):
     action2d = np.where(map == action)
     return int(action2d[0]), int(action2d[1])
 
+
 def action1d_ize(action):
     map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4).T)
     return map[action[0], action[1]]
+
 
 def winning(state, player=0):
     if np.all(state[TURN_CHNL] == player):
@@ -33,12 +35,14 @@ def winning(state, player=0):
     else:
         return -1
 
+
 def turn(state):
     """
     :param state:
     :return: Who's turn it is (govars.BLACK/govars.WHITE)
     """
     return int(np.max(state[TURN_CHNL]))
+
 
 def areas(state):
     '''
@@ -66,6 +70,7 @@ def areas(state):
             white_area += np.sum(empty_area)
 
     return black_area, white_area
+
 
 def fiar_check(state, loc=False):
     # check four in a row
@@ -182,15 +187,16 @@ def fiar_check(state, loc=False):
             return False
 
     if loc is False:
-        return 1 if np.any([horizontal_check(state), vertical_check(state), horizontal_11to4_check(state), horizontal_1to7_check(state),]) else 0
+        return 1 if np.any([horizontal_check(state), vertical_check(state), horizontal_11to4_check(state),
+                            horizontal_1to7_check(state),]) else 0
     else:
-        switch, locset =vertical_check(state,loc=True)
+        switch, locset = vertical_check(state,loc=True)
         if switch:
             return switch, locset
-        switch, locset =horizontal_check(state,loc=True)
+        switch, locset = horizontal_check(state,loc=True)
         if switch:
             return switch, locset
-        switch, locset =horizontal_11to4_check(state,loc=True)
+        switch, locset = horizontal_11to4_check(state,loc=True)
         if switch:
             return switch, locset
         switch, locset =horizontal_1to7_check(state,loc=True)
@@ -243,6 +249,7 @@ def invalid_moves(state):
         return np.zeros(action_size(state))
     return np.append(state[INVD_CHNL].flatten(), 0)
 
+
 def str_(state):
     board_str = ' '
 
@@ -275,7 +282,6 @@ def str_(state):
     t = turn(state)
     board_str += '\tTurn: {}, Game Over: {}\n'.format('B' if t == 0 else 'W', done)
     return board_str
-
 
 
 def action_size(state=None, board_size: int = None):
@@ -319,7 +325,7 @@ class Fiar(gym.Env):
         :return: 1 for black's win, -1 for white's win
         """
         if self.game_ended():
-            return winning(self.state_, self.player )
+            return winning(self.state_, self.player)
         else:
             return 0
 
