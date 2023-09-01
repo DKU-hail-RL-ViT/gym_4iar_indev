@@ -5,26 +5,33 @@ from gym_4iar.network import DQNBase
 
 class QRDQN(nn.Module):
 
-    def __init__(self, num_channels, num_actions=36, embedding_dim=5*9*4, N=32):
+    def __init__(self, num_channels, num_actions=36, embedding_dim=5*9*4, N=2):
         super(QRDQN, self).__init__()
-        linear = nn.Linear
 
         # Feature extractor of DQN.
         self.dqn_net = DQNBase(num_channels=num_channels, num_actions=num_actions, embedding_dim=embedding_dim)
 
+        self.N = N
+        if self.N == 2:
+            pass
+        else:
+            self.N *= 2
+        k = self.N
+        self.k = self.N
+
         # Quantile network.
         self.q_net = nn.Sequential(
-            linear(embedding_dim, 32),
+            nn.Linear(embedding_dim, 32),  # Correct the linear instantiation
             nn.ReLU(),
-            linear(32, num_actions * N),
+            nn.Linear(32, num_actions * k),  # Correct the linear instantiation
         )
 
-        self.N = N
-        self.num_channels = 5
+        self.num_channels = num_channels  # Assign the correct value
         self.num_actions = num_actions
         self.embedding_dim = embedding_dim
 
-    def forward(self, states=None, state_embeddings=None):
+
+    def forward(self, states=None, state_embeddings=None,):
         assert states is not None or state_embeddings is not None
         batch_size = states.shape[0] if states is not None\
             else state_embeddings.shape[0]
@@ -33,14 +40,14 @@ class QRDQN(nn.Module):
             state_embeddings = self.dqn_net(states)
 
         quantiles = self.q_net(
-            state_embeddings).view(batch_size, self.N, self.num_actions)
+            state_embeddings).view(batch_size, self.k, self.num_actions)
 
-        assert quantiles.shape == (batch_size, self.N, self.num_actions)
+        assert quantiles.shape == (batch_size, self.k, self.num_actions)
         return quantiles
 
     def calculate_q(self, states=None, state_embeddings=None):
         assert states is not None or state_embeddings is not None
-        batch_size = states.shape[0] if states is not None\
+        batch_size = states.shape[0] if states is not None \
             else state_embeddings.shape[0]
 
         # Calculate quantiles.
