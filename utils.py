@@ -57,21 +57,14 @@ def calculate_quantile_huber_loss(td_errors, taus, weights=None, kappa=1.0):
 
 
 def evaluate_quantile_at_action(s_quantiles, actions):
-
     assert s_quantiles.shape[0] == actions.shape[0]
 
-    print(s_quantiles.shape)
-
     batch_size = s_quantiles.shape[0]
-    k = s_quantiles.shape[1]
-
-    print(k, "action의 qunatile index")
-    # N = [2, 4, 8, 16, 32, 64]
-    # k = N[i]
-    # s_quantiles.shape[1] = k
+    N = s_quantiles.shape[1]
 
     # Expand actions into (batch_size, N, 1).
-    action_index = actions[..., None].expand(batch_size, k, 1)
+    action_index = actions[..., None].expand(batch_size, N, 1)
+    # action_index = torch.clamp(actions[..., None], max=36).expand(batch_size, N, 1)
 
     # Calculate quantile values at specified actions.
     sa_quantiles = s_quantiles.gather(dim=2, index=action_index)

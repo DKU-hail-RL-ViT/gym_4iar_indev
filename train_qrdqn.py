@@ -36,9 +36,6 @@ if __name__ == '__main__':
     env = fiar_env.Fiar()
     done = False
 
-    while not done:
-        break
-
     args = parser.parse_args()
     run(args)
 
