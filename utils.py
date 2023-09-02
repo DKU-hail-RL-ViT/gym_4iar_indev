@@ -56,9 +56,11 @@ def calculate_quantile_huber_loss(td_errors, taus, weights=None, kappa=1.0):
     return quantile_huber_loss
 
 
-def evaluate_quantile_at_action(s_quantiles, actions, i):
+def evaluate_quantile_at_action(s_quantiles, actions):
 
     assert s_quantiles.shape[0] == actions.shape[0]
+
+    print(s_quantiles.shape)
 
     batch_size = s_quantiles.shape[0]
     k = s_quantiles.shape[1]

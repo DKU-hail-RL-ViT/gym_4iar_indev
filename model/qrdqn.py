@@ -5,25 +5,29 @@ from gym_4iar.network import DQNBase
 
 class QRDQN(nn.Module):
 
-    def __init__(self, num_channels, num_actions=36, embedding_dim=5*9*4, N=2):
+    def __init__(self, num_channels, num_actions=36, embedding_dim=5*9*4, N_index=0):
         super(QRDQN, self).__init__()
 
         # Feature extractor of DQN.
         self.dqn_net = DQNBase(num_channels=num_channels, num_actions=num_actions, embedding_dim=embedding_dim)
 
-        self.N = N
-        if self.N == 2:
-            pass
+        self.N = [2, 4, 8, 16, 32, 64]
+        if self.N[N_index] == 2:
+            k = self.N[N_index - 1]
+            N_index += 1
+
         else:
-            self.N *= 2
-        k = self.N
-        self.k = self.N
+            k = self.N[N_index - 1]
+            N_index += 1
+
+        self.k = k
+
 
         # Quantile network.
         self.q_net = nn.Sequential(
             nn.Linear(embedding_dim, 32),  # Correct the linear instantiation
             nn.ReLU(),
-            nn.Linear(32, num_actions * k),  # Correct the linear instantiation
+            nn.Linear(32, num_actions * self.k),  # Correct the linear instantiation
         )
 
         self.num_channels = num_channels  # Assign the correct value
@@ -41,6 +45,7 @@ class QRDQN(nn.Module):
 
         quantiles = self.q_net(
             state_embeddings).view(batch_size, self.k, self.num_actions)
+        print(self.k, "qrdqn 모델에서 forward할때 출력하는 quantile")
 
         assert quantiles.shape == (batch_size, self.k, self.num_actions)
         return quantiles
