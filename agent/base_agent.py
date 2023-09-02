@@ -57,7 +57,6 @@ class BaseAgent(ABC):
         self.start_steps = start_steps
         self.epsilon_train = LinearAnneaer(
             1.0, epsilon_train, epsilon_decay_steps)
-
         self.epsilon_eval = epsilon_eval
         self.update_interval = update_interval
         self.target_update_interval = target_update_interval
