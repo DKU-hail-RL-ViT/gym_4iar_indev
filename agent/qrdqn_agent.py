@@ -38,6 +38,7 @@ class QRDQNAgent(BaseAgent):
         self.online_net = QRDQN(
             num_channels=env.observation_space.shape[0],
             num_actions=self.num_actions, N_index=self.N_index).to(self.device)
+
         # Target network.
         self.target_net = QRDQN(
             num_channels=env.observation_space.shape[0],
