@@ -5,3 +5,5 @@ logs/
 wandb/
 *.log
 *.out
+*.model
+

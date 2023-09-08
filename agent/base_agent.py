@@ -8,7 +8,7 @@ import wandb
 from gym_4iar.memory import LazyMultiStepMemory, \
     LazyPrioritizedMultiStepMemory
 from gym_4iar.utils import RunningMeanStats, LinearAnneaer
-from gym_4iar.mcts import MCTSPlayer
+from gym_4iar.mcts_init import MCTSPlayer
 
 
 class BaseAgent(ABC):

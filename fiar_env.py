@@ -1,407 +1,210 @@
-from enum import Enum
+from __future__ import print_function
 import numpy as np
-import gym
-
-from gym import spaces
-from scipy import ndimage
-import state_utils
-
-# from numpy.random import choice_
-
-BLACK = 0
-WHITE = 1
-TURN_CHNL = 2
-INVD_CHNL = 3
-DONE_CHNL = 4
-NUM_CHNLS = 5
 
 
-def action2d_ize(action):
-    map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4).T)
-    print(map)
+class Board(object):
+    """board for the game"""
 
-    action2d = np.where(map == action)
-    return int(action2d[0]), int(action2d[1])
-
-
-def action1d_ize(action):
-    map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4).T)
-    return map[action[0], action[1]]
-
-
-def winning(state, player=0):
-    if np.all(state[TURN_CHNL] == player):
-        return 1
-    else:
-        return -1
-
-
-def turn(state):
-    """
-    :param state:
-    :return: Who's turn it is (govars.BLACK/govars.WHITE)
-    """
-    return int(np.max(state[TURN_CHNL]))
-
-
-def areas(state):
-    '''
-    Return black area, white area
-    '''
-
-    all_pieces = np.sum(state[[BLACK, WHITE]], axis=0)
-    empties = 1 - all_pieces
-
-    empty_labels, num_empty_areas = ndimage.measurements.label(empties)
-
-    black_area, white_area = np.sum(state[BLACK]), np.sum(state[WHITE])
-    for label in range(1, num_empty_areas + 1):
-        empty_area = empty_labels == label
-        neighbors = ndimage.binary_dilation(empty_area)
-        black_claim = False
-        white_claim = False
-        if (state[BLACK] * neighbors > 0).any():
-            black_claim = True
-        if (state[WHITE] * neighbors > 0).any():
-            white_claim = True
-        if black_claim and not white_claim:
-            black_area += np.sum(empty_area)
-        elif white_claim and not black_claim:
-            white_area += np.sum(empty_area)
-
-    return black_area, white_area
-
-
-def fiar_check(state, loc=False):
-    # check four in a row
-    black_white = 1 if np.all(state[2]==1) else 0   # 0:black 1:white
-
-    state = np.copy(state[black_white,:,:])
-
-    def horizontal_check(state_b, loc=False):
-        for i in range(state_b.shape[0]):
-            fiar_ = 0
-            continuous_ = False
-            loc_set = []
-            for j in range(state_b.shape[1]):
-                if state_b[i,j] == 1:
-                    fiar_ += 1
-                    continuous_ = True
-                    loc_set.append([i,j])
-                else:
-                    fiar_ = 0
-                    continuous_ = False
-                    loc_set = []
-                if (fiar_ == 4) and continuous_:
-                    if loc:
-                        return True, loc_set
-                    else:
-                        return True
-        if loc:
-            return False, loc_set
-        else:
-            return False
-
-    def vertical_check(state_b, loc=False):
-        for j in range(state_b.shape[1]):
-            fiar_ = 0
-            continuous_ = False
-            loc_set = []
-            for i in range(state_b.shape[0]):
-                if state_b[i,j] == 1:
-                    fiar_ += 1
-                    continuous_ = True
-                    loc_set.append([i,j])
-                else:
-                    fiar_ = 0
-                    continuous_ = False
-                    loc_set = []
-                if (fiar_ == 4) and continuous_:
-                    if loc:
-                        return True, loc_set
-                    else:
-                        return True
-        if loc:
-            return False, loc_set
-        else:
-            return False
-
-    # check_board = np.zeros((9,4))
-    def horizontal_11to4_check(state_b, loc=False):
-        for offset_i in range(max(state_b.shape[1],state_b.shape[0])-1,-1,-1):
-            fiar_ = 0
-            continuous_ = False
-            loc_set = []
-            for j in range(max(state_b.shape[1],state_b.shape[0])):
-                i = offset_i + j
-                if i<state_b.shape[0] and j <state_b.shape[1]:
-                    if i>=state_b.shape[0]:
-                        break
-                    # check_board[i,j]=1
-                    if state_b[i,j] == 1:
-                        fiar_ += 1
-                        continuous_ = True
-                        loc_set.append([i,j])
-                    else:
-                        fiar_ = 0
-                        continuous_ = False
-                        loc_set = []
-                    if (fiar_ == 4) and continuous_:
-                        if loc:
-                            return True, loc_set
-                        else:
-                            return True
-        if loc:
-            return False, loc_set
-        else:
-            return False
-
-    def horizontal_1to7_check(state_b, loc=False):
-        # for offset_j in range(state_b.shape[1]-1,-1,-1): # 3
-        for offset_j in range(max(state_b.shape[1],state_b.shape[0])): # 3
-            fiar_ = 0
-            continuous_ = False
-            loc_set = []
-            for i in range(max(state_b.shape[1],state_b.shape[0])):
-                j = offset_j - i
-                if i<state_b.shape[0] and j <state_b.shape[1]:
-                    if j<0:
-                        break
-                    # check_board[i,j]=1
-                    if state_b[i,j] == 1:
-                        fiar_ += 1
-                        continuous_ = True
-                        loc_set.append([i,j])
-                    else:
-                        fiar_ = 0
-                        continuous_ = False
-                        loc_set = []
-                    if (fiar_ == 4) and continuous_:
-                        if loc:
-                            return True, loc_set
-                        else:
-                            return True
-        if loc:
-            return False, loc_set
-        else:
-            return False
-
-    if loc is False:
-        return 1 if np.any([horizontal_check(state), vertical_check(state), horizontal_11to4_check(state),
-                            horizontal_1to7_check(state),]) else 0
-    else:
-        switch, locset = vertical_check(state,loc=True)
-        if switch:
-            return switch, locset
-        switch, locset = horizontal_check(state,loc=True)
-        if switch:
-            return switch, locset
-        switch, locset = horizontal_11to4_check(state,loc=True)
-        if switch:
-            return switch, locset
-        switch, locset =horizontal_1to7_check(state,loc=True)
-        if switch:
-            return switch, locset
-        return False, []
-
-
-def next_state(state, action1d):
-    # Deep copy the state to modify
-    state = np.copy(state)
-
-    # Initialize basic variables
-    board_shape = state.shape[1:]
-    pass_idx = np.prod(board_shape)
-    action2d = action1d % board_shape[0], action1d // board_shape[0]  # previous
-
-    player = turn(state)
-    ko_protect = None
-
-    # Assert move is valid
-    if not ((0 <= action2d[0] < state.shape[1]) and (0 <= action2d[1] < state.shape[2])):
-        raise ValueError("Invalid move", action2d)
-
-    # Add piece
-    state[player, action2d[0], action2d[1]] = 1
-
-    # Update FIAR ending status
-    state[DONE_CHNL] = fiar_check(state)
-
-    if np.any(state[DONE_CHNL] == 0): # proceed if it is not ended
-        # Switch turn
-        state_utils.set_turn(state)
-
-    return state
-
-
-def game_ended(state):
-    """
-    :param state:
-    :return: 0/1 = game not ended / game ended respectively
-    """
-    m, n = state.shape[1:]
-    return int(np.count_nonzero(state[4] == 1) >= 1)
-
-
-def invalid_moves(state):
-    # return a fixed size binary vector
-    if game_ended(state):
-        return np.zeros(action_size(state))
-    return np.append(state[INVD_CHNL].flatten(), 0)
-
-
-def str_(state):
-    board_str = ' '
-
-    size_x = state.shape[1]
-    size_y = state.shape[2]
-    for i in range(size_y):  # 행 수에 따라 반복
-        board_str += '   {}'.format(i)
-    board_str += '\n  '
-    board_str += '----' * size_y + '-'
-    board_str += '\n'
-    for j in range(size_x):  # 열 수에 따라 반복
-        board_str += '{} |'.format(j)
-        for i in range(size_y):
-            if state[0, j, i] == 1:
-                board_str += ' B'
-            elif state[1, j, i] == 1:
-                board_str += ' W'
-            elif state[2, j, i] == 1:
-                board_str += ' .'
-            else:
-                board_str += '  '
-
-            board_str += ' |'
-
-        board_str += '\n  '
-        board_str += '----' * size_y + '-'
-        board_str += '\n'
-
-    done = game_ended(state)
-    t = turn(state)
-    board_str += '\tTurn: {}, Game Over: {}\n'.format('B' if t == 0 else 'W', done)
-    return board_str
-
-
-def action_size(state=None, board_size: int = None):
-    # return number of actions
-    if state is not None:
-        m, n = state.shape[1:]
-    elif board_size is not None:
-        m, n = board_size, board_size
-    else:
-        raise RuntimeError('No argument passed')
-    # return m * n + 1
-    return m * n
-
-
-class Fiar(gym.Env):
-    def __init__(self, player=0):
-        self.player = player    #  0: black,  1: white
-
-        self.state_ = self.init_state()
-        self.observation_space = spaces.Box(np.float32(0), np.float32(NUM_CHNLS),
-                                                shape=(NUM_CHNLS, 9, 4))
-        self.action_space = spaces.Discrete(action_size(self.state_))
-        self.done = False
-        self.action = None
+    def __init__(self, **kwargs):
+        self.width = int(kwargs.get('width', 8))
+        self.height = int(kwargs.get('height', 8))
+        # board states stored as a dict,
+        # key: move as location on the board,
+        # value: player as pieces type
         self.states = {}
-        self.current_player = self.state_[0]
-        self.players = [0, 1]  # player1 and player2
-        # end, winner = self.game_end()
+        # need how many pieces in a row to win
+        self.n_in_row = int(kwargs.get('n_in_row', 5))
+        self.players = [1, 2]  # player1 and player2
+
+    def init_board(self, start_player=0):
+        if self.width < self.n_in_row or self.height < self.n_in_row:
+            raise Exception('board width and height can not be '
+                            'less than {}'.format(self.n_in_row))
+        self.current_player = self.players[start_player]  # start player
+        # keep available moves in a list
+        self.availables = list(range(self.width * self.height))
+        self.states = {}
+        self.last_move = -1
+
+    def move_to_location(self, move):
+        h = move // self.width
+        w = move % self.width
+        return [h, w]
+
+    def location_to_move(self, location):
+        if len(location) != 2:
+            return -1
+        h = location[0]
+        w = location[1]
+        move = h * self.width + w
+        if move not in range(self.width * self.height):
+            return -1
+        return move
+
+    def current_state(self):
+        """return the board state from the perspective of the current player.
+        state shape: 4*width*height
+        """
+
+        square_state = np.zeros((4, self.width, self.height))
+        if self.states:
+            moves, players = np.array(list(zip(*self.states.items())))
+            move_curr = moves[players == self.current_player]
+            move_oppo = moves[players != self.current_player]
+            square_state[0][move_curr // self.width,
+                            move_curr % self.height] = 1.0
+            square_state[1][move_oppo // self.width,
+                            move_oppo % self.height] = 1.0
+            # indicate the last move location
+            square_state[2][self.last_move // self.width,
+                            self.last_move % self.height] = 1.0
+        if len(self.states) % 2 == 0:
+            square_state[3][:, :] = 1.0  # indicate the colour to play
+        return square_state[:, ::-1, :]
+
+    def do_move(self, move):
+        self.states[move] = self.current_player
+        self.availables.remove(move)
+
+        self.current_player = (
+            self.players[0] if self.current_player == self.players[1]
+            else self.players[1]
+        )
+        self.last_move = move
+
+    def has_a_winner(self):
+        width = self.width
+        height = self.height
+        states = self.states
+        n = self.n_in_row
+
+        moved = list(set(range(width * height)) - set(self.availables))
+        if len(moved) < self.n_in_row *2-1:
+            return False, -1
+
+        for m in moved:
+            h = m // width
+            w = m % width
+            player = states[m]
+
+            if (w in range(width - n + 1) and
+                    len(set(states.get(i, -1) for i in range(m, m + n))) == 1):
+                return True, player
+
+            if (h in range(height - n + 1) and
+                    len(set(states.get(i, -1) for i in range(m, m + n * width, width))) == 1):
+                return True, player
+
+            if (w in range(width - n + 1) and h in range(height - n + 1) and
+                    len(set(states.get(i, -1) for i in range(m, m + n * (width + 1), width + 1))) == 1):
+                return True, player
+
+            if (w in range(n - 1, width) and h in range(height - n + 1) and
+                    len(set(states.get(i, -1) for i in range(m, m + n * (width - 1), width - 1))) == 1):
+                return True, player
+
+        return False, -1
 
     def game_end(self):
-        # 여기 코드 좀 이상함
-        # winning 메서드 들어가보면 항상 player turn 과 board의 turn을 일치하기 때문에 항상 1을 반환함
-        winner = winning(self.state_, self.player)
-        if winner != 0:
+        """Check whether the game is ended or not"""
+        win, winner = self.has_a_winner()
+        if win:
             return True, winner
-        elif not len(self.observation_space.shape):
-            return True
-        return False
+        elif not len(self.availables):
+            return True, -1
+        return False, -1
 
-    def winner(self):
+    def get_current_player(self):
+        return self.current_player
+
+
+class Game(object):
+    def __init__(self, board, **kwargs):
+        self.board = board
+
+    def graphic(self, board, player1, player2):
+        """Draw the board and show game info"""
+        width = board.width
+        height = board.height
+
+        print("Player", player1, "with X".rjust(3))
+        print("Player", player2, "with O".rjust(3))
+        print()
+        for x in range(width):
+            print("{0:8}".format(x), end='')
+        print('\r\n')
+        for i in range(height - 1, -1, -1):
+            print("{0:4d}".format(i), end='')
+            for j in range(width):
+                loc = i * width + j
+                p = board.states.get(loc, -1)
+                if p == player1:
+                    print('X'.center(8), end='')
+                elif p == player2:
+                    print('O'.center(8), end='')
+                else:
+                    print('_'.center(8), end='')
+            print('\r\n\r\n')
+
+    def start_play(self, player1, player2, start_player=0, is_shown=1):
+        """start a game between two players"""
+        if start_player not in (0, 1):
+            raise Exception('start_player should be either 0 (player1 first) '
+                            'or 1 (player2 first)')
+        self.board.init_board(start_player)
+        p1, p2 = self.board.players
+        player1.set_player_ind(p1)
+        player2.set_player_ind(p2)
+        players = {p1: player1, p2: player2}
+        if is_shown:
+            self.graphic(self.board, player1.player, player2.player)
+        while True:
+            current_player = self.board.get_current_player()
+            player_in_turn = players[current_player]
+            move = player_in_turn.get_action(self.board)
+            self.board.do_move(move)
+            if is_shown:
+                self.graphic(self.board, player1.player, player2.player)
+            end, winner = self.board.game_end()
+            if end:
+                if is_shown:
+                    if winner != -1:
+                        print("Game end. Winner is", players[winner])
+                    else:
+                        print("Game end. Tie")
+                return winner
+
+    def start_self_play(self, player, is_shown=0, temp=1e-3):
+        """ start a self-play game using a MCTS player, reuse the search tree,
+        and store the self-play data: (state, mcts_probs, z) for training
         """
-        Get's the winner in BLACK's perspective
-        :return: 1 for black's win, -1 for white's win
-        """
-        if self.game_ended():
-            return winning(self.state_, self.player)
-        else:
-            return 0
-
-    def init_state(self):
-        """
-        The state of the game is a numpy array
-        * Are values are either 0 or 1
-
-        * Shape [NUM_CHNLS, SIZE, SIZE]
-
-        CHANNELS:
-        0 - Black pieces
-        1 - White pieces
-        2 - Turn (0: black, 1: white)
-        3 - Invalid moves (including ko-protection)
-        4 - Game over
-
-        SIZE: 9,4 since it is 4x9 board
-        """
-        return np.zeros((5, 9, 4))
-
-    def step(self, action=None):
-        '''
-        Assumes the correct player is making a move. Black goes first.
-        return observation, reward, done, info
-        '''
-        assert not self.done
-
-        if action is None:
-            # Generate a random action1d that is not equal to the previous one
-            possible_actions = list(range(action_size(self.state_)))
-            if self.action is not None:
-                action1d = np.random.choice(possible_actions)
-        else:
-            if isinstance(action, tuple):  # Check if action is a tuple
-                action1d = action[0] + action[1] * 9  # Convert 2D to 1D
-            else:
-                action1d = action
-
-        self.state_ = next_state(self.state_, action1d)
-        self.done = game_ended(self.state_)
-
-        return np.copy(self.state_), self.reward(), self.done, self.info()
-
-    def reset(self):
-        '''
-        Reset state, go_board, curr_player, prev_player_passed,
-        done, return state
-        '''
-        self.state_ = self.init_state()
-        self.done = False
-        return np.copy(self.state_)
-
-    def info(self):
-        """
-        :return: Debugging info for the state
-        """
-        return {
-            'turn': turn(self.state_),
-            'invalid_moves': invalid_moves(self.state_)
-        }
-
-    def state(self):
-        """
-        :return: copy of state
-        """
-        return np.copy(self.state_)
-
-    def game_ended(self):
-        return self.done
-
-
-    def __str__(self):
-        return str_(self.state_)
-
-    def reward(self):
-        return self.winner()
+        self.board.init_board()
+        p1, p2 = self.board.players
+        states, mcts_probs, current_players = [], [], []
+        while True:
+            move, move_probs = player.get_action(self.board,
+                                                 temp=temp,
+                                                 return_prob=1)
+            # store the data
+            states.append(self.board.current_state())
+            mcts_probs.append(move_probs)
+            current_players.append(self.board.current_player)
+            # perform a move
+            self.board.do_move(move)
+            if is_shown:
+                self.graphic(self.board, p1, p2)
+            end, winner = self.board.game_end()
+            if end:
+                # winner from the perspective of the current player of each state
+                winners_z = np.zeros(len(current_players))
+                if winner != -1:
+                    winners_z[np.array(current_players) == winner] = 1.0
+                    winners_z[np.array(current_players) != winner] = -1.0
+                # reset MCTS root node
+                player.reset_player()
+                if is_shown:
+                    if winner != -1:
+                        print("Game end. Winner is player:", winner)
+                    else:
+                        print("Game end. Tie")
+                return winner, zip(states, mcts_probs, winners_z)

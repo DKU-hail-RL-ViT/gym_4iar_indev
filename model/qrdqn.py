@@ -1,6 +1,6 @@
 from torch import nn
 
-from gym_4iar.network import DQNBase
+# from gym_4iar.network import DQNBase
 
 
 class QRDQN(nn.Module):
