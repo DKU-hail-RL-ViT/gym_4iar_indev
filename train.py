@@ -5,15 +5,15 @@ import wandb
 
 from collections import defaultdict, deque
 
-# Four in a row task
-import fiar_env
+import torch
 
+# Four in a row task
 from fiar_env import Board, Game
 from mcts_init import MCTSPlayer as MCTS_Init
 from mcts_train import MCTSPlayer
-from policy_value_net import PolicyValueNet
+from qrdqn import PolicyValueNet
 
-from gym_4iar.agent import QRDQNAgent
+
 
 
 class TrainPipeline():
@@ -22,6 +22,7 @@ class TrainPipeline():
         self.board_width = 6
         self.board_height = 6
         self.n_in_row = 4
+        self.num_quantiles = 32
         self.board = Board(width=self.board_width,
                            height=self.board_height,
                            n_in_row=self.n_in_row)
@@ -50,12 +51,13 @@ class TrainPipeline():
         if init_model:
             # start training from an initial policy-value net
             self.policy_value_net = PolicyValueNet(self.board_width,
-                                                   self.board_height,
-                                                   model_file=init_model)
+                                                self.board_height,
+                                                model_file=init_model)
+
         else:
             # start training from a new policy-value net
             self.policy_value_net = PolicyValueNet(self.board_width,
-                                                   self.board_height)
+                                                self.board_height)
 
         self.mcts_player = MCTSPlayer(self.policy_value_net.policy_value_fn,
                                       c_puct=self.c_puct,
@@ -102,20 +104,33 @@ class TrainPipeline():
         state_batch = [data[0] for data in mini_batch]
         mcts_probs_batch = [data[1] for data in mini_batch]
         winner_batch = [data[2] for data in mini_batch]
+
+        # Convert data to PyTorch tensors
+        state_batch = torch.FloatTensor(state_batch).to(self.device)
+        mcts_probs_batch = torch.FloatTensor(mcts_probs_batch).to(self.device)
+        winner_batch = torch.FloatTensor(winner_batch).to(self.device)
+
         old_probs, old_v = self.policy_value_net.policy_value(state_batch)
+
         for i in range(self.epochs):
             loss, entropy = self.policy_value_net.train_step(
-                    state_batch,
-                    mcts_probs_batch,
-                    winner_batch,
-                    self.learn_rate * self.lr_multiplier)
-            new_probs, new_v = self.policy_value_net.policy_value(state_batch)
-            kl = np.mean(np.sum(old_probs * (
-                    np.log(old_probs + 1e-10) - np.log(new_probs + 1e-10)),
-                    axis=1)
+                state_batch,
+                mcts_probs_batch,
+                winner_batch,
+                self.learn_rate * self.lr_multiplier
             )
+            new_probs, new_v = self.policy_value_net.policy_value(state_batch)
+
+            # Calculate Quantile Huber Loss
+            quantile_probs = torch.mean(old_probs, dim=0).unsqueeze(0)
+            td_errors = winner_batch - old_v.squeeze()
+            huber_loss = self.huber_loss(td_errors.unsqueeze(1))
+            quantile_loss = torch.abs(quantile_probs - (td_errors < 0).float()) * huber_loss
+            loss = torch.mean(quantile_loss)
+
             if kl > self.kl_targ * 4:  # early stopping if D_KL diverges badly
                 break
+
         # adaptively adjust the learning rate
         if kl > self.kl_targ * 2 and self.lr_multiplier > 0.1:
             self.lr_multiplier /= 1.5
@@ -123,11 +138,12 @@ class TrainPipeline():
             self.lr_multiplier *= 1.5
 
         explained_var_old = (1 -
-                             np.var(np.array(winner_batch) - old_v.flatten()) /
-                             np.var(np.array(winner_batch)))
+                             torch.var(winner_batch - old_v.squeeze()) /
+                             torch.var(winner_batch))
         explained_var_new = (1 -
-                             np.var(np.array(winner_batch) - new_v.flatten()) /
-                             np.var(np.array(winner_batch)))
+                             torch.var(winner_batch - new_v.squeeze()) /
+                             torch.var(winner_batch))
+
         print(("kl:{:.5f},"
                "lr_multiplier:{:.3f},"
                "loss:{},"
@@ -136,11 +152,15 @@ class TrainPipeline():
                "explained_var_new:{:.3f}"
                ).format(kl,
                         self.lr_multiplier,
-                        loss,
+                        loss.item(),
                         entropy,
-                        explained_var_old,
-                        explained_var_new))
-        return loss, entropy
+                        explained_var_old.item(),
+                        explained_var_new.item()))
+        return loss.item(), entropy
+
+    def huber_loss(self, x, delta=1.0):
+        return torch.where(x.abs() < delta, 0.5 * x.pow(2), delta * (x.abs() - 0.5 * delta))
+
 
     def policy_evaluate(self, n_games=10):
         """
@@ -175,6 +195,8 @@ class TrainPipeline():
                 self.collect_selfplay_data(self.play_batch_size)
                 print("batch i:{}, episode_len:{}".format(
                     i+1, self.episode_len))
+
+                print ('hello')
 
                 if len(self.data_buffer) > self.batch_size:
                     loss, entropy = self.policy_update()
