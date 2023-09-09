@@ -32,6 +32,9 @@ class QRDQNNet(nn.Module):
         self.quantile_fcs = nn.ModuleList(
             [nn.Linear(4 * board_width * board_height, board_width * board_height) for _ in range(num_quantiles)])
 
+
+
+
     def forward(self, state_input):
         # Common layers
         x = F.relu(self.conv1(state_input))
@@ -48,6 +51,27 @@ class QRDQNNet(nn.Module):
 
         return quantile_predictions
 
+    def policy_value_fn(self, board):
+        """
+        input: board
+        output: a list of (action, probability) tuples for each available
+        action and the score of the board state
+        """
+        legal_positions = board.availables
+        current_state = np.ascontiguousarray(board.current_state().reshape(
+                -1, 4, self.board_width, self.board_height))
+        current_state = torch.from_numpy(current_state).float()
+
+        if self.use_gpu:
+            current_state = current_state.cuda()
+
+        log_act_probs, value = self.policy_value_net(current_state)
+        act_probs = torch.exp(log_act_probs).cpu().detach().numpy().flatten()
+        act_probs = zip(legal_positions, act_probs[legal_positions])
+        value = value.item()
+        return act_probs, value
+
+
 
 class QRDQN:
     def __init__(self, board_width, board_height, num_actions, num_quantiles, lr=0.001):
@@ -57,7 +81,10 @@ class QRDQN:
         self.qrdqn_net = QRDQNNet(board_width, board_height, num_quantiles).to(self.device)
         self.optimizer = optim.Adam(self.qrdqn_net.parameters(), lr=lr)
 
+
+
     def train(self, state_batch, action_batch, reward_batch, next_state_batch, done_batch):
+
         state_batch = torch.FloatTensor(state_batch).to(self.device)
         action_batch = torch.LongTensor(action_batch).to(self.device)
         reward_batch = torch.FloatTensor(reward_batch).to(self.device)
@@ -101,22 +128,23 @@ class QRDQN:
     def set_tau(self, tau):
         self.tau = tau
 
-
+##########################
 
 
 class PolicyValueNet():
     """Policy-value network"""
-    def __init__(self, board_width, board_height, model_file=None, use_gpu=False):
+    def __init__(self, board_width, board_height, model_file=None, use_gpu=False, num_quantiles=32):
         self.use_gpu = use_gpu
         self.board_width = board_width
+        self.num_quantiles = num_quantiles
         self.board_height = board_height
         self.l2_const = 1e-4  # Coefficient of L2 penalty
 
         # The policy value net module
         if self.use_gpu:
-                self.policy_value_net = Net(board_width, board_height).cuda()
+                self.policy_value_net = QRDQNNet(board_width, board_height, num_quantiles).cuda()
         else:
-            self.policy_value_net = Net(board_width, board_height)
+            self.policy_value_net = QRDQNNet(board_width, board_height, num_quantiles)
 
         self.optimizer = optim.Adam(self.policy_value_net.parameters(), weight_decay=self.l2_const)
 
@@ -149,32 +177,31 @@ class PolicyValueNet():
         """
         legal_positions = board.availables
         current_state = np.ascontiguousarray(board.current_state().reshape(
-                -1, 4, self.board_width, self.board_height))
+            -1, 4, self.board_width, self.board_height))
         current_state = torch.from_numpy(current_state).float()
 
         if self.use_gpu:
             current_state = current_state.cuda()
 
-        log_act_probs, value = self.policy_value_net(current_state)
+        log_act_probs, _ = self.policy_value_net(current_state)
         act_probs = torch.exp(log_act_probs).cpu().detach().numpy().flatten()
         act_probs = zip(legal_positions, act_probs[legal_positions])
-        value = value.item()
-        return act_probs, value
+        return act_probs
 
-    def train_step(self, state_batch, mcts_probs, winner_batch, lr):
+    def train_step(self, state_batch, mcts_probs, quantiles_batch, lr):
         """Perform a training step"""
         state_batch = np.array(state_batch, dtype=np.float32)
         mcts_probs = np.array(mcts_probs, dtype=np.float32)
-        winner_batch = np.array(winner_batch, dtype=np.float32)
+        quantiles_batch = np.array(quantiles_batch, dtype=np.float32)
 
         state_batch = torch.FloatTensor(state_batch)
         mcts_probs = torch.FloatTensor(mcts_probs)
-        winner_batch = torch.FloatTensor(winner_batch)
+        quantiles_batch = torch.FloatTensor(quantiles_batch)
 
         if self.use_gpu:
             state_batch = state_batch.cuda()
             mcts_probs = mcts_probs.cuda()
-            winner_batch = winner_batch.cuda()
+            quantiles_batch = quantiles_batch.cuda()
 
         # Zero the parameter gradients
         self.optimizer.zero_grad()
@@ -182,18 +209,14 @@ class PolicyValueNet():
         set_learning_rate(self.optimizer, lr)
 
         # Forward pass
-        log_act_probs, value = self.policy_value_net(state_batch)
-        # Define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
-        # Note: The L2 penalty is incorporated in the optimizer
-        value_loss = F.mse_loss(value.view(-1), winner_batch)
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-        loss = value_loss + policy_loss
+        quantile_predictions = self.policy_value_net(state_batch)
+        # Define the loss using quantile Huber loss
+        loss = quantile_huber_loss(quantile_predictions, quantiles_batch)
         # Backward and optimize
         loss.backward()
         self.optimizer.step()
-        # Calculate policy entropy, for monitoring only
-        entropy = -torch.mean(torch.sum(torch.exp(log_act_probs) * log_act_probs, 1))
-        return loss.item(), entropy.item()
+
+        return loss.item()
 
     def get_policy_param(self):
         net_params = self.policy_value_net.state_dict()
