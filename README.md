@@ -1,6 +1,3 @@
-# FQF, IQN, QR-DQN and DQN in PyTorch
-
-This is a PyTorch implementation of Fully parameterized Quantile Function(FQF)[1], Implicit Quantile Networks(IQN)[2], Quantile Regression DQN(QR-DQN)[3] and Deep Q Network(DQN)[4].
 
 python version 3.10
 
@@ -10,21 +7,28 @@ pip install numpy==1.25.1
 pip install matplotlib==3.7.2
 pip install gym==0.26.2
 pip install pyglet==2.0.8
-pip install mcts
+pip install pyyaml
 pip install wandb
 ```
 
 Task : four in a row (9 x 4)
 
+### why
+9 x 4으로 한다면 어느 한쪽은 반드시 이긴다고 하심
+비기는 경우가 절대 안나온다고 하셨음
+
 
 ### Todo
-
-model.qrdqn 3번 kill함 
-지금 코드가 mcts만 돌아가도록 만들었음
-qrdqn 다 빼놓음
-1. 이제 해야할게 mcts에서 받아온 승률 가지고 qrdqn를 해야하지 않나
-2. 아니면 CNN 끝나자마자 코드를 QRDQN에게 줘서 강화학습을 하거나 
+agent를 흑백으로 따로 둘 것
+흑은 학습하고 백은 학습하지 않고
+둘다 학습하고 
+뭐
 
 
 
+### 잘 모르겠는 것
+fiar_env에서 225번째 줄 활성화하면 왜 invalid_channel에서 에러가 발생하는지 잘 모르겠음
+코드 상 아군의 그룹과 적군의 그룹을 분석해서 적절한 움직임을 하겠다 라는거 같은데 
+일단 보류
+state[INVD_CHNL] = state_utils.compute_invalid_moves(state, player, ko_protect)
 

@@ -2,8 +2,6 @@
 __pycache__/
 .idea/
 logs/
-wandb/
 *.log
 *.out
-*.model
-
+wandb/
