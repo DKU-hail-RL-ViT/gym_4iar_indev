@@ -1,28 +1,28 @@
-# [DK] Copied from stable_baseline3 for modification
-
 import warnings
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
 import numpy as np
 import torch as th
 from gymnasium import spaces
+from torch.nn import functional as F
+
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_linear_fn, get_parameters_by_name, polyak_update
+from stable_baselines3.dqn.policies import CnnPolicy, DQNPolicy, MlpPolicy, MultiInputPolicy, QNetwork
 
-from sb3_contrib.common.utils import quantile_huber_loss
-from sb3_contrib.qrdqn.policies import CnnPolicy, MlpPolicy, MultiInputPolicy, QRDQNPolicy, QuantileNetwork
-
-SelfQRDQN = TypeVar("SelfQRDQN", bound="QRDQN")
+SelfDQN = TypeVar("SelfDQN", bound="DQN")
 
 
-class QRDQN(OffPolicyAlgorithm):
+class DQN(OffPolicyAlgorithm):
     """
-    Quantile Regression Deep Q-Network (QR-DQN)
-    Paper: https://arxiv.org/abs/1710.10044
-    Default hyperparameters are taken from the paper and are tuned for Atari games.
+    Deep Q-Network (DQN)
+
+    Paper: https://arxiv.org/abs/1312.5602, https://www.nature.com/articles/nature14236
+    Default hyperparameters are taken from the Nature paper,
+    except for the optimizer and learning rate that were taken from Stable Baselines defaults.
 
     :param policy: The policy model to use (MlpPolicy, CnnPolicy, ...)
     :param env: The environment to learn from (if registered in Gym, can be str)
@@ -35,8 +35,7 @@ class QRDQN(OffPolicyAlgorithm):
     :param gamma: the discount factor
     :param train_freq: Update the model every ``train_freq`` steps. Alternatively pass a tuple of frequency and unit
         like ``(5, "step")`` or ``(2, "episode")``.
-    :param gradient_steps: How many gradient steps to do after each rollout
-        (see ``train_freq`` and ``n_episodes_rollout``)
+    :param gradient_steps: How many gradient steps to do after each rollout (see ``train_freq``)
         Set to ``-1`` means to do as many gradient steps as steps done in the environment
         during the rollout.
     :param replay_buffer_class: Replay buffer class to use (for instance ``HerReplayBuffer``).
@@ -50,12 +49,13 @@ class QRDQN(OffPolicyAlgorithm):
     :param exploration_fraction: fraction of entire training period over which the exploration rate is reduced
     :param exploration_initial_eps: initial value of random action probability
     :param exploration_final_eps: final value of random action probability
-    :param max_grad_norm: The maximum value for the gradient clipping (if None, no clipping)
+    :param max_grad_norm: The maximum value for the gradient clipping
     :param stats_window_size: Window size for the rollout logging, specifying the number of episodes to average
         the reported success rate, mean episode length, and mean reward over
     :param tensorboard_log: the log location for tensorboard (if None, no logging)
     :param policy_kwargs: additional arguments to be passed to the policy on creation
-    :param verbose: the verbosity level: 0 no output, 1 info, 2 debug
+    :param verbose: Verbosity level: 0 for no output, 1 for info messages (such as device or wrappers used), 2 for
+        debug messages
     :param seed: Seed for the pseudo random generators
     :param device: Device (cpu, cuda, ...) on which the code should be run.
         Setting it to auto, the code will be run on the GPU if possible.
@@ -69,30 +69,30 @@ class QRDQN(OffPolicyAlgorithm):
     }
     # Linear schedule will be defined in `_setup_model()`
     exploration_schedule: Schedule
-    quantile_net: QuantileNetwork
-    quantile_net_target: QuantileNetwork
-    policy: QRDQNPolicy
+    q_net: QNetwork
+    q_net_target: QNetwork
+    policy: DQNPolicy
 
     def __init__(
         self,
-        policy: Union[str, Type[QRDQNPolicy]],
+        policy: Union[str, Type[DQNPolicy]],
         env: Union[GymEnv, str],
-        learning_rate: Union[float, Schedule] = 5e-5,
-        buffer_size: int = 1000000,  # 1e6
+        learning_rate: Union[float, Schedule] = 1e-4,
+        buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 50000,
         batch_size: int = 32,
         tau: float = 1.0,
         gamma: float = 0.99,
-        train_freq: int = 4,
+        train_freq: Union[int, Tuple[int, str]] = 4,
         gradient_steps: int = 1,
         replay_buffer_class: Optional[Type[ReplayBuffer]] = None,
         replay_buffer_kwargs: Optional[Dict[str, Any]] = None,
         optimize_memory_usage: bool = False,
         target_update_interval: int = 10000,
-        exploration_fraction: float = 0.005,
+        exploration_fraction: float = 0.1,
         exploration_initial_eps: float = 1.0,
-        exploration_final_eps: float = 0.01,
-        max_grad_norm: Optional[float] = None,
+        exploration_final_eps: float = 0.05,
+        max_grad_norm: float = 10,
         stats_window_size: int = 100,
         tensorboard_log: Optional[str] = None,
         policy_kwargs: Optional[Dict[str, Any]] = None,
@@ -100,7 +100,7 @@ class QRDQN(OffPolicyAlgorithm):
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
-    ):
+    ) -> None:
         super().__init__(
             policy,
             env,
@@ -137,25 +137,21 @@ class QRDQN(OffPolicyAlgorithm):
         # "epsilon" for the epsilon-greedy exploration
         self.exploration_rate = 0.0
 
-        if "optimizer_class" not in self.policy_kwargs:
-            self.policy_kwargs["optimizer_class"] = th.optim.Adam
-            # Proposed in the QR-DQN paper where `batch_size = 32`
-            self.policy_kwargs["optimizer_kwargs"] = dict(eps=0.01 / batch_size)
-
         if _init_setup_model:
             self._setup_model()
 
     def _setup_model(self) -> None:
         super()._setup_model()
         self._create_aliases()
-        # Copy running stats, see https://github.com/DLR-RM/stable-baselines3/issues/996
-        self.batch_norm_stats = get_parameters_by_name(self.quantile_net, ["running_"])
-        self.batch_norm_stats_target = get_parameters_by_name(self.quantile_net_target, ["running_"])
+        # Copy running stats, see GH issue #996
+        self.batch_norm_stats = get_parameters_by_name(self.q_net, ["running_"])
+        self.batch_norm_stats_target = get_parameters_by_name(self.q_net_target, ["running_"])
         self.exploration_schedule = get_linear_fn(
-            self.exploration_initial_eps, self.exploration_final_eps, self.exploration_fraction
+            self.exploration_initial_eps,
+            self.exploration_final_eps,
+            self.exploration_fraction,
         )
-        # Account for multiple environments
-        # each call to step() corresponds to n_envs transitions
+
         if self.n_envs > 1:
             if self.n_envs > self.target_update_interval:
                 warnings.warn(
@@ -165,12 +161,9 @@ class QRDQN(OffPolicyAlgorithm):
                     f"which corresponds to {self.n_envs} steps."
                 )
 
-            self.target_update_interval = max(self.target_update_interval // self.n_envs, 1)
-
     def _create_aliases(self) -> None:
-        self.quantile_net = self.policy.quantile_net
-        self.quantile_net_target = self.policy.quantile_net_target
-        self.n_quantiles = self.policy.n_quantiles
+        self.q_net = self.policy.q_net
+        self.q_net_target = self.policy.q_net_target
 
     def _on_step(self) -> None:
         """
@@ -178,9 +171,11 @@ class QRDQN(OffPolicyAlgorithm):
         This method is called in ``collect_rollouts()`` after each step in the environment.
         """
         self._n_calls += 1
-        if self._n_calls % self.target_update_interval == 0:
-            polyak_update(self.quantile_net.parameters(), self.quantile_net_target.parameters(), self.tau)
-            # Copy running stats, see https://github.com/DLR-RM/stable-baselines3/issues/996
+        # Account for multiple environments
+        # each call to step() corresponds to n_envs transitions
+        if self._n_calls % max(self.target_update_interval // self.n_envs, 1) == 0:
+            polyak_update(self.q_net.parameters(), self.q_net_target.parameters(), self.tau)
+            # Copy running stats, see GH issue #996
             polyak_update(self.batch_norm_stats, self.batch_norm_stats_target, 1.0)
 
         self.exploration_rate = self.exploration_schedule(self._current_progress_remaining)
@@ -198,35 +193,30 @@ class QRDQN(OffPolicyAlgorithm):
             replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
 
             with th.no_grad():
-                # Compute the quantiles of next observation
-                next_quantiles = self.quantile_net_target(replay_data.next_observations)
-                # Compute the greedy actions which maximize the next Q values
-                next_greedy_actions = next_quantiles.mean(dim=1, keepdim=True).argmax(dim=2, keepdim=True)
-                # Make "n_quantiles" copies of actions, and reshape to (batch_size, n_quantiles, 1)
-                next_greedy_actions = next_greedy_actions.expand(batch_size, self.n_quantiles, 1)
-                # Follow greedy policy: use the one with the highest Q values
-                next_quantiles = next_quantiles.gather(dim=2, index=next_greedy_actions).squeeze(dim=2)
+                # Compute the next Q-values using the target network
+                next_q_values = self.q_net_target(replay_data.next_observations)
+                # Follow greedy policy: use the one with the highest value
+                next_q_values, _ = next_q_values.max(dim=1)
+                # Avoid potential broadcast issue
+                next_q_values = next_q_values.reshape(-1, 1)
                 # 1-step TD target
-                target_quantiles = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_quantiles
+                target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
-            # Get current quantile estimates
-            current_quantiles = self.quantile_net(replay_data.observations)
+            # Get current Q-values estimates
+            current_q_values = self.q_net(replay_data.observations)
 
-            # Make "n_quantiles" copies of actions, and reshape to (batch_size, n_quantiles, 1).
-            actions = replay_data.actions[..., None].long().expand(batch_size, self.n_quantiles, 1)
-            # Retrieve the quantiles for the actions from the replay buffer
-            current_quantiles = th.gather(current_quantiles, dim=2, index=actions).squeeze(dim=2)
+            # Retrieve the q-values for the actions from the replay buffer
+            current_q_values = th.gather(current_q_values, dim=1, index=replay_data.actions.long())
 
-            # Compute Quantile Huber loss, summing over a quantile dimension as in the paper.
-            loss = quantile_huber_loss(current_quantiles, target_quantiles, sum_over_quantiles=True)
+            # Compute Huber loss (less sensitive to outliers)
+            loss = F.smooth_l1_loss(current_q_values, target_q_values)
             losses.append(loss.item())
 
             # Optimize the policy
             self.policy.optimizer.zero_grad()
             loss.backward()
             # Clip gradient norm
-            if self.max_grad_norm is not None:
-                th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+            th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
             self.policy.optimizer.step()
 
         # Increase update counter
@@ -234,6 +224,7 @@ class QRDQN(OffPolicyAlgorithm):
 
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         self.logger.record("train/loss", np.mean(losses))
+
 
     def predict(
         self,
@@ -243,16 +234,13 @@ class QRDQN(OffPolicyAlgorithm):
         deterministic: bool = False,
     ) -> Tuple[np.ndarray, Optional[Tuple[np.ndarray, ...]]]:
         """
-        Get the policy action from an observation (and optional hidden state).
-        Includes sugar-coating to handle different observations (e.g. normalizing images).
+        Overrides the base_class predict function to include epsilon-greedy exploration.
 
         :param observation: the input observation
-        :param state: The last hidden states (can be None, used in recurrent policies)
+        :param state: The last states (can be None, used in recurrent policies)
         :param episode_start: The last masks (can be None, used in recurrent policies)
-            this correspond to beginning of episodes,
-            where the hidden states of the RNN must be reset.
         :param deterministic: Whether or not to return deterministic actions.
-        :return: the model's action and the next hidden state
+        :return: the model's action and the next state
             (used in recurrent policies)
         """
         if not deterministic and np.random.rand() < self.exploration_rate:
@@ -268,15 +256,16 @@ class QRDQN(OffPolicyAlgorithm):
             action, state = self.policy.predict(observation, state, episode_start, deterministic)
         return action, state
 
+
     def learn(
-        self: SelfQRDQN,
+        self: SelfDQN,
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 4,
-        tb_log_name: str = "QRDQN",
+        tb_log_name: str = "DQN",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-    ) -> SelfQRDQN:
+    ) -> SelfDQN:
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,
@@ -286,8 +275,9 @@ class QRDQN(OffPolicyAlgorithm):
             progress_bar=progress_bar,
         )
 
+
     def _excluded_save_params(self) -> List[str]:
-        return super()._excluded_save_params() + ["quantile_net", "quantile_net_target"]  # noqa: RUF005
+        return [*super()._excluded_save_params(), "q_net", "q_net_target"]
 
     def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
         state_dicts = ["policy", "policy.optimizer"]

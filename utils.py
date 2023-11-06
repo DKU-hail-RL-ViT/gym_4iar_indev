@@ -64,6 +64,7 @@ def evaluate_quantile_at_action(s_quantiles, actions):
 
     # Expand actions into (batch_size, N, 1).
     action_index = actions[..., None].expand(batch_size, N, 1)
+    # action_index = torch.clamp(actions[..., None], max=36).expand(batch_size, N, 1)
 
     # Calculate quantile values at specified actions.
     sa_quantiles = s_quantiles.gather(dim=2, index=action_index)
@@ -87,13 +88,12 @@ class RunningMeanStats:
 class LinearAnneaer:
 
     def __init__(self, start_value, end_value, num_steps):
-        # assert num_steps > 0 and isinstance(num_steps, int)
+        assert num_steps > 0 and isinstance(num_steps, int)
 
         self.steps = 0
         self.start_value = start_value
         self.end_value = end_value
-        self.num_steps = 5*(10**7)
-
+        self.num_steps = num_steps
         self.a = (self.end_value - self.start_value) / self.num_steps
         self.b = self.start_value
 
