@@ -34,7 +34,6 @@ def self_play(env, model):
                 # action = model.predict(obs_post.reshape(*[1, *obs_post.shape]))[0]
                 # action = action[0]
 
-
             # action = env.action_space.sample()
             action2d = action2d_ize(action)
 
@@ -138,9 +137,14 @@ if __name__ == '__main__':
 
     for i in range(len(rewards)):
         data_buffer.append((rewards, wons))
-
-
+         # 여기에서 데이터 버퍼에 집어넣어놓고 그 다음에 actor-critic 하는 부분 있어야 함
     env.reset()
+
+
+
+
+
+    # 그 다음에 평가하는 부분
     while True:
         # sample an action until a valid action is sampled
         while True:
