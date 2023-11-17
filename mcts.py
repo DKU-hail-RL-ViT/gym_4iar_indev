@@ -10,6 +10,7 @@ def rollout_policy_fn(board):
     availables = list(range(36))
     action_probs = np.random.rand(len(availables))
     return zip(availables, action_probs)
+# 현재 board가 9,4라서 그냥
 
 
 def policy_value_fn(board):
@@ -191,10 +192,11 @@ class MCTS(object):
 
             print(max_action)
 
+
             obs, reward, terminated, info = env.step(max_action)
             player = 1 - player
 
-        else:
+        else: # 수정 필요
             # If no break from the loop, issue a warning.
             print("WARNING: rollout reached move limit")
         if winner == 0:  # tie
