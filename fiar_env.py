@@ -22,17 +22,19 @@ def action2d_ize(action):
     action2d = np.where(map == action)
     return int(action2d[0]), int(action2d[1])
 
+
 def action1d_ize(action):
     map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
     return map[action[0],action[1]]
 
-def winning(state, player=0):
-    if (state[3].sum() == 36):
-        return np.nan
-    elif np.all(state[TURN_CHNL] == player):
-        return 1
+
+def winning(state):
+    if state[3].sum() == 36:
+        return 0    # draw
+    elif state[3].sum() // 2 == 1:
+        return 1    # black win
     else:
-        return -1
+        return -1   # black win
 
 
 def turn(state):
@@ -249,8 +251,6 @@ def game_ended(state):
     :return: 0/1 = game not ended / game ended respectively
     """
     m, n = state.shape[1:]
-
-
     return int(np.count_nonzero(state[4] == 1) >= 1)
     # return int(np.count_nonzero(state[4] == 1) == m * n)
 
@@ -308,20 +308,13 @@ def action_size(state=None, board_size: int = None):
     return m * n
 
 class Fiar(gym.Env):
-    def __init__(self, player=0):
-        self.player = [0, 1]    # 0: black,  1: white
-        self.current_player = self.player[0]
-
+    def __init__(self):
         self.state_ = self.init_state()
         self.observation_space = spaces.Box(np.float32(0), np.float32(NUM_CHNLS),
                                                 shape=(NUM_CHNLS, 9, 4))
-        self.availables = list(range(36))
         self.action_space = spaces.Discrete(action_size(self.state_))
         self.done = False
         self.action = None
-        self.state_history = []
-        self.action_history = []
-        self.reward_history = []
 
 
     def init_state(self):
@@ -340,7 +333,7 @@ class Fiar(gym.Env):
 
         SIZE: 9,4 since it is 4x9 board
         """
-        return np.zeros((5,9,4))
+        return np.zeros((5, 9, 4))
 
     def step(self, action):
         '''
@@ -392,26 +385,14 @@ class Fiar(gym.Env):
     def game_ended(self):
         return self.done
 
-    def do_move(self, move):
-        self.states[move] = self.current_player
-        self.availables.remove(move)
-        self.current_player = (
-            self.players[0] if self.current_player == self.players[1]
-            else self.players[1]
-        )
-
     def __str__(self):
         return str_(self.state_)
 
     def winner(self):
-        """
-        Get's the winner in BLACK's perspective
-        :return: 1 for black's win, -1 for white's win
-        """
-        if self.game_ended():
-            return winning(self.state_, self.player)
+        if not self.game_ended():  # 끝나지 않았으면 False 줌
+            return False, 0
         else:
-            return 0
+            return True, winning(self.state_)
 
     def reward(self):
         return self.winner()
@@ -422,7 +403,7 @@ class Fiar(gym.Env):
             self.window.close()
             self.pyglet.app.exit()
 
-    def render(self,mode='terminal'):
+    def render(self, mode='terminal'):
         if mode == 'terminal':
             print(self.__str__())
 
