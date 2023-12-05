@@ -19,34 +19,35 @@ class Net(nn.Module):
 
         self.board_width = board_width
         self.board_height = board_height
+        self.flatten = nn.Flatten()
+
         # common layers
-        self.conv1 = nn.Conv2d(4, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        # action policy layers
-        self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
-        self.act_fc1 = nn.Linear(4*board_width*board_height,
-                                 board_width*board_height)
-        # state value layers
-        self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
-        self.val_fc1 = nn.Linear(2*board_width*board_height, 64)
+        self.fc1 = nn.Linear(5*board_width*board_height, 256)
+        self.fc2 = nn.Linear(256, 128)
+
+        # action policy layers (MLP)
+        self.act_fc1 = nn.Linear(128, board_width*board_height)
+
+        # state value layers (MLP)
+        self.val_fc1 = nn.Linear(128, 64)
         self.val_fc2 = nn.Linear(64, 1)
 
-    def forward(self, state_input):
+    def forward(self, x):
+        # flatten input
+        x = self.flatten(x)
+
         # common layers
-        x = F.relu(self.conv1(state_input))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+
         # action policy layers
-        x_act = F.relu(self.act_conv1(x))
-        x_act = x_act.view(-1, 4*self.board_width*self.board_height)
-        x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
+        action_probs = F.log_softmax(self.act_fc1(x), dim=1)
+
         # state value layers
-        x_val = F.relu(self.val_conv1(x))
-        x_val = x_val.view(-1, 2*self.board_width*self.board_height)
-        x_val = F.relu(self.val_fc1(x_val))
-        x_val = F.tanh(self.val_fc2(x_val))
-        return x_act, x_val
+        x_val = F.relu(self.val_fc1(x))
+        state_value = torch.tanh(self.val_fc2(x_val))
+
+        return action_probs, state_value
 
 
 class PolicyValueNet():
@@ -54,8 +55,8 @@ class PolicyValueNet():
     def __init__(self, board_width, board_height,
                  model_file=None, use_gpu=False):
         self.use_gpu = use_gpu
-        self.board_width = board_width
-        self.board_height = board_height
+        self.board_width = board_width      # 9
+        self.board_height = board_height    # 4
         self.l2_const = 1e-4  # coef of l2 penalty
         # the policy value net module
         if self.use_gpu:
@@ -79,33 +80,27 @@ class PolicyValueNet():
             state_batch = Variable(torch.FloatTensor(state_batch_np).cuda())
             log_act_probs, value = self.policy_value_net(state_batch)
             act_probs = np.exp(log_act_probs.data.cpu().numpy())
-            return act_probs, value.data.cpu().numpy()
+            return act_probs, value.item()
         else:
             state_batch_np = np.array(state_batch)
             state_batch = Variable(torch.FloatTensor(state_batch_np))
             log_act_probs, value = self.policy_value_net(state_batch)
             act_probs = np.exp(log_act_probs.data.numpy())
-            return act_probs, value.data.numpy()
+            return act_probs, value.item()
 
     def policy_value_fn(self, board):
-        """
-        input: board
-        output: a list of (action, probability) tuples for each available
-        action and the score of the board state
-        """
+
         legal_positions = board.availables
+        print(legal_positions)
         current_state = np.ascontiguousarray(board.current_state().reshape(
-                -1, 4, self.board_width, self.board_height))
-        if self.use_gpu:
-            log_act_probs, value = self.policy_value_net(
-                    Variable(torch.from_numpy(current_state)).cuda().float())
-            act_probs = np.exp(log_act_probs.data.cpu().numpy().flatten())
-        else:
-            log_act_probs, value = self.policy_value_net(
-                    Variable(torch.from_numpy(current_state)).float())
-            act_probs = np.exp(log_act_probs.data.detach().numpy().flatten())
+            -1, 4, self.board_width, self.board_height))
+
+        log_act_probs, value = self.policy_value_net(
+            Variable(torch.from_numpy(current_state)).float())
+
+        act_probs = np.exp(log_act_probs.data.detach().numpy().flatten())
         act_probs = list(zip(legal_positions, act_probs[legal_positions]))
-        value = value.data[0][0]
+        value = value.item()
         return act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):

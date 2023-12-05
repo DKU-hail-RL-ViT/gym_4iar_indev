@@ -5,7 +5,7 @@ import random
 
 from collections import defaultdict, deque
 from mcts import MCTSPlayer
-from policy_value_network import PolicyValueNet
+from policy_value_net import PolicyValueNet
 
 eps = 0.05
 
@@ -22,6 +22,15 @@ kl_targ = 0.02
 check_freq = 50
 self_play_times = 1500
 best_win_ratio = 0.0
+
+init_model = None
+
+
+def policy_value_fn(board):  # board.shape = (9,4)
+    # return uniform probabilities and 0 score for pure MCTS
+    availables = [i for i in range(36) if not np.any(board[3][i // 4][i % 4] == 1)]
+    action_probs = np.ones(len(availables)) / len(availables)
+    return zip(availables, action_probs), 0
 
 
 def collect_selfplay_data(n_games=1):
@@ -66,6 +75,8 @@ def self_play(env, temp=1e-3):
         print(player_0, player_1)
         obs, reward, terminated, info = env.step(action)
 
+        print("hello")
+
         player_0 = turn(obs)
         player_1 = 1 - player_0
 
@@ -77,17 +88,20 @@ def self_play(env, temp=1e-3):
         end, winners = env.winner()
 
         if end:  # 이 부분 수정해야 함
+            env.reset()
+
+            # reset MCTS root node
+            mcts_player.reset_player()
+
             if obs[3].sum() == 36:
                 print('draw')
-                env.render()  # ?
+                env.render()
 
             winners_z = np.zeros(len(current_player))
 
             if winners != 0:
                 winners_z[np.array(current_player) == winners] = 1.0
                 winners_z[np.array(current_player) != winners] = -1.0
-
-            obs, _ = env.reset()
 
             return reward, zip(states, mcts_probs, winners_z)
 
@@ -166,14 +180,26 @@ if __name__ == '__main__':
     obs_post[2] = np.zeros_like(obs[0])
     # obs_post = obs[player_myself] + obs[player_enemy]*(-1)
 
+    """
     c = 0
     num_timesteps = 0
     ep = 1
     b_win = 0
     w_win = 0
+    """
     self_play_sizes = 1
 
-    mcts_player = MCTSPlayer(c_puct, n_playout, is_selfplay=1)
+    if init_model:
+        # start training from an initial policy-value net
+        policy_value_net = PolicyValueNet(env.state().shape[1],
+                                          env.state().shape[2],
+                                          model_file=init_model)
+    else:
+        # start training from a new policy-value net
+        policy_value_net = PolicyValueNet(env.state().shape[1],
+                                          env.state().shape[2])
+
+    mcts_player = MCTSPlayer(policy_value_fn, c_puct, n_playout, is_selfplay=1)
 
     for i in range(self_play_times):
         collect_selfplay_data(self_play_sizes)
