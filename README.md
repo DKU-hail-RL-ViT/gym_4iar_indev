@@ -24,6 +24,7 @@ pip install numpy==1.25.1
 pip install matplotlib==3.7.2
 pip install gym==0.26.2
 pip install pyglet==2.0.8
+pip install mcts
 pip install wandb
 ```
 
@@ -32,8 +33,10 @@ Task : four in a row (9 x 4)
 
 ### Problem
 
-mcts 111번째 줄
-playout 하는 부분에서 문제가 생기는 듯
+문제가 생김 
+첫 _playout은 잘 돌아감 
+근데 다음 _playout은 turn이 안넘어가는건지 action이 같은게 뽑힘 
+분명 state 초기화 되어 들어가는데 왜 그러니
 
 
 
