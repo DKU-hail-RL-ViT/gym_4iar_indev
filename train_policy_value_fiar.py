@@ -1,11 +1,11 @@
 from fiar_env import Fiar, turn, action2d_ize
 import numpy as np
-import wandb
+# import wandb
 import random
 
 from collections import defaultdict, deque
 from mcts import MCTSPlayer
-from policy_value_net import PolicyValueNet
+from policy_value_network import PolicyValueNet
 
 eps = 0.05
 
@@ -64,6 +64,8 @@ def self_play(env, temp=1e-3):
                 action = move
 
             action2d = action2d_ize(action)
+            print("여기로 나오면 성공 ")
+
             if obs[3, action2d[0], action2d[1]] == 0.0:
                 break
 
@@ -164,7 +166,7 @@ def policy_evaluate():
 
 if __name__ == '__main__':
 
-    wandb.init(project="4iar_DQN")
+    # wandb.init(project="4iar_DQN")
 
     env = Fiar()
     obs, _ = env.reset()
