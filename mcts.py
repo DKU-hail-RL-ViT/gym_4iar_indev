@@ -4,7 +4,7 @@ import copy
 import torch
 import torch.nn.functional as F
 
-from policy_value_net import Net
+from policy_value_network import Net
 
 
 def softmax(x):
@@ -32,6 +32,7 @@ class TreeNode(object):
     def __init__(self, parent, prior_p):
         self._parent = parent
         self._children = {}  # a map from action to TreeNode
+        self._removed_children = []
         self._n_visits = 0
         self._Q = 0
         self._u = 0
@@ -45,14 +46,21 @@ class TreeNode(object):
         for action, prob in action_priors:
             if action not in self._children:
                 self._children[action] = TreeNode(self, prob)
+                # print(self._children.items())
 
     def select(self, c_puct):
         """Select action among children that gives maximum action value Q
         plus bonus u(P).
         Return: A tuple of (action, next_node)
         """
-        return max(self._children.items(),
-                   key=lambda act_node: act_node[1].get_value(c_puct))
+        action, i_node = max(self._children.items(),
+                                key=lambda act_node: act_node[1].get_value(c_puct))
+        # Remove the selected child from the children dictionary
+        self._children.pop(action)
+
+        # Store the removed child in a list
+        self._removed_children.append(action)
+        return action, i_node
 
     def update(self, leaf_value):
         """Update node values from leaf evaluation.
@@ -84,12 +92,23 @@ class TreeNode(object):
         return self._Q + self._u
 
     def is_leaf(self):
-        """Check if leaf node (i.e. no nodes below this have been expanded).
-        """
+        """Check if leaf node (i.e. no nodes below this have been expanded)."""
         return self._children == {}
 
     def is_root(self):
         return self._parent is None
+
+    def leaf_reset(self):
+        # Reinsert the removed children after the game is finished
+        for action in self._removed_children:
+            # Assuming _removed_children contains only actions
+            self._children[action] = None  # You can replace None with an appropriate default value
+
+            # Clear the list of removed actions for the next game
+        self._removed_children = []
+
+
+
 
 
 class MCTS(object):
@@ -117,15 +136,14 @@ class MCTS(object):
         """
         net = Net(obs.shape[1], obs.shape[2])
         node = self._root
+
         while(1):
             if node.is_leaf():
                 break
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            obs, reward, terminated, info = env.step(action)
-            print(action, info)
-            # whyyyyyyyyyyyyyyyyy
 
+            obs, reward, terminated, info = env.step(action)
         action_probs, leaf_value = policy_value_fn(obs, net)
 
         # Check for end of game
@@ -142,10 +160,14 @@ class MCTS(object):
                 leaf_value = (
                     1.0 if result == 1 else -1.0
                 )
+
             obs, _ = env.reset()
+            self.update_with_move(-1)
+            node.leaf_reset()
+
         node.update_recursive(-leaf_value)
 
-    def get_move_probs(self, env, state, temp=1e-3): # state.shape = (9,4)
+    def get_move_probs(self, env, state, temp=1e-3): # state.shape = (5,9,4)
 
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
@@ -156,7 +178,7 @@ class MCTS(object):
             state_copy = copy.deepcopy(state)
             self._playout(env, state_copy)   # state_copy.shape = (5,9,4)
 
-        print('hello')
+        print('제발')
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
                       for act, node in self._root._children.items()]
@@ -198,10 +220,10 @@ class MCTSPlayer(object):
         move_probs = np.zeros(len(sensible_moves))
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, board, temp)
-            # board.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, board, temp)    # board.shape = (5,9,4)
 
             move_probs[list(acts)] = probs
+
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)
                 move = np.random.choice(
