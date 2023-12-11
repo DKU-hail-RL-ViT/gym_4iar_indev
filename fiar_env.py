@@ -25,16 +25,16 @@ def action2d_ize(action):
 
 def action1d_ize(action):
     map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
-    return map[action[0],action[1]]
+    return map[action[0], action[1]]
 
 
 def winning(state):
     if state[3].sum() == 36:
-        return 0    # draw
-    elif state[3].sum() // 2 == 1:
-        return 1    # black win
+        return -1    # draw
+    elif state[3].sum() % 2 == 1:
+        return 1   # black win
     else:
-        return -1   # black win
+        return 0.1   # white win
 
 
 def turn(state):
@@ -393,7 +393,7 @@ class Fiar(gym.Env):
 
     def winner(self):
         if not self.game_ended():  # 끝나지 않았으면 False 줌
-            return False, 0
+            return False, -1
         else:
             return True, winning(self.state_)
 
