@@ -339,7 +339,7 @@ class Fiar(gym.Env):
         """
         return np.zeros((5, 9, 4))
 
-    def step(self, action):
+    def step(self, action, node=None):
         '''
         Assumes the correct player is making a move. Black goes first.
         return observation, reward, done, info
