@@ -161,11 +161,11 @@ class MCTS(object):
             node.expand(action_probs)
         else:
             # for end state，return the "true" leaf_value
-            if result == 0:  # tie
+            if result == -1:  # tie
                 leaf_value = 0.0
             else:
                 leaf_value = (
-                    1.0 if result == 1 else -1.0
+                    1.0 if result == 0 else -1.0
                 )
 
             obs, _ = env.reset()

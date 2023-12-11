@@ -9,7 +9,7 @@ from policy_value_network import PolicyValueNet
 
 eps = 0.05
 
-batch_size = 32   # previous 512 너무 오래걸려서 32로 줄여놓았음
+batch_size = 128   # previous 512 너무 오래걸려서 32로 줄여놓았음
 temp = 1e-3
 learn_rate = 2e-3
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
@@ -71,7 +71,6 @@ def self_play(env, temp=1e-3):
         mcts_probs.append(move_probs)
         current_player.append(turn(obs))
 
-        # print(player_0, player_1)
         obs, reward, terminated, info = env.step(action)
 
         player_0 = turn(obs)
@@ -83,35 +82,36 @@ def self_play(env, temp=1e-3):
         obs_post[3] = obs[player_0] + obs[player_1]
 
         end, winners = env.winner()
-        print(winners)
+        # Return value from env.winner is identical to the return value
+        # so, black win -> 1 , white win -> 0.1
 
         if end:
             if obs[3].sum() == 36:
                 print('draw')
-                env.render()
+                print(env)
 
+            print(env)
             env.reset()
 
             # reset MCTS root node
             mcts_player.reset_player()
 
-
+            print("batch i:{}, episode_len:{}".format(
+                i + 1, len(current_player)))
 
             winners_z = np.zeros(len(current_player))
+            if winners != -1:
+                if winners == 0.1:      # if win white return : 0.1
+                    winners = 0
 
-            if winners != 0:
-                print(np.array(current_player))
-
-                winners_z[np.array(current_player) == winners] = 1.0
-                winners_z[np.array(current_player) != winners] = -1.0
-
-            print(winners_z)
+                winners_z[np.array(current_player) == 1 - winners] = 1.0
+                winners_z[np.array(current_player) != 1 - winners] = -1.0
 
             return reward, zip(states, mcts_probs, winners_z)
 
 
-def policy_update(lr_multiplier=1.0):
-    print('80%')
+def policy_update(lr_multiplier):
+    kl, loss, entropy = 0, 0, 0
 
     """update the policy-value net"""
     mini_batch = random.sample(data_buffer, batch_size)
@@ -185,13 +185,6 @@ if __name__ == '__main__':
     obs_post[2] = np.zeros_like(obs[0])
     # obs_post = obs[player_myself] + obs[player_enemy]*(-1)
 
-    """
-    c = 0
-    num_timesteps = 0
-    ep = 1
-    b_win = 0
-    w_win = 0
-    """
     self_play_sizes = 1
 
     if init_model:
@@ -210,9 +203,10 @@ if __name__ == '__main__':
         collect_selfplay_data(self_play_sizes)
 
         if len(data_buffer) > batch_size:
-            loss, entropy = policy_update()
+            loss, entropy = policy_update(lr_multiplier=lr_multiplier)
 
         if (i + 1) % check_freq == 0:
+            print(i+1)
             print("current self-play batch: {}".format(i + 1))
             win_ratio = policy_evaluate()
             print(win_ratio)
