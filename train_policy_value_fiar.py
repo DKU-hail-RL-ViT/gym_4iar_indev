@@ -9,7 +9,7 @@ from policy_value_network import PolicyValueNet
 
 eps = 0.05
 
-batch_size = 512
+batch_size = 32   # previous 512 너무 오래걸려서 32로 줄여놓았음
 temp = 1e-3
 learn_rate = 2e-3
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
@@ -52,8 +52,6 @@ def self_play(env, temp=1e-3):
     obs_post[2] = np.zeros_like(obs[0])
     obs_post[3] = obs[player_0] + obs[player_1]
 
-    print('selfplay_start')
-
     while True:
         while True:
             action = None
@@ -63,23 +61,18 @@ def self_play(env, temp=1e-3):
             else:
                 move, move_probs = mcts_player.get_action(env, obs_post, temp=temp, return_prob=1)
                 action = move
-
             action2d = action2d_ize(action)
-            print("여기로 나오면 성공 ")
 
             if obs[3, action2d[0], action2d[1]] == 0.0:
                 break
-
 
         # store the data
         states.append(obs)
         mcts_probs.append(move_probs)
         current_player.append(turn(obs))
 
-        print(player_0, player_1)
+        # print(player_0, player_1)
         obs, reward, terminated, info = env.step(action)
-
-        print("hello")
 
         player_0 = turn(obs)
         player_1 = 1 - player_0
@@ -90,22 +83,29 @@ def self_play(env, temp=1e-3):
         obs_post[3] = obs[player_0] + obs[player_1]
 
         end, winners = env.winner()
+        print(winners)
 
-        if end:  # 이 부분 수정해야 함
+        if end:
+            if obs[3].sum() == 36:
+                print('draw')
+                env.render()
+
             env.reset()
 
             # reset MCTS root node
             mcts_player.reset_player()
 
-            if obs[3].sum() == 36:
-                print('draw')
-                env.render()
+
 
             winners_z = np.zeros(len(current_player))
 
             if winners != 0:
+                print(np.array(current_player))
+
                 winners_z[np.array(current_player) == winners] = 1.0
                 winners_z[np.array(current_player) != winners] = -1.0
+
+            print(winners_z)
 
             return reward, zip(states, mcts_probs, winners_z)
 
@@ -142,10 +142,11 @@ def policy_update(lr_multiplier=1.0):
 
     explained_var_old = (1 -
                          np.var(np.array(winner_batch) - old_v.flatten()) /
-                         np.var(np.array(winner_batch)))
+                         (np.var(np.array(winner_batch)) + 1e-10))
     explained_var_new = (1 -
                          np.var(np.array(winner_batch) - new_v.flatten()) /
-                         np.var(np.array(winner_batch)))
+                         (np.var(np.array(winner_batch)) + 1e-10))
+
     print(("kl:{:.5f},"
            "lr_multiplier:{:.3f},"
            "loss:{},"

@@ -45,7 +45,7 @@ class Net(nn.Module):
 
         # state value layers
         x_val = F.relu(self.val_fc1(x))
-        state_value = torch.tanh(self.val_fc2(x_val))
+        state_value = torch.tanh(self.val_fc2(x_val)).squeeze()  # Fix here
 
         return action_probs, state_value
 
@@ -86,22 +86,18 @@ class PolicyValueNet():
             state_batch = Variable(torch.FloatTensor(state_batch_np))
             log_act_probs, value = self.policy_value_net(state_batch)
             act_probs = np.exp(log_act_probs.data.numpy())
-            return act_probs, value.item()
+            return act_probs, value.cpu().detach().numpy()
 
-    def policy_value_fn(self, board):
+    def policy_value_fn(self, board, net):
+        available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
+        current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
+        log_act_probs, value = net(torch.from_numpy(current_state).float())
 
-        legal_positions = board.availables
-        print(legal_positions)
-        current_state = np.ascontiguousarray(board.current_state().reshape(
-            -1, 4, self.board_width, self.board_height))
+        act_probs = F.softmax(log_act_probs, dim=1).data.numpy().flatten()
+        act_probs = list(zip(available, act_probs))
+        state_value = value.item()
 
-        log_act_probs, value = self.policy_value_net(
-            Variable(torch.from_numpy(current_state)).float())
-
-        act_probs = np.exp(log_act_probs.data.detach().numpy().flatten())
-        act_probs = list(zip(legal_positions, act_probs[legal_positions]))
-        value = value.item()
-        return act_probs, value
+        return act_probs, state_value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
