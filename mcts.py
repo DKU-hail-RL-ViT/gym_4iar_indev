@@ -55,11 +55,14 @@ class TreeNode(object):
         """
         action, i_node = max(self._children.items(),
                                 key=lambda act_node: act_node[1].get_value(c_puct))
-        # Remove the selected child from the children dictionary
-        self._children.pop(action)
+        # # Remove the selected child from the children dictionary
+        # self._children.pop(action)
+        #
+        # # Store the removed child in a list
+        # self._removed_children.append(action)
 
-        # Store the removed child in a list
-        self._removed_children.append(action)
+        if self._children == {}:
+            print('empty')
         return action, i_node
 
     def update(self, leaf_value):
@@ -134,16 +137,22 @@ class MCTS(object):
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
+        print('start_playout')
         net = Net(obs.shape[1], obs.shape[2])
         node = self._root
+        action_num = 0
+
+        if np.any(env.state_[3] != obs[3]):
+            print('wtf')
 
         while(1):
             if node.is_leaf():
                 break
+            action_num += 1
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-
-            obs, reward, terminated, info = env.step(action)
+            print('move')
+            obs, reward, terminated, info = env.step(action,node)
         action_probs, leaf_value = policy_value_fn(obs, net)
 
         # Check for end of game
@@ -164,7 +173,9 @@ class MCTS(object):
             obs, _ = env.reset()
             self.update_with_move(-1)
             node.leaf_reset()
+            print('reset_done')
 
+        print('end_one_playout')
         node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, state, temp=1e-3): # state.shape = (5,9,4)
@@ -176,7 +187,8 @@ class MCTS(object):
         """
         for n in range(self._n_playout):
             state_copy = copy.deepcopy(state)
-            self._playout(env, state_copy)   # state_copy.shape = (5,9,4)
+            # self._playout(env, state_copy)   # state_copy.shape = (5,9,4)
+            self._playout(copy.deepcopy(env), state_copy)   # state_copy.shape = (5,9,4)
 
         print('제발')
         # calc the move probabilities based on visit counts at the root node
@@ -221,6 +233,7 @@ class MCTSPlayer(object):
 
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, board, temp)    # board.shape = (5,9,4)
+
 
             move_probs[list(acts)] = probs
 

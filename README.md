@@ -33,17 +33,15 @@ Task : four in a row (9 x 4)
 
 ### Problem
 
-그 중에 한가지 에러를 해결함
-일단 alphazero의 코드를 따라하고 gym환경에 맞추다보니 몇가지 설정이 덜된듯
-alphazero 코드에서는 playout중에 게임이 끝나면 자동으로 root node를 초기화 되는데 
-우리 코드에서는 그러지 않았기 때문에 
-근데 왜 문제 해결이 안된거 같지
-
-
+교수님이 해결해주신 버전이라 문제 부분엔 적지 않았음
 
 
 ### version  
-이건 나중에 다시 정리함
+
+교수님이 해결해주신 version
+
+
+
 
 black 학습, white 랜덤
 

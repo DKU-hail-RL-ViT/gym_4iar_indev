@@ -52,11 +52,12 @@ def self_play(env, temp=1e-3):
     obs_post[2] = np.zeros_like(obs[0])
     obs_post[3] = obs[player_0] + obs[player_1]
 
+    print('selfplay_start')
+
     while True:
         while True:
             action = None
             move_probs = None
-
             if obs[3].sum() == 36:
                 print('draw')
             else:
@@ -68,6 +69,7 @@ def self_play(env, temp=1e-3):
 
             if obs[3, action2d[0], action2d[1]] == 0.0:
                 break
+
 
         # store the data
         states.append(obs)
