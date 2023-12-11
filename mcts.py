@@ -46,7 +46,6 @@ class TreeNode(object):
         for action, prob in action_priors:
             if action not in self._children:
                 self._children[action] = TreeNode(self, prob)
-                # print(self._children.items())
 
     def select(self, c_puct):
         """Select action among children that gives maximum action value Q
@@ -137,13 +136,13 @@ class MCTS(object):
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
-        print('start_playout')
         net = Net(obs.shape[1], obs.shape[2])
         node = self._root
         action_num = 0
 
         if np.any(env.state_[3] != obs[3]):
-            print('wtf')
+            pass
+            # print('wtf')
 
         while(1):
             if node.is_leaf():
@@ -151,7 +150,7 @@ class MCTS(object):
             action_num += 1
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            print('move')
+            # print('move')
             obs, reward, terminated, info = env.step(action,node)
         action_probs, leaf_value = policy_value_fn(obs, net)
 
@@ -161,7 +160,6 @@ class MCTS(object):
         if not end:
             node.expand(action_probs)
         else:
-            print(env)
             # for end state，return the "true" leaf_value
             if result == 0:  # tie
                 leaf_value = 0.0
@@ -171,11 +169,10 @@ class MCTS(object):
                 )
 
             obs, _ = env.reset()
-            self.update_with_move(-1)
             node.leaf_reset()
-            print('reset_done')
+            # print('reset_done')
 
-        print('end_one_playout')
+        # print('end_one_playout')
         node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, state, temp=1e-3): # state.shape = (5,9,4)
@@ -187,10 +184,8 @@ class MCTS(object):
         """
         for n in range(self._n_playout):
             state_copy = copy.deepcopy(state)
-            # self._playout(env, state_copy)   # state_copy.shape = (5,9,4)
             self._playout(copy.deepcopy(env), state_copy)   # state_copy.shape = (5,9,4)
 
-        print('제발')
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
                       for act, node in self._root._children.items()]
@@ -229,12 +224,10 @@ class MCTSPlayer(object):
         available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
         sensible_moves = available
         # the pi vector returned by MCTS as in the alphaGo Zero paper
-        move_probs = np.zeros(len(sensible_moves))
+        move_probs = np.zeros(board.shape[1] * board.shape[2])
 
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, board, temp)    # board.shape = (5,9,4)
-
-
             move_probs[list(acts)] = probs
 
             if self._is_selfplay:
