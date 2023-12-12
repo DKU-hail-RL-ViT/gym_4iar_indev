@@ -54,12 +54,6 @@ class TreeNode(object):
         """
         action, i_node = max(self._children.items(),
                                 key=lambda act_node: act_node[1].get_value(c_puct))
-        # # Remove the selected child from the children dictionary
-        # self._children.pop(action)
-        #
-        # # Store the removed child in a list
-        # self._removed_children.append(action)
-
         if self._children == {}:
             print('empty')
         return action, i_node
@@ -100,18 +94,6 @@ class TreeNode(object):
     def is_root(self):
         return self._parent is None
 
-    def leaf_reset(self):
-        # Reinsert the removed children after the game is finished
-        for action in self._removed_children:
-            # Assuming _removed_children contains only actions
-            self._children[action] = None  # You can replace None with an appropriate default value
-
-            # Clear the list of removed actions for the next game
-        self._removed_children = []
-
-
-
-
 
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
@@ -138,7 +120,6 @@ class MCTS(object):
         """
         net = Net(obs.shape[1], obs.shape[2])
         node = self._root
-        action_num = 0
 
         if np.any(env.state_[3] != obs[3]):
             pass
@@ -147,11 +128,10 @@ class MCTS(object):
         while(1):
             if node.is_leaf():
                 break
-            action_num += 1
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             # print('move')
-            obs, reward, terminated, info = env.step(action,node)
+            obs, reward, terminated, info = env.step(action, node)
         action_probs, leaf_value = policy_value_fn(obs, net)
 
         # Check for end of game
@@ -169,7 +149,6 @@ class MCTS(object):
                 )
 
             obs, _ = env.reset()
-            node.leaf_reset()
             # print('reset_done')
 
         # print('end_one_playout')
@@ -183,8 +162,7 @@ class MCTS(object):
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):
-            state_copy = copy.deepcopy(state)
-            self._playout(copy.deepcopy(env), state_copy)   # state_copy.shape = (5,9,4)
+            self._playout(copy.deepcopy(env), copy.deepcopy(state))   # state_copy.shape = (5,9,4)
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)

@@ -5,9 +5,6 @@ from gymnasium import spaces
 from scipy import ndimage
 
 from gym_4iar_indev import state_utils
-from gym_4iar_indev.prev_codes import rendering
-import gym_4iar_indev.state_utils
-
 # from numpy.random import choice_
 
 BLACK = 0
@@ -35,7 +32,7 @@ def winning(state):
     elif state[3].sum() % 2 == 1:
         return 1   # black win
     else:
-        return 0.1   # white win
+        return -0.5   # white win
 
 
 def turn(state):
@@ -211,15 +208,10 @@ def next_state(state, action1d):
 
     # Initialize basic variables
     board_shape = state.shape[1:]
-    pass_idx = np.prod(board_shape)
-    # action2d = action1d // board_shape[0], action1d % board_shape[1]
     action2d = action2d_ize(action1d)
 
     player = turn(state)
     ko_protect = None
-
-    # update invalidity of moves
-    # state[INVD_CHNL] = state_utils.compute_invalid_moves(state, player, ko_protect)
 
     # Assert move is valid
     assert state[INVD_CHNL, action2d[0], action2d[1]] == 0, ("Invalid move", action2d)
@@ -228,7 +220,6 @@ def next_state(state, action1d):
     state[player, action2d[0], action2d[1]] = 1
 
     state[INVD_CHNL] = state_utils.compute_invalid_moves(state, player, ko_protect)
-    # state[INVD_CHNL] = state_utils.compute_invalid_moves(state, player, ko_protect)
 
     # Update FIAR ending status
     state[DONE_CHNL] = fiar_check(state)
@@ -393,122 +384,10 @@ class Fiar(gym.Env):
         return str_(self.state_)
 
     def winner(self):
-        if not self.game_ended():  # 끝나지 않았으면 False 줌
+        if not self.game_ended():
             return False, -1
         else:
             return True, winning(self.state_)
 
     def reward(self):
         return self.winner()
-
-    def close(self):
-        if hasattr(self, 'window'):
-            assert hasattr(self, 'pyglet')
-            self.window.close()
-            self.pyglet.app.exit()
-
-    def render(self, mode='terminal'):
-        if mode == 'terminal':
-            print(self.__str__())
-
-            return None
-        elif mode == 'human':
-
-            import pyglet
-            from pyglet.window import mouse
-            from pyglet.window import key
-
-            screen = pyglet.canvas.get_display().get_default_screen()
-            # window_width = int(min(screen.width, screen.height) * 2 / 3)
-            # window_height = int(window_width * 1.2)
-            window_height = int(min(screen.width, screen.height) * 2 / 4)
-            window_width = int(window_height * 2)
-            # window_height = int(window_height * 1.5)
-            window = pyglet.window.Window(window_width, window_height)
-            # [1920,1080] monitor --> [1080,540] window
-
-            self.window = window
-            self.pyglet = pyglet
-            self.user_action = None
-
-            # Set Cursor
-            cursor = window.get_system_mouse_cursor(window.CURSOR_CROSSHAIR)
-            window.set_mouse_cursor(cursor)
-
-            # Outlines
-            lower_x_grid_coord = window_width * 0.075 # [1920,1080] monitor --> [81,] and [999,]
-            board_x_size = window_width * 0.85 # 918
-            upper_x_grid_coord = board_x_size + lower_x_grid_coord  # [1920,1080] monitor --> [81,] and [999,]
-
-            delta = board_x_size / (9.0 - 1) # board_size / (self.size - 1)
-
-            lower_y_grid_coord = window_height * 0.075 # [1920,1080] monitor --> [81,40.5] and [999,499.5]
-            board_y_size = window_height * 0.85 # 459
-            upper_y_grid_coord = lower_y_grid_coord + delta*(4.0-1) # [1920,1080] monitor --> [81,40.5] and [999,499.5]
-
-            # lower_y_grid_coord = window_height * 0.075 # [1920,1080] monitor --> [81,40.5] and [999,499.5]
-            # board_y_size = window_height * 0.85 # 459
-            # upper_y_grid_coord = board_y_size + lower_y_grid_coord # [1920,1080] monitor --> [81,40.5] and [999,499.5]
-            #
-            # delta = board_x_size / (9.0 - 1) # board_size / (self.size - 1)
-            piece_r = delta / 3.3  # radius
-
-            @window.event
-            def on_draw():
-                pyglet.gl.glClearColor(0.7, 0.5, 0.3, 1)
-                window.clear()
-
-                pyglet.gl.glLineWidth(3)
-                batch = pyglet.graphics.Batch()
-
-                # draw the grid and labels
-                rendering.draw_grid(batch, delta, [9, 4], [lower_x_grid_coord, upper_x_grid_coord], [lower_y_grid_coord, upper_y_grid_coord])
-
-                # info on top of the board
-                rendering.draw_info(batch, window_width, window_height, upper_y_grid_coord, self.state_) # only requires y upper coordinate
-
-                # Inform user what they can do
-                rendering.draw_command_labels(batch, window_width, window_height)
-
-                rendering.draw_title(batch, window_width, window_height)
-
-                batch.draw()
-
-                # draw the pieces
-                rendering.draw_pieces(batch, [lower_x_grid_coord, lower_y_grid_coord], delta, piece_r, [9, 4], self.state_)
-
-            @window.event
-            def on_mouse_press(x, y, button, modifiers):
-                if button == mouse.LEFT:
-                    grid_x = (x - lower_x_grid_coord)
-                    grid_y = (y - lower_y_grid_coord)
-                    x_coord = round(grid_x / delta)
-                    y_coord = round(grid_y / delta)
-                    print('PRESSED:\n [' + str(x) + ',' + str(y) + ']')
-                    print('GRID:   \n [' + str(grid_x) + ',' + str(grid_y) + ']')
-                    print('COORD:  \n [' + str(x_coord) + ',' + str(y_coord) + ']')
-                    try:
-                        self.window.close()
-                        pyglet.app.exit()
-                        self.user_action = (x_coord, y_coord)
-                    except:
-                        pass
-
-            @window.event
-            def on_key_press(symbol, modifiers):
-                if symbol == key.P:
-                    self.window.close()
-                    pyglet.app.exit()
-                    self.user_action = None
-                elif symbol == key.R:
-                    self.reset()
-                    self.window.close()
-                    pyglet.app.exit()
-                elif symbol == key.E:
-                    self.window.close()
-                    pyglet.app.exit()
-                    self.user_action = -1
-
-            pyglet.app.run()
-
-            return self.user_action

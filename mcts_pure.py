@@ -6,16 +6,18 @@ from operator import itemgetter
 def rollout_policy_fn(board):
     """a coarse, fast version of policy_fn used in the rollout phase."""
     # rollout randomly
-    action_probs = np.random.rand(len(board.availables))
-    return zip(board.availables, action_probs)
+    available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
+    action_probs = np.random.rand(len(available))
+    return zip(available, action_probs)
 
 
 def policy_value_fn(board):
     """a function that takes in a state and outputs a list of (action, probability)
     tuples and a score for the state"""
     # return uniform probabilities and 0 score for pure MCTS
-    action_probs = np.ones(len(board.availables))/len(board.availables)
-    return zip(board.availables, action_probs), 0
+    available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
+    action_probs = np.ones(len(available))/len(available)
+    return zip(available, action_probs), 0
 
 
 class TreeNode(object):
@@ -45,8 +47,11 @@ class TreeNode(object):
         plus bonus u(P).
         Return: A tuple of (action, next_node)
         """
-        return max(self._children.items(),
-                   key=lambda act_node: act_node[1].get_value(c_puct))
+        action, i_node = max(self._children.items(),
+                             key=lambda act_node: act_node[1].get_value(c_puct))
+        if self._children == {}:
+            print('empty')
+        return action, i_node
 
     def update(self, leaf_value):
         """Update node values from leaf evaluation.
@@ -104,7 +109,7 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
 
-    def _playout(self, state):
+    def _playout(self, env, obs):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
@@ -112,52 +117,54 @@ class MCTS(object):
         node = self._root
         while(1):
             if node.is_leaf():
-
                 break
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            state.do_move(action)
-
+            obs, reward, terminated, info = env.step(action,node)
         action_probs, _ = self._policy(state)
+
         # Check for end of game
-        end, winner = state.game_end()
+        end, result = env.winner()
+
         if not end:
             node.expand(action_probs)
+
         # Evaluate the leaf node by random rollout
-        leaf_value = self._evaluate_rollout(state)
+        leaf_value = self._evaluate_rollout(env, obs)
         # Update value and visit count of nodes in this traversal.
         node.update_recursive(-leaf_value)
 
-    def _evaluate_rollout(self, state, limit=1000):
+    def _evaluate_rollout(self, env, state, limit=1000):
         """Use the rollout policy to play until the end of the game,
         returning +1 if the current player wins, -1 if the opponent wins,
         and 0 if it is a tie.
         """
         player = state.get_current_player()
         for i in range(limit):
-            end, winner = state.game_end()
+            end, winner = env.game_end()
             if end:
                 break
             action_probs = rollout_policy_fn(state)
             max_action = max(action_probs, key=itemgetter(1))[0]
-            state.do_move(max_action)
+            obs, reward, terminated, info = env.step(max_action)
+
         else:
             # If no break from the loop, issue a warning.
             print("WARNING: rollout reached move limit")
+
         if winner == -1:  # tie
             return 0
         else:
             return 1 if winner == player else -1
 
-    def get_move(self, state):
+    def get_move(self, env, state):
         """Runs all playouts sequentially and returns the most visited action.
         state: the current game state
 
         Return: the selected action
         """
         for n in range(self._n_playout):
-            state_copy = copy.deepcopy(state)
-            self._playout(state_copy)
+            self._playout(copy.deepcopy(env), copy.deepcopy(state))
         return max(self._root._children.items(),
                    key=lambda act_node: act_node[1]._n_visits)[0]
 
@@ -186,10 +193,12 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, board):
-        sensible_moves = board.availables
+    def get_action(self, env, board):
+        available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
+        sensible_moves = available
+
         if len(sensible_moves) > 0:
-            move = self.mcts.get_move(board)
+            move = self.mcts.get_move(env, board)
             self.mcts.update_with_move(-1)
             return move
         else:
