@@ -9,7 +9,7 @@ from policy_value_network import PolicyValueNet
 
 eps = 0.05
 
-batch_size = 128   # previous 512 너무 오래걸려서 32로 줄여놓았음
+batch_size = 128   # previous 512 너무 오래걸려서 128로 줄여놓았음
 temp = 1e-3
 learn_rate = 2e-3
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
@@ -19,7 +19,7 @@ c_puct = 5
 buffer_size = 10000
 epochs = 5  # num of train_steps for each update
 kl_targ = 0.02
-check_freq = 50
+check_freq = 20
 self_play_times = 1500
 best_win_ratio = 0.0
 
@@ -88,7 +88,6 @@ def self_play(env, temp=1e-3):
         if end:
             if obs[3].sum() == 36:
                 print('draw')
-                print(env)
 
             print(env)
             env.reset()

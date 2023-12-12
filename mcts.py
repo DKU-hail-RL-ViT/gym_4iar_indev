@@ -4,7 +4,7 @@ import copy
 import torch
 import torch.nn.functional as F
 
-from policy_value_network import Net
+from gym_4iar_indev.policy_value.policy_value_network import Net
 
 
 def softmax(x):
