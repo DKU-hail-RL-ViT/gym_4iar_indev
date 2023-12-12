@@ -1,10 +1,10 @@
-from fiar_env import Fiar, turn, action2d_ize
+from gym_4iar_indev.fiar_env import Fiar, turn, action2d_ize
 import numpy as np
 # import wandb
 import random
 
 from collections import defaultdict, deque
-from mcts import MCTSPlayer
+from gym_4iar_indev.mcts import MCTSPlayer
 from policy_value_network import PolicyValueNet
 
 eps = 0.05

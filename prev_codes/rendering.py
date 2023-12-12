@@ -1,6 +1,6 @@
 import numpy as np
 import pyglet
-import fiar_env
+import gym_4iar_indev.fiar_env
 
 BLACK = 0
 
