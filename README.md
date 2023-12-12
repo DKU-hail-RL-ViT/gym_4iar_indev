@@ -46,7 +46,8 @@ Task : four in a row (9 x 4)
 ### version  
 
 교수님이 해결해주신 version
-batch_size = 32   # previous 512 너무 오래걸려서 32로 줄여놓았음
+batch_size = 128   # previous 512 너무 오래걸려서 128로 줄여놓았음
+
 
 
 
