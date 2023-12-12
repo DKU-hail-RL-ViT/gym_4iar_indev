@@ -1,11 +1,12 @@
-from enum import Enum
 import numpy as np
 # import matplotlib.pyplot as plt
 import gymnasium as gym
 from gymnasium import spaces
 from scipy import ndimage
-import rendering
-import state_utils
+
+from gym_4iar_indev import state_utils
+from gym_4iar_indev.prev_codes import rendering
+import gym_4iar_indev.state_utils
 
 # from numpy.random import choice_
 
@@ -461,7 +462,7 @@ class Fiar(gym.Env):
                 batch = pyglet.graphics.Batch()
 
                 # draw the grid and labels
-                rendering.draw_grid(batch, delta, [9,4], [lower_x_grid_coord,upper_x_grid_coord], [lower_y_grid_coord,upper_y_grid_coord])
+                rendering.draw_grid(batch, delta, [9, 4], [lower_x_grid_coord, upper_x_grid_coord], [lower_y_grid_coord, upper_y_grid_coord])
 
                 # info on top of the board
                 rendering.draw_info(batch, window_width, window_height, upper_y_grid_coord, self.state_) # only requires y upper coordinate
@@ -474,7 +475,7 @@ class Fiar(gym.Env):
                 batch.draw()
 
                 # draw the pieces
-                rendering.draw_pieces(batch, [lower_x_grid_coord, lower_y_grid_coord], delta, piece_r, [9,4], self.state_)
+                rendering.draw_pieces(batch, [lower_x_grid_coord, lower_y_grid_coord], delta, piece_r, [9, 4], self.state_)
 
             @window.event
             def on_mouse_press(x, y, button, modifiers):
