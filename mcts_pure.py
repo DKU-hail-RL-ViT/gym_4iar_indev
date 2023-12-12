@@ -3,7 +3,7 @@ import copy
 from operator import itemgetter
 
 
-def rollout_policy_fn(board):
+def rollout_policy_fn(board):   # board shape : (5, 9, 4)
     """a coarse, fast version of policy_fn used in the rollout phase."""
     # rollout randomly
     available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
@@ -115,13 +115,18 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
+
+        if np.any(env.state_[3] != obs[3]):
+            pass
+            # print('wtf')
+
         while(1):
             if node.is_leaf():
                 break
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            obs, reward, terminated, info = env.step(action,node)
-        action_probs, _ = self._policy(state)
+            obs, reward, terminated, info = env.step(action, node)
+        action_probs, _ = self._policy(env.state())
 
         # Check for end of game
         end, result = env.winner()
@@ -139,11 +144,11 @@ class MCTS(object):
         returning +1 if the current player wins, -1 if the opponent wins,
         and 0 if it is a tie.
         """
-        player = state.get_current_player()
         for i in range(limit):
-            end, winner = env.game_end()
+            end, winner = env.winner()
             if end:
                 break
+
             action_probs = rollout_policy_fn(state)
             max_action = max(action_probs, key=itemgetter(1))[0]
             obs, reward, terminated, info = env.step(max_action)
@@ -155,7 +160,7 @@ class MCTS(object):
         if winner == -1:  # tie
             return 0
         else:
-            return 1 if winner == player else -1
+            return 1 if winner == 1 else -1
 
     def get_move(self, env, state):
         """Runs all playouts sequentially and returns the most visited action.
