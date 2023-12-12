@@ -7,7 +7,6 @@ from collections import defaultdict, deque
 from gym_4iar_indev.mcts import MCTSPlayer
 from gym_4iar_indev.mcts_pure import MCTSPlayer as MCTS_Pure
 from policy_value_network import PolicyValueNet
-
 # self-play parameter
 self_play_sizes = 1
 temp = 1e-3
@@ -23,7 +22,7 @@ batch_size = 128  # previous 512 너무 오래걸려서 128로 줄여놓았음
 learn_rate = 2e-3
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
 kl_targ = 0.02
-check_freq = 20  # policy evaluate frequency
+check_freq = 1  # policy evaluate frequency
 best_win_ratio = 0.0
 
 init_model = None
@@ -192,22 +191,28 @@ def policy_evaluate(env, n_games=100):
 def start_play(env, player1, player2):
     """start a game between two players"""
 
-    env.reset()
+    obs, _ = env.reset()
 
     players = [0, 1]
     p1, p2 = players
     player1.set_player_ind(p1)
     player2.set_player_ind(p2)
     players = {p1: player1, p2: player2}
+    current_player = 0
 
     while True:
-        current_player = self.board.get_current_player()
+
         player_in_turn = players[current_player]
-        move = player_in_turn.get_action(self.board)
+        move = player_in_turn.get_action(env, obs)
         obs, reward, terminated, info = env.step(move)
 
         end, winner = env.winner()
-        if end:
+
+        if not end:
+            current_player = 1 - current_player
+
+        else:
+            print(winner)
             return winner
 
 

@@ -57,11 +57,10 @@ class PolicyValueNet():
         self.board_width = board_width      # 9
         self.board_height = board_height    # 4
         self.l2_const = 1e-4  # coef of l2 penalty
-        # the policy value net module
-        if self.use_gpu:
-            self.policy_value_net = Net(board_width, board_height).cuda()
-        else:
-            self.policy_value_net = Net(board_width, board_height)
+
+        self.device = torch.device("cuda" if use_gpu else "cpu")
+        self.policy_value_net = Net(board_width, board_height).to(self.device)
+
         self.optimizer = optim.Adam(self.policy_value_net.parameters(),
                                     weight_decay=self.l2_const)
 
@@ -76,7 +75,7 @@ class PolicyValueNet():
         """
         if self.use_gpu:
             state_batch_np = np.array(state_batch)
-            state_batch = torch.FloatTensor(state_batch_np).cuda()
+            state_batch = torch.FloatTensor(state_batch_np).to(self.device)
             log_act_probs, value = self.policy_value_net(state_batch)
             act_probs = np.exp(log_act_probs.data.cpu().numpy())
             return act_probs, value.item()
@@ -90,9 +89,9 @@ class PolicyValueNet():
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
         # wrap in Tensor
-        state_batch = torch.FloatTensor(np.array(state_batch))
-        mcts_probs = torch.FloatTensor(np.array(mcts_probs))
-        winner_batch = torch.FloatTensor(np.array(winner_batch))
+        state_batch = torch.from_numpy(np.array(state_batch)).float()
+        mcts_probs = torch.from_numpy(np.array(mcts_probs)).float()
+        winner_batch = torch.from_numpy(np.array(winner_batch)).float()
 
         # zero the parameter gradients
         self.optimizer.zero_grad()
@@ -104,7 +103,7 @@ class PolicyValueNet():
 
         # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
         # Note: the L2 penalty is incorporated in optimizer
-        value_loss = F.mse_loss(value.view(-1), winner_batch)
+        value_loss = F.mse_loss(value.detach().view(-1), winner_batch)
         policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
         loss = value_loss + policy_loss
 
