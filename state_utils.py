@@ -2,6 +2,7 @@ import numpy as np
 from scipy import ndimage
 from scipy.ndimage import measurements
 
+
 BLACK = 0
 WHITE = 1
 TURN_CHNL = 2
