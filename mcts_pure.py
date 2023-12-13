@@ -117,8 +117,7 @@ class MCTS(object):
         node = self._root
 
         if np.any(env.state_[3] != obs[3]):
-            pass
-            # print('wtf')
+            print('wtf')
 
         while(1):
             if node.is_leaf():
@@ -126,7 +125,7 @@ class MCTS(object):
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action, node)
-        action_probs, _ = self._policy(env.state())
+        action_probs, _ = self._policy(obs)
 
         # Check for end of game
         end, result = env.winner()
@@ -139,17 +138,21 @@ class MCTS(object):
         # Update value and visit count of nodes in this traversal.
         node.update_recursive(-leaf_value)
 
-    def _evaluate_rollout(self, env, state, limit=1000):
+    def _evaluate_rollout(self, env, obs, limit=1000):
         """Use the rollout policy to play until the end of the game,
         returning +1 if the current player wins, -1 if the opponent wins,
         and 0 if it is a tie.
         """
         for i in range(limit):
             end, winner = env.winner()
+
+            if np.any(env.state_[3] != obs[3]):
+                print('wtf')
+
             if end:
                 break
 
-            action_probs = rollout_policy_fn(state)
+            action_probs = rollout_policy_fn(obs)
             max_action = max(action_probs, key=itemgetter(1))[0]
             obs, reward, terminated, info = env.step(max_action)
 

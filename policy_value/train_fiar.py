@@ -1,28 +1,31 @@
 from gym_4iar_indev.fiar_env import Fiar, turn, action2d_ize
 import numpy as np
-# import wandb
+import wandb
 import random
 
 from collections import defaultdict, deque
 from gym_4iar_indev.mcts import MCTSPlayer
 from gym_4iar_indev.mcts_pure import MCTSPlayer as MCTS_Pure
 from policy_value_network import PolicyValueNet
+
 # self-play parameter
+c_puct = 5
+n_playout = 200  # previous 400
+# num of simulations for each move
+
 self_play_sizes = 1
 temp = 1e-3
-n_playout = 400  # num of simulations for each move
-c_puct = 5
 buffer_size = 10000
 epochs = 5  # num of train_steps for each update
-self_play_times = 1500
-pure_mcts_playout_num = 1000
+self_play_times = 1000   # previous 1500
+pure_mcts_playout_num = 500     # previous 1000
 
 # policy update parameter
 batch_size = 128  # previous 512 너무 오래걸려서 128로 줄여놓았음
 learn_rate = 2e-3
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
 kl_targ = 0.02
-check_freq = 1  # policy evaluate frequency
+check_freq = 50  # previous 50
 best_win_ratio = 0.0
 
 init_model = None
@@ -92,22 +95,23 @@ def self_play(env, temp=1e-3):
                 print('draw')
 
             print(env)
-            env.reset()
+            obs, _ = env.reset()
+
+            if np.any(env.state_[3] != obs[3]):
+                print("따이")
 
             # reset MCTS root node
             mcts_player.reset_player()
 
             print("batch i:{}, episode_len:{}".format(
                 i + 1, len(current_player)))
-
             winners_z = np.zeros(len(current_player))
+
             if winners != -1:
                 if winners == -0.5:  # if win white return : 0.1
                     winners = 0
-
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
-
             return reward, zip(states, mcts_probs, winners_z)
 
 
@@ -163,7 +167,7 @@ def policy_update(lr_multiplier):
     return loss, entropy
 
 
-def policy_evaluate(env, n_games=100):
+def policy_evaluate(env, n_games=10):
     """
     Evaluate the trained policy by playing against the pure MCTS player
     Note: this is only for monitoring the progress of training
@@ -179,12 +183,16 @@ def policy_evaluate(env, n_games=100):
         winner = start_play(env,
                             current_mcts_player,
                             pure_mcts_player)
+        if winner == -0.5:
+            winner = 0
         win_cnt[winner] += 1
+        print('one time evaluate end')
+
     win_ratio = 1.0 * (win_cnt[1] + 0.5 * win_cnt[-1]) / n_games
 
     print("num_playouts:{}, win: {}, lose: {}, tie:{}".format(
         pure_mcts_playout_num,
-        win_cnt[1], win_cnt[2], win_cnt[-1]))
+        win_cnt[1], win_cnt[0], win_cnt[-1]))
     return win_ratio
 
 
@@ -212,13 +220,15 @@ def start_play(env, player1, player2):
             current_player = 1 - current_player
 
         else:
-            print(winner)
+            print(env)
             return winner
 
 
 if __name__ == '__main__':
 
-    # wandb.init(project="4iar_DQN")
+    api = wandb.Api()
+    run = api.run("hails/policy_value_4iar")
+    wandb.init(project="policy_value_4iar")
 
     env = Fiar()
     obs, _ = env.reset()
@@ -232,8 +242,6 @@ if __name__ == '__main__':
     obs_post[0] = obs[turn_A]
     obs_post[1] = obs[turn_B]
     obs_post[2] = np.zeros_like(obs[0])
-    # obs_post = obs[player_myself] + obs[player_enemy]*(-1)
-
 
     if init_model:
         # start training from an initial policy-value net
@@ -253,11 +261,27 @@ if __name__ == '__main__':
 
             if len(data_buffer) > batch_size:
                 loss, entropy = policy_update(lr_multiplier=lr_multiplier)
+                wandb.log({"loss": loss, "entropy": entropy})
 
             if (i + 1) % check_freq == 0:
                 print("current self-play batch: {}".format(i + 1))
                 win_ratio = policy_evaluate(env)
-                print(win_ratio)
+                print("win rate : ", win_ratio * 100, "%")
+
+                policy_value_net.save_model('./current_policy.model')
+
+                if win_ratio > best_win_ratio:
+                    print("New best policy!!!!!!!!")
+                    best_win_ratio = win_ratio
+
+                    # update the best_policy
+                    policy_value_net.save_model('./best_policy.model')
+
+                    if (best_win_ratio == 1.0 and
+                            pure_mcts_playout_num < 5000):
+                        pure_mcts_playout_num += 500    # previous 1000
+                        print("Pure mcts level up!!!")
+                        best_win_ratio = 0.0
 
     except KeyboardInterrupt:
         print('\n\rquit')
