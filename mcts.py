@@ -1,10 +1,8 @@
 import numpy as np
 import copy
-
 import torch
-import torch.nn.functional as F
 
-from gym_4iar_indev.policy_value.policy_value_network import Net
+from gym_4iar_indev.policy_value.policy_value_network_mlp import Net
 
 
 def softmax(x):
@@ -18,7 +16,7 @@ def policy_value_fn(board, net):
     current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
     log_act_probs, value = net(torch.from_numpy(current_state).float())
 
-    act_probs = F.softmax(log_act_probs, dim=1).data.numpy().flatten()
+    act_probs = np.exp(log_act_probs.data.numpy().flatten())
     act_probs = list(zip(available, act_probs))
     state_value = value.item()
 
@@ -146,11 +144,8 @@ class MCTS(object):
                 leaf_value = (
                     1.0 if result == 0 else -1.0
                 )
-
             obs, _ = env.reset()
-            # print('reset_done')
 
-        # print('end_one_playout')
         node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, state, temp=1e-3): # state.shape = (5,9,4)
