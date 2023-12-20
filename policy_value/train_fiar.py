@@ -7,10 +7,12 @@ from collections import defaultdict, deque
 from gym_4iar_indev.mcts import MCTSPlayer
 from gym_4iar_indev.mcts_pure import MCTSPlayer as MCTS_Pure
 from policy_value_network import PolicyValueNet
+# from policy_value_network_mlp import PolicyValueNet
+
 
 # self-play parameter
 c_puct = 5
-n_playout = 200  # previous 400
+n_playout = 400  # previous 400
 # num of simulations for each move
 
 self_play_sizes = 1
@@ -21,12 +23,15 @@ self_play_times = 1000   # previous 1500
 pure_mcts_playout_num = 500     # previous 1000
 
 # policy update parameter
-batch_size = 128  # previous 512 너무 오래걸려서 128로 줄여놓았음
+batch_size = 64  # previous 512
 learn_rate = 2e-3
-lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
-kl_targ = 0.02
+lr_mul = 1.0
+lr_multiplier = 1.0     # adaptively adjust the learning rate based on KL
 check_freq = 50  # previous 50
 best_win_ratio = 0.0
+
+kl_targ = 0.05  # previous 0.02
+
 
 init_model = None
 
@@ -115,8 +120,9 @@ def self_play(env, temp=1e-3):
             return reward, zip(states, mcts_probs, winners_z)
 
 
-def policy_update(lr_multiplier):
+def policy_update(lr_mul):
     kl, loss, entropy = 0, 0, 0
+    lr_multiplier = lr_mul
 
     """update the policy-value net"""
     mini_batch = random.sample(data_buffer, batch_size)
@@ -164,7 +170,7 @@ def policy_update(lr_multiplier):
                     entropy,
                     explained_var_old,
                     explained_var_new))
-    return loss, entropy
+    return loss, entropy, lr_multiplier
 
 
 def policy_evaluate(env, n_games=10):
@@ -226,9 +232,9 @@ def start_play(env, player1, player2):
 
 if __name__ == '__main__':
 
-    api = wandb.Api()
-    run = api.run("hails/policy_value_4iar")
-    wandb.init(project="policy_value_4iar")
+    wandb.init(mode="offline",
+               entity="hails",
+               project="policy_value_4iar")
 
     env = Fiar()
     obs, _ = env.reset()
@@ -260,7 +266,7 @@ if __name__ == '__main__':
             collect_selfplay_data(self_play_sizes)
 
             if len(data_buffer) > batch_size:
-                loss, entropy = policy_update(lr_multiplier=lr_multiplier)
+                loss, entropy, lr_multiplier = policy_update(lr_mul=lr_multiplier)
                 wandb.log({"loss": loss, "entropy": entropy})
 
             if (i + 1) % check_freq == 0:
