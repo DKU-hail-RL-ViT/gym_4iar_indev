@@ -4,8 +4,8 @@ import wandb
 import random
 
 from collections import defaultdict, deque
-from gym_4iar_indev.mcts import MCTSPlayer
-from gym_4iar_indev.mcts_pure import MCTSPlayer as MCTS_Pure
+from gym_4iar_indev.policy_value.mcts import MCTSPlayer
+from gym_4iar_indev.policy_value.mcts_pure import MCTSPlayer as MCTS_Pure
 from policy_value_network import PolicyValueNet
 # from policy_value_network_mlp import PolicyValueNet
 

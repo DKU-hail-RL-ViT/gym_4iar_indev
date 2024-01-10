@@ -1,8 +1,10 @@
 import numpy as np
 import copy
-import torch
 
-from gym_4iar_indev.policy_value.policy_value_network_mlp import Net
+import torch
+import torch.nn.functional as F
+
+from Project.prev_codes.dqn_network import DQN
 
 
 def softmax(x):
@@ -11,12 +13,12 @@ def softmax(x):
     return probs
 
 
-def policy_value_fn(board, net):
+def state_value_fn(board, net):
     available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
     current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
     log_act_probs, value = net(torch.from_numpy(current_state).float())
 
-    act_probs = np.exp(log_act_probs.data.numpy().flatten())
+    act_probs = F.softmax(log_act_probs, dim=1).data.numpy().flatten()
     act_probs = list(zip(available, act_probs))
     state_value = value.item()
 
@@ -116,7 +118,7 @@ class MCTS(object):
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
-        net = Net(obs.shape[1], obs.shape[2])
+        net = DQN(obs.shape[1], obs.shape[2], obs.shape[1]*obs.shape[2])
         node = self._root
 
         while(1):
@@ -144,8 +146,10 @@ class MCTS(object):
                 leaf_value = (
                     1.0 if result == 0 else -1.0
                 )
+
             obs, _ = env.reset()
 
+        # print('end_one_playout')
         node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, state, temp=1e-3): # state.shape = (5,9,4)
