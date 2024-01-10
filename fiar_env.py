@@ -5,6 +5,7 @@ from gymnasium import spaces
 from scipy import ndimage
 
 from gym_4iar_indev import state_utils
+
 # from numpy.random import choice_
 
 BLACK = 0
@@ -28,11 +29,11 @@ def action1d_ize(action):
 
 def winning(state):
     if state[3].sum() == 36:
-        return -1    # draw
+        return -1  # draw
     elif state[3].sum() % 2 == 1:
-        return 1   # black win
+        return 1  # black win
     else:
-        return -0.5   # white win
+        return -0.5  # white win
 
 
 def turn(state):
@@ -73,9 +74,9 @@ def areas(state):
 
 def fiar_check(state, loc=False):
     # check four in a row
-    black_white = 1 if np.all(state[2]==1) else 0 # 0:black 1:white
+    black_white = 1 if np.all(state[2] == 1) else 0  # 0:black 1:white
 
-    state = np.copy(state[black_white,:,:])
+    state = np.copy(state[black_white, :, :])
 
     def horizontal_check(state_b, loc=False):
         for i in range(state_b.shape[0]):
@@ -83,10 +84,10 @@ def fiar_check(state, loc=False):
             continuous_ = False
             loc_set = []
             for j in range(state_b.shape[1]):
-                if state_b[i,j] == 1:
+                if state_b[i, j] == 1:
                     fiar_ += 1
                     continuous_ = True
-                    loc_set.append([i,j])
+                    loc_set.append([i, j])
                 else:
                     fiar_ = 0
                     continuous_ = False
@@ -107,10 +108,10 @@ def fiar_check(state, loc=False):
             continuous_ = False
             loc_set = []
             for i in range(state_b.shape[0]):
-                if state_b[i,j] == 1:
+                if state_b[i, j] == 1:
                     fiar_ += 1
                     continuous_ = True
-                    loc_set.append([i,j])
+                    loc_set.append([i, j])
                 else:
                     fiar_ = 0
                     continuous_ = False
@@ -126,20 +127,20 @@ def fiar_check(state, loc=False):
             return False
 
     def horizontal_11to4_check(state_b, loc=False):
-        for offset_i in range(max(state_b.shape[1],state_b.shape[0])-1,-1,-1):
+        for offset_i in range(max(state_b.shape[1], state_b.shape[0]) - 1, -1, -1):
             fiar_ = 0
             continuous_ = False
             loc_set = []
-            for j in range(max(state_b.shape[1],state_b.shape[0])):
+            for j in range(max(state_b.shape[1], state_b.shape[0])):
                 i = offset_i + j
-                if i<state_b.shape[0] and j <state_b.shape[1]:
-                    if i>=state_b.shape[0]:
+                if i < state_b.shape[0] and j < state_b.shape[1]:
+                    if i >= state_b.shape[0]:
                         break
                     # check_board[i,j]=1
-                    if state_b[i,j] == 1:
+                    if state_b[i, j] == 1:
                         fiar_ += 1
                         continuous_ = True
-                        loc_set.append([i,j])
+                        loc_set.append([i, j])
                     else:
                         fiar_ = 0
                         continuous_ = False
@@ -156,20 +157,20 @@ def fiar_check(state, loc=False):
 
     def horizontal_1to7_check(state_b, loc=False):
         # for offset_j in range(state_b.shape[1]-1,-1,-1): # 3
-        for offset_j in range(max(state_b.shape[1],state_b.shape[0])): # 3
+        for offset_j in range(max(state_b.shape[1], state_b.shape[0])):  # 3
             fiar_ = 0
-            continuous_ = False
+            False
             loc_set = []
-            for i in range(max(state_b.shape[1],state_b.shape[0])):
+            for i in range(max(state_b.shape[1], state_b.shape[0])):
                 j = offset_j - i
-                if i<state_b.shape[0] and j <state_b.shape[1]:
-                    if j<0:
+                if i < state_b.shape[0] and j < state_b.shape[1]:
+                    if j < 0:
                         break
                     # check_board[i,j]=1
-                    if state_b[i,j] == 1:
+                    if state_b[i, j] == 1:
                         fiar_ += 1
                         continuous_ = True
-                        loc_set.append([i,j])
+                        loc_set.append([i, j])
                     else:
                         fiar_ = 0
                         continuous_ = False
@@ -185,18 +186,21 @@ def fiar_check(state, loc=False):
             return False
 
     if loc is False:
-        return 1 if np.any([horizontal_check(state), vertical_check(state), horizontal_11to4_check(state), horizontal_1to7_check(state),]) else 0
+        return 1 if np.any([horizontal_check(state),
+                            vertical_check(state),
+                            horizontal_11to4_check(state),
+                            horizontal_1to7_check(state), ]) else 0
     else:
-        switch, locset =vertical_check(state,loc=True)
+        switch, locset = vertical_check(state, loc=True)
         if switch:
             return switch, locset
-        switch, locset =horizontal_check(state,loc=True)
+        switch, locset = horizontal_check(state, loc=True)
         if switch:
             return switch, locset
-        switch, locset =horizontal_11to4_check(state,loc=True)
+        switch, locset = horizontal_11to4_check(state, loc=True)
         if switch:
             return switch, locset
-        switch, locset =horizontal_1to7_check(state,loc=True)
+        switch, locset = horizontal_1to7_check(state, loc=True)
         if switch:
             return switch, locset
         return False, []
@@ -207,9 +211,7 @@ def next_state(state, action1d):
     state = np.copy(state)
 
     # Initialize basic variables
-    board_shape = state.shape[1:]
     action2d = action2d_ize(action1d)
-
     player = turn(state)
     ko_protect = None
 
@@ -228,7 +230,7 @@ def next_state(state, action1d):
     if np.all(state[INVD_CHNL] == 1):
         state[DONE_CHNL] = 1
 
-    if np.any(state[DONE_CHNL] == 0): # proceed if it is not ended
+    if np.any(state[DONE_CHNL] == 0):  # proceed if it is not ended
         # Switch turn
         state_utils.set_turn(state)
 
@@ -303,15 +305,15 @@ def action_size(state=None, board_size: int = None):
         raise RuntimeError('No argument passed')
     return m * n
 
+
 class Fiar(gym.Env):
     def __init__(self):
         self.state_ = self.init_state()
         self.observation_space = spaces.Box(np.float32(0), np.float32(NUM_CHNLS),
-                                                shape=(NUM_CHNLS, 9, 4))
+                                            shape=(NUM_CHNLS, 9, 4))
         self.action_space = spaces.Discrete(action_size(self.state_))
         self.done = False
         self.action = None
-
 
     def init_state(self):
         """
@@ -332,10 +334,10 @@ class Fiar(gym.Env):
         return np.zeros((5, 9, 4))
 
     def step(self, action, node=None):
-        '''
+        """
         Assumes the correct player is making a move. Black goes first.
         return observation, reward, done, info
-        '''
+        """
         assert not self.done
 
         if isinstance(action, tuple) or isinstance(action, list) or isinstance(action, np.ndarray):
@@ -345,7 +347,7 @@ class Fiar(gym.Env):
             action = action1d_ize(action)
 
         elif action is None:
-            action = 9*4 # self.size**2
+            action = 9 * 4  # self.size**2
 
         self.state_ = next_state(self.state_, action)
         self.done = game_ended(self.state_)
@@ -353,10 +355,10 @@ class Fiar(gym.Env):
         return np.copy(self.state_), self.reward(), self.done, self.info()
 
     def reset(self, seed=None):
-        '''
+        """
         Reset state, go_board, curr_player, prev_player_passed,
         done, return state
-        '''
+        """
         seed = seed
         self.state_ = self.init_state()
         self.done = False

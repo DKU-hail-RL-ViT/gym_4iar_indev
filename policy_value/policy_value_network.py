@@ -92,7 +92,7 @@ class PolicyValueNet():
     def policy_value_fn(self, board):
         """
         input: board
-        output: a list of (action, probability) tuples fㅌor each available
+        output: a list of (action, probability) tuples for each available
         action and the score of the board state
         """
         legal_positions = board.availables
@@ -103,8 +103,6 @@ class PolicyValueNet():
                 Variable(torch.from_numpy(current_state)).float())
 
         act_probs = np.exp(log_act_probs.data.detach().numpy().flatten())
-
-        print(act_probs)
         act_probs = list(zip(legal_positions, act_probs[legal_positions]))
         value = value.data[0][0]
         return act_probs, value
@@ -140,7 +138,7 @@ class PolicyValueNet():
         # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
         # Note: the L2 penalty is incorporated in optimizer
         value_loss = F.mse_loss(value.view(-1), winner_batch)
-        policy_loss = -torch.mean(torch.sum(mcts_probs*log_act_probs, 1))
+        policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
         loss = value_loss + policy_loss
         # backward and optimize
         loss.backward()

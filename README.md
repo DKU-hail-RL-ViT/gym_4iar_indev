@@ -52,10 +52,11 @@ White win -> Reward: -1 or 1e-3 (undecided)
 Draw -> Reward: -1
 
 
-# adjust hyperparameter :  policy_value.train_fiar.py 285
+## adjust hyperparameter :  policy_value.train_fiar.py 285
 batch_size = 128   # previous 512  (toooo slow)
 
-# adjust hyperparameter :  policy_value.train_fiar.py 13 ~ 33
+
+## adjust hyperparameter :  policy_value.train_fiar.py 13 ~ 33
 n_playout = 200  # previous 400
 pure_mcts_playout_num = 500     # previous 1000 
 
