@@ -1,10 +1,8 @@
 import numpy as np
 import copy
-
 import torch
-import torch.nn.functional as F
 
-from Project.prev_codes.dqn_network import DQN
+from gym_4iar_indev.dqn.policy_value_network import Net
 
 
 def softmax(x):
@@ -13,12 +11,12 @@ def softmax(x):
     return probs
 
 
-def state_value_fn(board, net):
+def policy_value_fn(board, net):
     available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
     current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
     log_act_probs, value = net(torch.from_numpy(current_state).float())
 
-    act_probs = F.softmax(log_act_probs, dim=1).data.numpy().flatten()
+    act_probs = np.exp(log_act_probs.data.numpy().flatten())
     act_probs = list(zip(available, act_probs))
     state_value = value.item()
 
@@ -29,6 +27,7 @@ class TreeNode(object):
     """A node in the MCTS tree. Each node keeps track of its own value Q,
     prior probability P, and its visit-count-adjusted prior score u.
     """
+
     def __init__(self, parent, prior_p):
         self._parent = parent
         self._children = {}  # a map from action to TreeNode
@@ -43,6 +42,8 @@ class TreeNode(object):
         action_priors: a list of tuples of actions and their prior probability
             according to the policy function.
         """
+        # action_count = len(action_priors)
+        # print(action_count)
         for action, prob in action_priors:
             if action not in self._children:
                 self._children[action] = TreeNode(self, prob)
@@ -53,7 +54,7 @@ class TreeNode(object):
         Return: A tuple of (action, next_node)
         """
         action, i_node = max(self._children.items(),
-                                key=lambda act_node: act_node[1].get_value(c_puct))
+                             key=lambda act_node: act_node[1].get_value(c_puct))
         if self._children == {}:
             print('empty')
         return action, i_node
@@ -66,7 +67,7 @@ class TreeNode(object):
         # Count visit.
         self._n_visits += 1
         # Update Q, a running average of values for all visits.
-        self._Q += 1.0*(leaf_value - self._Q) / self._n_visits
+        self._Q += 1.0 * (leaf_value - self._Q) / self._n_visits
 
     def update_recursive(self, leaf_value):
         """Like a call to update(), but applied recursively for all ancestors.
@@ -75,7 +76,6 @@ class TreeNode(object):
         if self._parent:
             self._parent.update_recursive(-leaf_value)
         self.update(leaf_value)
-
     def get_value(self, c_puct):
         """Calculate and return the value for this node.
         It is a combination of leaf evaluations Q, and this node's prior
@@ -93,6 +93,10 @@ class TreeNode(object):
 
     def is_root(self):
         return self._parent is None
+
+    @property
+    def children(self):
+        return self._children
 
 
 class MCTS(object):
@@ -113,25 +117,24 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
 
-    def _playout(self, env, obs):   # obs.shape = (5,9,4)
+    def _playout(self, env):  # obs.shape = (5,9,4)
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
-        net = DQN(obs.shape[1], obs.shape[2], obs.shape[1]*obs.shape[2])
+        net = Net(env.state_.shape[1], env.state_.shape[2])
         node = self._root
 
-        while(1):
+        while (1):
             if node.is_leaf():
                 break
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action, node)
 
-        if np.any(env.state_[3] != obs[3]):
-            print('wtf')
 
-        action_probs, leaf_value = policy_value_fn(obs, net)
+        action_probs, leaf_value = policy_value_fn(env.state_, net)
+        # print(action_probs)
 
         # Check for end of game
         end, result = env.winner()
@@ -146,13 +149,11 @@ class MCTS(object):
                 leaf_value = (
                     1.0 if result == 0 else -1.0
                 )
-
             obs, _ = env.reset()
 
-        # print('end_one_playout')
         node.update_recursive(-leaf_value)
 
-    def get_move_probs(self, env, state, temp=1e-3): # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp=1e-3):  # state.shape = (5,9,4)
 
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
@@ -160,13 +161,14 @@ class MCTS(object):
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):  # for 400 times
-            self._playout(copy.deepcopy(env), copy.deepcopy(state))   # state_copy.shape = (5,9,4)
+            print(copy.deepcopy(env))
+            self._playout(copy.deepcopy(env))  # state_copy.shape = (5,9,4)
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
                       for act, node in self._root._children.items()]
         acts, visits = zip(*act_visits)
-        act_probs = softmax(1.0/temp * np.log(np.array(visits) + 1e-10))
+        act_probs = softmax(1.0 / temp * np.log(np.array(visits) + 1e-10))
 
         return acts, act_probs
 
@@ -186,6 +188,7 @@ class MCTS(object):
 
 class MCTSPlayer(object):
     """AI player based on MCTS"""
+
     def __init__(self, policy_value_fn, c_puct=5, n_playout=2000, is_selfplay=0):
         self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
         self._is_selfplay = is_selfplay
@@ -196,14 +199,14 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, board, temp=1e-3, return_prob=0):  # board.shape = (5,9,4)
-        available = [i for i in range(36) if board[3][i // 4][i % 4] != 1]
+    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+        available = [i for i in range(36) if env.state_[3][i // 4][i % 4] != 1]
         sensible_moves = available
         # the pi vector returned by MCTS as in the alphaGo Zero paper
-        move_probs = np.zeros(board.shape[1] * board.shape[2])
+        move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, board, temp)    # board.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
             move_probs[list(acts)] = probs
 
             if self._is_selfplay:
