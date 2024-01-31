@@ -20,7 +20,33 @@ buffer_size = 10000
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_times = 100  # 비교할 논문에서는 100번 했다고 함. # previous 1500
-temp = 1e-3  # [Todo] temp을 1에서 점차 줄여가는 방식으로 원 논문에서는 그렇게 되어있었음
+temp = 1
+
+# policy update parameter
+batch_size = 64  # previous 512
+learn_rate = 2e-4   # previous 2e-3
+lr_mul = 1.0
+lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
+best_win_ratio = 0.0
+pure_mcts_playout_num = 2  # [todo] 디버깅하려고 줄여놓음 previous 500
+
+win_ratio = 0.0
+kl_targ = 0.02  # previous 0.02
+
+init_model = None
+
+
+# fine-tuning models
+n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+check_freq = 50  # = iter & training 1, 10, 20, 50, 100
+
+# num of simulations for each move
+self_play_sizes = 1
+buffer_size = 10000
+c_puct = 5
+epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
+self_play_times = 100  # 비교할 논문에서는 100번 했다고 함. # previous 1500
+temp = 1
 
 # policy update parameter
 batch_size = 64  # previous 512
@@ -58,12 +84,16 @@ def get_equi_data(env, play_data):
     return extend_data
 
 
-def collect_selfplay_data(n_games=1):
+def collect_selfplay_data(n_games=30):      #[Todo] 이부분 수정 해야함
+    last_n_games = 20
     for i in range(n_games):
+        temp = 1 if i <= 15 else 0
         rewards, play_data = self_play(env, temp=temp)
         play_data = list(play_data)[:]
-        play_data = get_equi_data(env, play_data)
-        data_buffer.extend(play_data)
+
+        if i >= (n_games - last_n_games):
+            play_data = get_equi_data(env, play_data)
+            data_buffer.extend(play_data)
 
 
 def self_play(env, temp=1e-3):
@@ -108,8 +138,6 @@ def self_play(env, temp=1e-3):
         obs_post[3] = obs[player_0] + obs[player_1]
 
         end, winners = env.winner()
-        # Return value from env.winner is identical to the return value
-        # so, black win -> 1 , white win -> 0.1
 
         if end:
             if obs[3].sum() == 36:
@@ -130,7 +158,7 @@ def self_play(env, temp=1e-3):
                     winners = 0
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
-            return reward, zip(states, mcts_probs, winners_z)
+            return winners, zip(states, mcts_probs, winners_z)
 
 
 def policy_update(lr_mul):
@@ -262,7 +290,7 @@ def start_play(env, player1, player2):
             current_player = 1 - current_player
         else:
             print(env)
-            env.reset()
+            obs, _ = env.reset()
             return winner
 
 

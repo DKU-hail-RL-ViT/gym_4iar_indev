@@ -133,7 +133,6 @@ class MCTS(object):
             obs, reward, terminated, info = env.step(action, node)
 
         action_probs, leaf_value = policy_value_fn(env.state_, net)
-        # print(action_probs)
 
         # Check for end of game
         end, result = env.winner()
@@ -160,7 +159,6 @@ class MCTS(object):
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):  # for 400 times
-
             self._playout(copy.deepcopy(env))  # state_copy.shape = (5,9,4)
 
         # calc the move probabilities based on visit counts at the root node
