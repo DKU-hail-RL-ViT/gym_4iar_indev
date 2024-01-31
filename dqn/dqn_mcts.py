@@ -161,7 +161,6 @@ class MCTS(object):
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):  # for 400 times
-            print(copy.deepcopy(env))
             self._playout(copy.deepcopy(env))  # state_copy.shape = (5,9,4)
 
         # calc the move probabilities based on visit counts at the root node

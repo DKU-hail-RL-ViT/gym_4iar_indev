@@ -13,7 +13,6 @@ from policy_value_network import PolicyValueNet
 
 
 
-
 # fine-tuning models
 n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
 check_freq = 50  # = iter & training 1, 10, 20, 50, 100
@@ -32,7 +31,7 @@ learn_rate = 1e-4   # previous 2e-3
 lr_mul = 1.0
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
 best_win_ratio = 0.0
-pure_mcts_playout_num = 2  # [todo] 디버깅하려고 줄여놓음 previous 500
+pure_mcts_playout_num = 50  # [todo] 디버깅하려고 줄여놓음 previous 500
 
 win_ratio = 0.0
 kl_targ = 0.02  # previous 0.02
@@ -62,12 +61,15 @@ def get_equi_data(env, play_data):
     return extend_data
 
 
-def collect_selfplay_data(n_games=1):
+def collect_selfplay_data(n_games=30):
+    last_n_games = 20
+
     for i in range(n_games):
         rewards, play_data = self_play(env, temp=temp)
         play_data = list(play_data)[:]
-        play_data = get_equi_data(env, play_data)
-        data_buffer.extend(play_data)
+        if i >= (n_games - last_n_games):  #
+            play_data = get_equi_data(env, play_data)
+            data_buffer.extend(play_data)
 
 
 def self_play(env, temp=1e-3):
