@@ -216,6 +216,7 @@ def next_state(state, action1d):
     ko_protect = None
 
     # Assert move is valid
+
     assert state[INVD_CHNL, action2d[0], action2d[1]] == 0, ("Invalid move", action2d)
 
     # Add piece

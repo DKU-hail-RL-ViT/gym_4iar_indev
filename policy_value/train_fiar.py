@@ -36,31 +36,6 @@ kl_targ = 0.02  # previous 0.02
 init_model = None
 
 
-# fine-tuning models
-n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
-check_freq = 50  # = iter & training 1, 10, 20, 50, 100
-
-# num of simulations for each move
-self_play_sizes = 1
-buffer_size = 10000
-c_puct = 5
-epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
-self_play_times = 100  # 비교할 논문에서는 100번 했다고 함. # previous 1500
-temp = 1
-
-# policy update parameter
-batch_size = 64  # previous 512
-learn_rate = 2e-4   # previous 2e-3
-lr_mul = 1.0
-lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
-best_win_ratio = 0.0
-pure_mcts_playout_num = 2  # [todo] 디버깅하려고 줄여놓음 previous 500
-
-win_ratio = 0.0
-kl_targ = 0.02  # previous 0.02
-
-init_model = None
-
 
 def policy_value_fn(board):  # board.shape = (9,4)
     # return uniform probabilities and 0 score for pure MCTS
@@ -246,12 +221,10 @@ def policy_evaluate2(env, n_games=30):
     max_i = max(i for i in range(50, self_play_times, 50))
     best_model_file = 'nmcts2_iter50/pure_mcts_{}.pth'.format(max_i)
     best_policy = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], best_model_file)
-
     prev_best_player = MCTSPlayer(best_policy.policy_value_fn,
                                   c_puct=5,
                                   n_playout=2)    # previous 400
     win_cnt = defaultdict(int)
-
     for j in range(n_games):
         winner = start_play(env,
                             mcts_player,
@@ -265,7 +238,6 @@ def policy_evaluate2(env, n_games=30):
         print("win: {}, lose: {}, tie:{}".format(
             win_cnt[1], win_cnt[0], win_cnt[-1]))
 
-    # win_ratio = policy_evaluate(env)
     print("win rate : ", win_ratio * 100, "%")
     return win_ratio
 
@@ -283,7 +255,10 @@ def start_play(env, player1, player2):
     while True:
         player_in_turn = players[current_player]
         move = player_in_turn.get_action(env)
+        print(current_player, env.state_[2].max())
+        # print(move)
         obs, reward, terminated, info = env.step(move)
+        print(move)
         end, winner = env.winner()
 
         if not end:
