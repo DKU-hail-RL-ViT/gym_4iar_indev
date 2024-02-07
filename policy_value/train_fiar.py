@@ -20,7 +20,7 @@ buffer_size = 10000
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_times = 100  # 비교할 논문에서는 100번 했다고 함. # previous 1500
-temp = 1
+temp = 0.1
 
 # policy update parameter
 batch_size = 64  # previous 512
@@ -62,7 +62,7 @@ def get_equi_data(env, play_data):
 def collect_selfplay_data(n_games=30):      #[Todo] 이부분 수정 해야함
     last_n_games = 20
     for i in range(n_games):
-        temp = 1 if i <= 15 else 0
+        # temp = 1 if i <= 15 else 0.1
         rewards, play_data = self_play(env, temp=temp)
         play_data = list(play_data)[:]
 
@@ -129,7 +129,7 @@ def self_play(env, temp=1e-3):
             winners_z = np.zeros(len(current_player))
 
             if winners != -1:
-                if winners == -0.9:  # if win white return : 0.1
+                if winners == -0.5:  # if win white return : 0.1
                     winners = 0
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
@@ -205,14 +205,13 @@ def policy_evaluate(env, n_games=30):  # total 30 games
                             current_mcts_player,
                             pure_mcts_player)
 
-        if winner == -0.9:
+        if winner == -0.5:
             winner = 0
         win_cnt[winner] += 1
         print("{} / 30 ".format(j + 1))
 
     win_ratio = 1.0 * (win_cnt[1] + 0.5 * win_cnt[-1]) / n_games
-    print("win: {}, lose: {}, tie:{}".format(
-        win_cnt[1], win_cnt[0], win_cnt[-1]))
+    print("win: {}, lose: {}, tie:{}".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     return win_ratio
 
 
@@ -229,7 +228,7 @@ def policy_evaluate2(env, n_games=30):
         winner = start_play(env,
                             mcts_player,
                             prev_best_player)
-        if winner == -0.9:
+        if winner == -0.5:
             winner = 0
         win_cnt[winner] += 1    # white win
         print("{} / 30 ".format(j + 1))
@@ -245,6 +244,7 @@ def policy_evaluate2(env, n_games=30):
 def start_play(env, player1, player2):
     """start a game between two players"""
     obs, _ = env.reset()
+
     players = [0, 1]
     p1, p2 = players
     player1.set_player_ind(p1)
@@ -255,17 +255,19 @@ def start_play(env, player1, player2):
     while True:
         player_in_turn = players[current_player]
         move = player_in_turn.get_action(env)
-        print(current_player, env.state_[2].max())
-        # print(move)
-        obs, reward, terminated, info = env.step(move)
+        # print(current_player, env.state_[2].max())
         print(move)
+        obs, reward, terminated, info = env.step(move)
         end, winner = env.winner()
 
         if not end:
             current_player = 1 - current_player
+            player_in_turn.node_update()
+            # [Todo] 이 부분에서 안끝났다면 상대방의 _root_children을 없애러
         else:
             print(env)
             obs, _ = env.reset()
+
             return winner
 
 
@@ -329,7 +331,7 @@ if __name__ == '__main__':
                     if win_ratio > best_win_ratio:  # update the best_policy
                         print("New best policy!!!!!!!!")
                         best_win_ratio = win_ratio
-                        model_file = 'nmcts2_iter50/best_policy_{}.pth'.format(i + 1)
+                        model_file = 'nmcts2_iter50/pure_mcts_{}.pth'.format(i + 1)
                         policy_value_net.save_model(model_file)
 
             if i > 5000:    # Save up to 100 models

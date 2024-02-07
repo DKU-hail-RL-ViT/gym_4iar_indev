@@ -123,7 +123,7 @@ class MCTS(object):
                 break
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            obs, reward, terminated, info = env.step(action, node)
+            obs, reward, terminated, info = env.step(action)
         action_probs, _ = self._policy(env.state_)
 
         # Check for end of game
@@ -182,7 +182,7 @@ class MCTS(object):
             self._root = TreeNode(None, 1.0)
 
     def __str__(self):
-        return "MCTS"
+        return "MCTS Pure"
 
 
 class MCTSPlayer(object):
@@ -209,7 +209,7 @@ class MCTSPlayer(object):
             print("WARNING: the board is full")
 
     def __str__(self):
-        return "MCTS {}".format(self.player)
+        return "MCTS Pure {}".format(self.player)
 
 
 class RandomAction(object):

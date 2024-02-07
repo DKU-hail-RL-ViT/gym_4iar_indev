@@ -75,11 +75,6 @@ class PolicyValueNet():
             state_dict = torch.load(model_file)
             self.policy_value_net.load_state_dict(state_dict)
 
-
-
-
-
-
     def policy_value(self, state_batch):
         """
         input: a batch of states

@@ -42,8 +42,6 @@ class TreeNode(object):
         action_priors: a list of tuples of actions and their prior probability
             according to the policy function.
         """
-        # action_count = len(action_priors)
-        # print(action_count)
         for action, prob in action_priors:
             if action not in self._children:
                 self._children[action] = TreeNode(self, prob)
@@ -76,6 +74,7 @@ class TreeNode(object):
         if self._parent:
             self._parent.update_recursive(-leaf_value)
         self.update(leaf_value)
+
     def get_value(self, c_puct):
         """Calculate and return the value for this node.
         It is a combination of leaf evaluations Q, and this node's prior
@@ -130,10 +129,9 @@ class MCTS(object):
                 break
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            obs, reward, terminated, info = env.step(action, node)
+            obs, reward, terminated, info = env.step(action)
 
         action_probs, leaf_value = policy_value_fn(env.state_, net)
-
         # Check for end of game
         end, result = env.winner()
 
@@ -164,7 +162,9 @@ class MCTS(object):
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
                       for act, node in self._root._children.items()]
+
         acts, visits = zip(*act_visits)
+
         act_probs = softmax(1.0 / temp * np.log(np.array(visits) + 1e-10))
 
         return acts, act_probs
@@ -227,5 +227,8 @@ class MCTSPlayer(object):
         else:
             print("WARNING: the board is full")
 
+    def node_update(self):
+        self.mcts._root.children = action_probs(action)
+
     def __str__(self):
-        return "MCTS {}".format(self.player)
+        return "training MCTS {}".format(self.player)
