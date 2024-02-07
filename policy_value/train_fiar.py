@@ -3,9 +3,9 @@ import wandb
 import random
 
 from collections import defaultdict, deque
-from gym_4iar_indev.fiar_env import Fiar, turn, action2d_ize
-from gym_4iar_indev.policy_value.mcts import MCTSPlayer
-from gym_4iar_indev.policy_value.mcts_pure import MCTSPlayer as MCTS_Pure
+from fiar_env import Fiar, turn, action2d_ize
+from policy_value.mcts import MCTSPlayer
+from policy_value.mcts_pure import MCTSPlayer as MCTS_Pure
 from policy_value_network import PolicyValueNet
 # from Project.policy_value.policy_value_mcts_pure import RandomAction
 
