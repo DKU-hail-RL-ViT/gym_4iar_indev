@@ -2,7 +2,7 @@ import numpy as np
 import copy
 import torch
 
-from gym_4iar_indev.policy_value.policy_value_network import Net
+from policy_value.policy_value_network import Net
 
 
 def softmax(x):

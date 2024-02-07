@@ -4,7 +4,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from scipy import ndimage
 
-from gym_4iar_indev import state_utils
+import state_utils
 
 # from numpy.random import choice_
 
