@@ -194,7 +194,7 @@ def policy_evaluate(env, n_games=30):  # total 30 games
     Note: this is only for monitoring the progress of training
     """
     current_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout)   # training Agent
-    pure_mcts_player = MCTS_Pure(c_puct=c_puct, n_playout=pure_mcts_playout_num)  # first evaluate Agent
+    pure_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout) # first evaluate Agent
     # random_action_player = RandomAction() # random actions Agent
 
     win_cnt = defaultdict(int)

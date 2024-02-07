@@ -92,6 +92,10 @@ class TreeNode(object):
     def is_root(self):
         return self._parent is None
 
+    @property
+    def children(self):
+        return self._children
+
 
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""

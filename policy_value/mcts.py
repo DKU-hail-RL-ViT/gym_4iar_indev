@@ -16,6 +16,8 @@ def policy_value_fn(board, net):
     current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
     log_act_probs, value = net(torch.from_numpy(current_state).float())
 
+    print('available:', len(available))
+
     act_probs = np.exp(log_act_probs.data.numpy().flatten())
     act_probs = list(zip(available, act_probs))
     state_value = value.item()
@@ -121,20 +123,34 @@ class MCTS(object):
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
+        print('\t init playout')
         net = Net(env.state_.shape[1], env.state_.shape[2])
         node = self._root
 
+        print('\t init while')
+        counter = 0
         while (1):
             if node.is_leaf():
                 break
             # Greedily select next move.
+            counter += 1
+            print('\t counter:', counter)
+
+            print('node_children:', len(node._children))
+            if not len(np.where( np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(node._children):
+                print('wt')
+            assert len(np.where( np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(node._children)
+
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
+            # np.where( np.abs(env.state_[3].reshape((-1,))-1 ))[0]
 
+        print('\t out of while')
         action_probs, leaf_value = policy_value_fn(env.state_, net)
         # Check for end of game
         end, result = env.winner()
 
+        print('\t end:', end)
         if not end:
             node.expand(action_probs)
         else:
@@ -212,13 +228,16 @@ class MCTSPlayer(object):
                     acts,
                     p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
                 )
-                # update the root node and reuse the search tree
-                self.mcts.update_with_move(move)
+                # # update the root node and reuse the search tree
+                # self.mcts.update_with_move(move)
+                self.mcts.update_with_move(-1)
 
             else:
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
+                assert len(np.where( np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
                 self.mcts.update_with_move(-1)
+
 
             if return_prob:
                 return move, move_probs
@@ -227,8 +246,10 @@ class MCTSPlayer(object):
         else:
             print("WARNING: the board is full")
 
-    def node_update(self):
-        self.mcts._root.children = action_probs(action)
+    # def node_update(self):
+    #     #TODO: update the root node
+    #     self.mcts.
+    #     # self.mcts._root.children = action_probs(action)
 
     def __str__(self):
         return "training MCTS {}".format(self.player)
