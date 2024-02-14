@@ -1,13 +1,14 @@
 import numpy as np
 import wandb
 import random
+import os
 
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
 from policy_value.mcts import MCTSPlayer
 from policy_value.mcts_pure import MCTSPlayer as MCTS_Pure
 from policy_value_network import PolicyValueNet
-# from Project.policy_value.policy_value_mcts_pure import RandomAction
+# from policy_value.policy_value_mcts_pure import RandomAction
 
 # fine-tuning models
 n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
@@ -15,6 +16,8 @@ check_freq = 1  # = iter & training 1, 10, 20, 50, 100
 
 # num of simulations for each move
 self_play_sizes = 1
+
+
 buffer_size = 10000
 c_puct = 5
 epochs = 1  # During each training iteration, the DNN is trained for 10 epochs.
@@ -196,7 +199,6 @@ def policy_evaluate(env, n_games=30):  # total 30 games
     current_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout)   # training Agent
     pure_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout) # first evaluate Agent
     # random_action_player = RandomAction() # random actions Agent
-
     win_cnt = defaultdict(int)
 
     for j in range(n_games):
@@ -215,8 +217,11 @@ def policy_evaluate(env, n_games=30):  # total 30 games
 
 
 def policy_evaluate2(env, n_games=30):
+    existing_files = [int(file.split('_')[-1].split('.')[0])
+                      for file in os.listdir('nmcts2_iter50')
+                      if file.startswith('pure_mcts_')]
+    max_i = max(existing_files) if existing_files else 0
 
-    max_i = max(i for i in range(50, self_play_times, 50))
     best_model_file = 'nmcts2_iter50/pure_mcts_{}.pth'.format(max_i)
     best_policy = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], best_model_file)
     prev_best_player = MCTSPlayer(best_policy.policy_value_fn,
@@ -251,13 +256,12 @@ def start_play(env, player1, player2):
     players = {p1: player1, p2: player2}
     current_player = 0
     move = None
+
     while True:
         player_in_turn = players[current_player]
 
         # synchronize the MCTS tree with the current state of the game
-
         move = player_in_turn.get_action(env) # TODO
-        # print(current_player, env.state_[2].max())
         print(move)
         obs, reward, terminated, info = env.step(move)
         print(env.state_[3][action2d_ize(move)])
@@ -267,11 +271,10 @@ def start_play(env, player1, player2):
 
         if not end:
             current_player = 1 - current_player
+            # player_in_turn = players[current_player]
 
-            # if move is not None:
-            #     player_in_turn.mcts._root.children.pop(move)  # pop the prev player's move
-            # player_in_turn.node_update()
-            # [Todo] 이 부분에서 안끝났다면 상대방의 _root_children을 없애러
+            player_in_turn.node_update(env, move)
+
         else:
             print(env)
             obs, _ = env.reset()
@@ -333,6 +336,7 @@ if __name__ == '__main__':
                 # load the trained policy_value_net
 
                 else:
+                    obs_post = np.zeros((5, 9, 4))
                     win_ratio = policy_evaluate2(env)
                     print("win rate : ", win_ratio * 100, "%")
 
@@ -342,7 +346,7 @@ if __name__ == '__main__':
                         model_file = 'nmcts2_iter50/pure_mcts_{}.pth'.format(i + 1)
                         policy_value_net.save_model(model_file)
 
-            if i > 5000:    # Save up to 100 models
+            if i > self_play_times:    # Save up to 100 models
                 print("End loop")
                 break
 
