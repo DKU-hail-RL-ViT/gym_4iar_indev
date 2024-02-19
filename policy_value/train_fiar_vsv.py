@@ -197,6 +197,7 @@ def policy_evaluate(env, n_games=30):  # total 30 games
     Note: this is only for monitoring the progress of training
     """
     current_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout)   # training Agent
+    # pure_mcts_player = MCTS_Pure(c_puct, n_playout)
     pure_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout) # first evaluate Agent
     # random_action_player = RandomAction() # random actions Agent
     win_cnt = defaultdict(int)
@@ -256,10 +257,9 @@ def start_play(env, player1, player2):
     players = {p1: player1, p2: player2}
     current_player = 0
     move = None
+    player_in_turn = players[current_player]
 
     while True:
-        player_in_turn = players[current_player]
-
         # synchronize the MCTS tree with the current state of the game
         move = player_in_turn.get_action(env) # TODO
         print(move)
@@ -270,9 +270,9 @@ def start_play(env, player1, player2):
         end, winner = env.winner()
 
         if not end:
+            print("\t opponent_update")
             current_player = 1 - current_player
-            # player_in_turn = players[current_player]
-
+            player_in_turn = players[current_player]
             player_in_turn.node_update(env, move)
 
         else:
@@ -322,7 +322,6 @@ if __name__ == '__main__':
                 # wandb.log({"loss": loss, "entropy": entropy})
 
             if (i + 1) % check_freq == 0:
-                print("current self-play batch: {}".format(i + 1))
 
                 if (i + 1) == check_freq:
                     win_ratio = policy_evaluate(env)

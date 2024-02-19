@@ -186,7 +186,7 @@ class MCTS(object):
             self._root = TreeNode(None, 1.0)
 
     def __str__(self):
-        return "MCTS Pure"
+        return "Pure MCTS"
 
 
 class MCTSPlayer(object):
