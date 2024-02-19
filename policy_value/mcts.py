@@ -16,8 +16,6 @@ def policy_value_fn(board, net):
     current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
     log_act_probs, value = net(torch.from_numpy(current_state).float())
 
-    print('available:', len(available))
-
     act_probs = np.exp(log_act_probs.data.numpy().flatten())
     filtered_act_probs = [(action, prob) for action, prob in zip(available, act_probs) if action in available]
     state_value = value.item()
@@ -56,7 +54,13 @@ class TreeNode(object):
         for action, prob in action_priors:
             if opp_act not in self._children:
                 self._children[action] = TreeNode(self, prob) # 오류날수도
-        print('asd')
+            else:
+                self._children.pop(opp_act)
+        # 이거 디버그 했을때 action이 35인 이유는 board의 남은 수만큼 돌았기 때
+        print('\t end expand2')
+        print('\n\n')
+
+
 
     def select(self, c_puct):
         """Select action among children that gives maximum action value Q
@@ -143,14 +147,14 @@ class MCTS(object):
             if node.is_leaf():
                 print('\t node is none')
                 break
-            # Greedily select next move.
 
             # counter += 1
             # print('\t counter:', counter)
             print('node_children:', len(node._children))
 
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(node._children)
+            assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) >= len(node._children)
 
+            # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
 
@@ -158,6 +162,7 @@ class MCTS(object):
 
         print('\t out of while')
         action_probs, leaf_value = policy_value_fn(env.state_, net)
+        print('available:', len(action_probs))
 
         # Check for end of game
         end, result = env.winner()
@@ -212,19 +217,10 @@ class MCTS(object):
         net = Net(env.state_.shape[1], env.state_.shape[2])
         node = self._root  # [Todo] 이 부분이 걸림 뭔가 문제를 일으킬 거 같음
 
-        while (1):
-            if node.is_leaf():
-                print('\t node is none')
-                break
-
-            print('node_children:', len(node._children))
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
 
         action_probs, leaf_value = policy_value_fn(env.state_, net)
         #[Todo] 여기서는 그냥 env_state를 주는게 아니라 그냥 board 자체를 주고
         node.expand2(action_probs, last_move)
-        # [Todo] 여기서 last_move를 받아다가 pop해버리는 건
-        print("sdfsdf")
 
 
 
@@ -280,7 +276,8 @@ class MCTSPlayer(object):
             print("WARNING: the board is full")
 
     def node_update(self, env, move):
-        self.mcts.update_opponent(env, move)
+        if self._is_selfplay == 0:
+            self.mcts.update_opponent(env, move)
 
     def __str__(self):
         return "training MCTS {}".format(self.player)
