@@ -46,22 +46,6 @@ class TreeNode(object):
             if action not in self._children:
                 self._children[action] = TreeNode(self, prob)
 
-    def expand2(self, action_priors, opp_act):
-        """Expand tree by creating new children.
-        action_priors: a list of tuples of actions and their prior probability
-            according to the policy function.
-        """
-        for action, prob in action_priors:
-            if opp_act not in self._children:
-                self._children[action] = TreeNode(self, prob) # 오류날수도
-            else:
-                self._children.pop(opp_act)
-        # 이거 디버그 했을때 action이 35인 이유는 board의 남은 수만큼 돌았기 때
-        print('\t end expand2')
-        print('\n\n')
-
-
-
     def select(self, c_puct):
         """Select action among children that gives maximum action value Q
         plus bonus u(P).
@@ -148,8 +132,6 @@ class MCTS(object):
                 print('\t node is none')
                 break
 
-            # counter += 1
-            # print('\t counter:', counter)
             print('node_children:', len(node._children))
 
             assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) >= len(node._children)
@@ -275,9 +257,8 @@ class MCTSPlayer(object):
         else:
             print("WARNING: the board is full")
 
-    def node_update(self, env, move):
-        if self._is_selfplay == 0:
-            self.mcts.update_opponent(env, move)
+    def node_update(self, move):
+        self.mcts.update_with_move(move)
 
     def __str__(self):
         return "training MCTS {}".format(self.player)
