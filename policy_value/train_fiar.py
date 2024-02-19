@@ -218,7 +218,7 @@ def policy_evaluate(env, n_games=30):  # total 30 games
 
 def policy_evaluate2(env, n_games=30):
     existing_files = [int(file.split('_')[-1].split('.')[0])
-                      for file in os.listdir('nmcts2_iter50')
+                      for file in os.listdir('nmcts2_iter1')
                       if file.startswith('pure_mcts_')]
     max_i = max(existing_files) if existing_files else 0
 

@@ -126,7 +126,6 @@ class MCTS(object):
         node = self._root
 
         print('\t init while')
-        # counter = 0
         while (1):
             if node.is_leaf():
                 print('\t node is none')
