@@ -264,8 +264,6 @@ def start_play(env, player1, player2):
         move = player_in_turn.get_action(env) # TODO
         print(move)
         obs, reward, terminated, info = env.step(move)
-        print(env.state_[3][action2d_ize(move)])
-        print(action2d_ize(move))
         assert env.state_[3][action2d_ize(move)]==1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
 
@@ -273,7 +271,7 @@ def start_play(env, player1, player2):
             print("\t opponent_update")
             current_player = 1 - current_player
             player_in_turn = players[current_player]
-            player_in_turn.node_update(env, move)
+            player_in_turn.node_update(move)
 
         else:
             print(env)
