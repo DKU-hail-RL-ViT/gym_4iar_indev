@@ -212,6 +212,10 @@ class MCTSPlayer(object):
         else:
             print("WARNING: the board is full")
 
+    def oppo_node_update(self, move):
+        # 원래는 없없던 코드
+        self.mcts.update_with_move(move)
+
     def __str__(self):
         return "MCTS Pure {}".format(self.player)
 

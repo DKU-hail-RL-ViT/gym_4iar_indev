@@ -1,12 +1,10 @@
-import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import numpy as np
-
 from torch.autograd import Variable
-from io import BytesIO
+import numpy as np
+import os
 
 
 def set_learning_rate(optimizer, lr):
@@ -76,12 +74,6 @@ class PolicyValueNet():
         if model_file:
             state_dict = torch.load(model_file)
             self.policy_value_net.load_state_dict(state_dict)
-
-
-
-
-
-
 
     def policy_value(self, state_batch):
         """

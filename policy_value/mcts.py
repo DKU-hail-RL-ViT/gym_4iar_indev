@@ -121,36 +121,31 @@ class MCTS(object):
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
-        print('\t init playout')
+        # print('\t init playout')
         net = Net(env.state_.shape[1], env.state_.shape[2])
         node = self._root
+        # print('\t init while')
 
-        print('\t init while')
         while (1):
             if node.is_leaf():
-                print('\t node is none')
+                # print('\t node is none')
                 break
-
-            print('node_children:', len(node._children))
-
+            # print('node_children:', len(node._children))
             assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) >= len(node._children)
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
 
-            # np.where( np.abs(env.state_[3].reshape((-1,))-1 ))[0]
-
-        print('\t out of while')
+        # print('\t out of while')
         action_probs, leaf_value = policy_value_fn(env.state_, net)
-        print('available:', len(action_probs))
+        # print('available:', len(action_probs))
 
         # Check for end of game
         end, result = env.winner()
 
-        print('\t end:', end)
         if not end:
-            print("\t node expand")
+            # print("\t node expand")
             node.expand(action_probs)
         else:
             # for end state，return the "true" leaf_value
@@ -194,22 +189,67 @@ class MCTS(object):
         else:
             self._root = TreeNode(None, 1.0)
 
-    def update_opponent(self, env, last_move):
-        net = Net(env.state_.shape[1], env.state_.shape[2])
-        node = self._root  # [Todo] 이 부분이 걸림 뭔가 문제를 일으킬 거 같음
-
-
-        action_probs, leaf_value = policy_value_fn(env.state_, net)
-        #[Todo] 여기서는 그냥 env_state를 주는게 아니라 그냥 board 자체를 주고
-        node.expand2(action_probs, last_move)
-
-
-
     def __str__(self):
         return "MCTS"
 
 
 class MCTSPlayer(object):
+    """AI player based on MCTS"""
+
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=2000, is_selfplay=0):
+        self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
+        self._is_selfplay = is_selfplay
+
+    def set_player_ind(self, p):
+        self.player = p
+
+    def reset_player(self):
+        self.mcts.update_with_move(-1)
+
+    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+        available = np.where(env.state_[3].flatten() == 0)[0]
+        sensible_moves = available
+        # the pi vector returned by MCTS as in the alphaGo Zero paper
+        move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
+
+        if len(sensible_moves) > 0:
+            acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
+            move_probs[list(acts)] = probs
+
+            if self._is_selfplay:
+                # add Dirichlet Noise for exploration (needed for self-play training)
+                move = np.random.choice(
+                    acts,
+                    p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
+                )
+                # # update the root node and reuse the search tree
+                self.mcts.update_with_move(move)
+                # self.mcts.update_with_move(-1)
+
+            else:
+                move = np.random.choice(acts, p=probs)
+                # reset the root node
+                assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
+                self.mcts.update_with_move(-1)
+
+            if return_prob:
+                return move, move_probs
+            else:
+                return move
+        else:
+            print("WARNING: the board is full")
+
+    def oppo_node_update(self, move):
+        # TODO 이 줄이 selfplay 중에도 하다보니 문제가 생길 수 있지 않을까 하는 생각
+        # 원래는 없없던 코드
+        self.mcts.update_with_move(move)
+
+    def __str__(self):
+        return "training MCTS {}".format(self.player)
+
+
+class MCTSPlayer_leaf(object):
+    """Force the transition to the tree node even during self-play."""
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_fn, c_puct=5, n_playout=2000, is_selfplay=0):
@@ -239,14 +279,12 @@ class MCTSPlayer(object):
                     acts,
                     p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
                 )
-                # # update the root node and reuse the search tree
-                self.mcts.update_with_move(move)
-                # self.mcts.update_with_move(-1)
-
+                # update the root node and reuse the search tree
+                self.mcts.update_with_move(-1)
             else:
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
-                assert len(np.where( np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
+                assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
                 self.mcts.update_with_move(-1)
 
             if return_prob:
@@ -256,8 +294,10 @@ class MCTSPlayer(object):
         else:
             print("WARNING: the board is full")
 
-    def node_update(self, move):
+    def oppo_node_update(self, move):
+        # TODO 이 줄이 selfplay 중에도 하다보니 문제가 생길 수 있지 않을까 하는 생각
+        # 원래는 없없던 코드
         self.mcts.update_with_move(move)
 
     def __str__(self):
-        return "training MCTS {}".format(self.player)
+        return "forcing leaf node MCTS {}".format(self.player)
