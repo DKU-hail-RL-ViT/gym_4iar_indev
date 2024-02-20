@@ -92,6 +92,10 @@ class TreeNode(object):
     def is_root(self):
         return self._parent is None
 
+    @property
+    def children(self):
+        return self._children
+
 
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
@@ -123,7 +127,7 @@ class MCTS(object):
                 break
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            obs, reward, terminated, info = env.step(action, node)
+            obs, reward, terminated, info = env.step(action)
         action_probs, _ = self._policy(env.state_)
 
         # Check for end of game
@@ -182,7 +186,7 @@ class MCTS(object):
             self._root = TreeNode(None, 1.0)
 
     def __str__(self):
-        return "MCTS"
+        return "Pure MCTS"
 
 
 class MCTSPlayer(object):
@@ -208,8 +212,12 @@ class MCTSPlayer(object):
         else:
             print("WARNING: the board is full")
 
+    def oppo_node_update(self, move):
+        # 원래는 없없던 코드
+        self.mcts.update_with_move(move)
+
     def __str__(self):
-        return "MCTS {}".format(self.player)
+        return "MCTS Pure {}".format(self.player)
 
 
 class RandomAction(object):

@@ -5,38 +5,39 @@ import os
 
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
+from policy_value_network import PolicyValueNet
+
 from policy_value.mcts import MCTSPlayer
 from policy_value.mcts_pure import MCTSPlayer as MCTS_Pure
-from policy_value_network import PolicyValueNet
+from policy_value.mcts import MCTSPlayer_leaf as MCTS_leaf
 # from policy_value.policy_value_mcts_pure import RandomAction
 
 # fine-tuning models
-n_playout = 50  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+# [TODO] HERE!!
+n_playout = 10  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
 check_freq = 1  # = iter & training 1, 10, 20, 50, 100
 
 # num of simulations for each move
 self_play_sizes = 1
 
-
 buffer_size = 10000
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
-self_play_times = 100 # 비교할 논문에서는 100번 했다고 함. # previous 1500
+self_play_times = 100  # 비교할 논문에서는 100번 했다고 함. # previous 1500
 temp = 0.1
 
 # policy update parameter
 batch_size = 64  # previous 512
-learn_rate = 2e-4   # previous 2e-3
+learn_rate = 2e-4  # previous 2e-3
 lr_mul = 1.0
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
 best_win_ratio = 0.0
-pure_mcts_playout_num = 2  # [todo] 디버깅하려고 줄여놓음 previous 500
+pure_mcts_playout_num = 2
 
 win_ratio = 0.0
 kl_targ = 0.02  # previous 0.02
 
 init_model = None
-
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -61,7 +62,7 @@ def get_equi_data(env, play_data):
     return extend_data
 
 
-def collect_selfplay_data(n_games=30):      #[Todo] 이부분 수정 해야함
+def collect_selfplay_data(n_games=30):  # [Todo] 이부분 수정 해야함
     last_n_games = 20
     for i in range(n_games):
         # temp = 1 if i <= 15 else 0.1
@@ -196,9 +197,11 @@ def policy_evaluate(env, n_games=30):  # total 30 games
     Evaluate the trained policy by playing against the pure MCTS player
     Note: this is only for monitoring the progress of training
     """
-    current_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout)   # training Agent
-    # pure_mcts_player = MCTS_Pure(c_puct, n_playout)
-    pure_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout) # first evaluate Agent
+    current_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout)  # training Agent
+    pure_mcts_player = MCTS_Pure(c_puct, n_playout)
+    # pure_mcts_player = MCTSPlayer(policy_value_fn, c_puct=c_puct, n_playout=n_playout) # first evaluate Agent
+    # leaf_mcts_player = MCTS_leaf(policy_value_fn, c_puct=c_puct, n_playout=n_playout) # forcing leaf node Agent
+
     # random_action_player = RandomAction() # random actions Agent
     win_cnt = defaultdict(int)
 
@@ -206,7 +209,6 @@ def policy_evaluate(env, n_games=30):  # total 30 games
         winner = start_play(env,
                             current_mcts_player,
                             pure_mcts_player)
-
         if winner == -0.5:
             winner = 0
         win_cnt[winner] += 1
@@ -220,15 +222,15 @@ def policy_evaluate(env, n_games=30):  # total 30 games
 def policy_evaluate2(env, n_games=30):
     # [TODO] HERE!!
     existing_files = [int(file.split('_')[-1].split('.')[0])
-                      for file in os.listdir('nmcts50_iter1')
+                      for file in os.listdir('nmcts10_iter1')
                       if file.startswith('pure_mcts_')]
     max_i = max(existing_files) if existing_files else 1
     # [TODO] HERE!!
-    best_model_file = 'nmcts50_iter1/pure_mcts_{}.pth'.format(max_i)
+    best_model_file = 'nmcts10_iter1/pure_mcts_{}.pth'.format(max_i)
     best_policy = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], best_model_file)
     prev_best_player = MCTSPlayer(best_policy.policy_value_fn,
                                   c_puct=c_puct,
-                                  n_playout=n_playout)    # previous 400
+                                  n_playout=n_playout)  # previous 400
     win_cnt = defaultdict(int)
     for j in range(n_games):
         winner = start_play(env,
@@ -236,7 +238,7 @@ def policy_evaluate2(env, n_games=30):
                             prev_best_player)
         if winner == -0.5:
             winner = 0
-        win_cnt[winner] += 1    # white win
+        win_cnt[winner] += 1  # white win
         print("{} / 30 ".format(j + 1))
 
         win_ratio = 1.0 * (win_cnt[1] + 0.5 * win_cnt[-1]) / n_games
@@ -265,14 +267,14 @@ def start_play(env, player1, player2):
         move = player_in_turn.get_action(env)
         print(move)
         obs, reward, terminated, info = env.step(move)
-        assert env.state_[3][action2d_ize(move)]==1, ("Invalid move", action2d_ize(move))
+        assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
 
         if not end:
             print("\t opponent_update")
             current_player = 1 - current_player
             player_in_turn = players[current_player]
-            player_in_turn.node_update(move)
+            player_in_turn.oppo_node_update(move)
 
         else:
             print(env)
@@ -321,12 +323,11 @@ if __name__ == '__main__':
                 # wandb.log({"loss": loss, "entropy": entropy})
 
             if (i + 1) % check_freq == 0:
-
                 if (i + 1) == check_freq:
                     win_ratio = policy_evaluate(env)
                     print("win rate : ", win_ratio * 100, "%")
                     # [TODO] HERE!!
-                    model_file = 'nmcts50_iter1/pure_mcts_{}.pth'.format(i + 1)
+                    model_file = 'nmcts10_iter1/pure_mcts_{}.pth'.format(i + 1)
                     policy_value_net.save_model(model_file)
                     best_win_ratio = win_ratio
 
@@ -342,10 +343,10 @@ if __name__ == '__main__':
                         print("New best policy!!!!!!!!")
                         best_win_ratio = win_ratio
                         # [TODO] HERE!!
-                        model_file = 'nmcts50_iter1/pure_mcts_{}.pth'.format(i + 1)
+                        model_file = 'nmcts10_iter1/pure_mcts_{}.pth'.format(i + 1)
                         policy_value_net.save_model(model_file)
 
-            if i > self_play_times:    # Save up to 100 models
+            if i > self_play_times:  # Save up to 100 models
                 print("End loop")
                 break
 
