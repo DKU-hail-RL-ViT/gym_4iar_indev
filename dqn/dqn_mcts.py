@@ -1,13 +1,11 @@
 import numpy as np
 import copy
+import random
 import torch
 
 from dqn.policy_value_network import Net
-import numpy as np
-import copy
-import torch
 
-from policy_value.policy_value_network import Net
+
 
 
 def softmax(x):
@@ -138,6 +136,7 @@ class MCTS(object):
             # print('node_children:', len(node._children))
             assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) >= len(node._children)
 
+
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
@@ -203,6 +202,7 @@ class MCTSPlayer(object):
 
     def __init__(self, policy_value_fn, c_puct=5, n_playout=2000, is_selfplay=0):
         self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
+        self.policy_value_fn = policy_value_fn
         self._is_selfplay = is_selfplay
 
     def set_player_ind(self, p):
@@ -232,6 +232,11 @@ class MCTSPlayer(object):
                 # self.mcts.update_with_move(-1)
 
             else:
+                # Todo 여기
+
+
+
+
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
                 assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
@@ -251,6 +256,11 @@ class MCTSPlayer(object):
 
     def __str__(self):
         return "training MCTS {}".format(self.player)
+
+
+
+
+
 
 
 class MCTSPlayer_leaf(object):
@@ -306,3 +316,19 @@ class MCTSPlayer_leaf(object):
 
     def __str__(self):
         return "forcing leaf node MCTS {}".format(self.player)
+
+
+class RandomAction(object):
+
+    def set_player_ind(self, p):
+        self.player = p
+
+    def get_action(self, env):
+        available = [i for i in range(36) if env.state_[3][i // 4][i % 4] != 1]
+        sensible_moves = available
+
+        if len(sensible_moves) > 0:
+            move = random.choice(sensible_moves)
+            return move
+        else:
+            print("WARNING: the board is full")

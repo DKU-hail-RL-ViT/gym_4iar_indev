@@ -5,38 +5,44 @@ import copy
 
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
-from policy_value_network import PolicyValueNet
 
-from policy_value.mcts import MCTSPlayer
+from policy_value_network import PolicyValueNet
+from dqn.dqn_mcts import MCTSPlayer
+from dqn_network import Agent
+
 
 # from policy_value.policy_value_mcts_pure import RandomAction
 
-# fine-tuning models
+
+""" tuning parameter """
 # [TODO] HERE!!
-n_playout = 5  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
-check_freq = 2  # = iter & training 1, 10, 20, 50, 100
+n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+check_freq = 1  # = iter & training 1, 10, 20, 50, 100
 
-# num of simulations for each move
-self_play_sizes = 1
 
+""" MCTS parameter """
 buffer_size = 10000
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
+self_play_sizes = 1
 self_play_times = check_freq * 100    # 비교할 논문에서는 100번 했다고 함. # previous 1500
 temp = 0.1
 
-# policy update parameter
+
+""" Policy update parameter """
 batch_size = 64  # previous 512
 learn_rate = 2e-4  # previous 2e-3
 lr_mul = 1.0
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
-best_win_ratio = 0.0
-pure_mcts_playout_num = 2
-
-win_ratio = 0.0
 kl_targ = 0.02  # previous 0.02
 
+
+""" Policy evaluate parameter """
+win_ratio = 0.0
 init_model = None
+
+
+""" DQN parameter """
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -215,7 +221,7 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
         win_cnt[winner] += 1
         print("{} / 30 ".format(j + 1))
 
-    win_ratio = 1.0 * (win_cnt[1] + 0.5 * win_cnt[-1]) / n_games
+    win_ratio = 1.0 * win_cnt[1] / n_games
     print("win: {}, lose: {}, tie:{}".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     return win_ratio, curr_mcts_player
 
@@ -295,15 +301,19 @@ if __name__ == '__main__':
                 # wandb.log({"loss": loss, "entropy": entropy})
 
             if (i + 1) % check_freq == 0:
+                # When MCTS evaluate level self play turn off
+                curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=0)
+
                 if (i + 1) == check_freq:
+
                     policy_evaluate(env, curr_mcts_player, curr_mcts_player)
 
-                    model_file = 'nmcts{}_iter{}/pure_mcts_{}.pth'.format(n_playout, check_freq, i + 1)
+                    model_file = 'nmcts{}_iter{}/train_{}.pth'.format(n_playout, check_freq, i + 1)
                     policy_value_net.save_model(model_file)
 
                     # meaning it is the first one and never saved any
                     policy_value_net_old = policy_value_net
-                    old_mcts_player = MCTSPlayer(policy_value_net_old, c_puct, n_playout, is_selfplay=1)
+                    old_mcts_player = MCTSPlayer(policy_value_net_old, c_puct, n_playout, is_selfplay=0)
 
                 else:
                     existing_files = [int(file.split('_')[-1].split('.')[0])
@@ -311,28 +321,28 @@ if __name__ == '__main__':
                                       if file.startswith('pure_mcts_')]
                     old_i = max(existing_files) if existing_files else check_freq
 
-                    best_old_model = 'nmcts{}_iter{}/pure_mcts_{}.pth'.format(n_playout, check_freq, old_i)
+                    best_old_model = 'nmcts{}_iter{}/train_{}.pth'.format(n_playout, check_freq, old_i)
                     policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], best_old_model)
-                    old_mcts_player = MCTSPlayer(policy_value_net_old, c_puct, n_playout, is_selfplay=1)
 
+                    old_mcts_player = MCTSPlayer(policy_value_net_old, c_puct, n_playout, is_selfplay=0)
                     win_ratio, best_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
                     print("\t win rate : ", win_ratio * 100, "%")
 
                     if win_ratio > 0.5:
-                        model_file = 'nmcts{}_iter{}/pure_mcts_{}.pth'.format(n_playout, check_freq, i + 1)
+                        model_file = 'nmcts{}_iter{}/train_{}.pth'.format(n_playout, check_freq, i + 1)
                         best_mcts_player.policy_value_fn.save_model(model_file)
                         print("\t New best policy!!!")
 
-                        curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=1)
+                        # TODO 머리가 안돌아가 check_iter에 안걸릴땐 selfplay를 하면 안되니까 0이 맞는걸로 보이는데
+                        curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=0)
                         # policy_value_net_old = copy.deepcopy(policy_value_net)
 
-                    else: # if worse
-                        # if it just reject and does not go back
-                        curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=1)
+                    else:  # if worse it just reject and does not go back
+                        pass
 
             else:
+                # TODO 여긴 evaluate를 하지 않으니까 selfplay를 계속 켜두는게 맞는거 같고
                 curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=1)
-
 
     except KeyboardInterrupt:
         print('\n\rquit')
