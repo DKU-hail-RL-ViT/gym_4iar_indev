@@ -31,18 +31,12 @@ Task : four in a row (9 x 4)
 ### Problem
 
 
-추가해야할건 루트 노드가 뭔지 나오게한다면 좋을거 같다고 하심
-
-질문1 mcts  winning에서 리턴 되는 값에 따라 누구를 학습시킬지가 결정이 되는데
-
-질문2 mcts_pure _evaluate_rollout 163번줄
-얘는 흰돌을 기준으로 하니까 return값을 반대로 줘야 백의 승률을 올려주는건가
-
 
 
 
 
 ### version  
+수정해야함
 
 Black: MCTS policy trained through the policy value network
 White: MCTS policy based solely on pure MCTS

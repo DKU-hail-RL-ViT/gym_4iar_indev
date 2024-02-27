@@ -4,7 +4,7 @@ import random
 import torch
 
 from dqn.policy_value_network import Net
-
+from dqn_network import Agent
 
 
 
@@ -178,7 +178,6 @@ class MCTS(object):
                       for act, node in self._root._children.items()]
 
         acts, visits = zip(*act_visits)
-
         act_probs = softmax(1.0 / temp * np.log(np.array(visits) + 1e-10))
 
         return acts, act_probs
@@ -232,12 +231,15 @@ class MCTSPlayer(object):
                 # self.mcts.update_with_move(-1)
 
             else:
-                # Todo 여기
+                """ DQN start"""
+                agent = Agent(env)
+                agent.train(max_episodes=1000)
 
 
 
 
                 move = np.random.choice(acts, p=probs)
+                print("my name")
                 # reset the root node
                 assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
                 self.mcts.update_with_move(-1)

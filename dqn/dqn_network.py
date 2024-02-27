@@ -61,16 +61,20 @@ class CNN_DQN(nn.Module):
         super(CNN_DQN, self).__init__()
         self.state_dim = state_dim
         self.action_dim = action_dim
+        self.batch_size = 64
         self.lr = lr
         self.eps_decay = eps_decay
         self.eps_min = eps_min
         self.epsilon = 1.0
 
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=5, padding=2)
-        self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=5, padding=2)
+        self.board_width = state_dim[1]
+        self.board_height = state_dim[2]
+
+        self.conv1 = nn.Conv2d(in_channels=5, out_channels=32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
         self.flatten = nn.Flatten()
-        self.fc1 = nn.Linear(210 * 160, 100)
-        self.fc2 = nn.Linear(100, 16)
+        self.fc1 = nn.Linear(self.batch_size * self.board_width * self.board_height, 64)
+        self.fc2 = nn.Linear(64, 16)
         self.fc3 = nn.Linear(16, action_dim)
 
     def forward(self, x):
@@ -81,6 +85,21 @@ class CNN_DQN(nn.Module):
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
+
+    def predict(self, state):
+        state = torch.tensor(state, dtype=torch.float32)
+        with torch.no_grad():
+            q_values = self.forward(state)  # Todo 여기 잘 된거지 모르겠음 network부분
+        return q_values.numpy()
+
+    def get_action(self, state):
+        state = np.reshape(state, (1, ) + self.state_dim)
+        self.epsilon *= args.eps_decay
+        self.epsilon = max(self.epsilon, args.eps_min)
+        q_value = self.predict(state)[0]
+        if np.random.random() < self.epsilon:
+            return random.randint(0, self.action_dim - 1)
+        return np.argmax(q_value)
 
 
 class Agent:
@@ -128,12 +147,13 @@ class Agent:
 
     def train(self, max_episodes=1000):
         for episode in range(max_episodes):
-            state = self.env.reset()
+            state = self.env.state_
             total_reward = 0
             done = False
 
             while not done:
-                action = self.model.get_action(state[0])
+                action = self.model.get_action(state) # 이걸 그냥 리턴 하면 안되고
+                print('wtf')
                 next_state, reward, done, _, _ = self.env.step(action)
 
                 self.buffer.put(state[0], action, reward, next_state, done)
@@ -149,13 +169,3 @@ class Agent:
                 self.replay()
 
             self.target_update()
-
-
-def main():
-    env = gym.make("ALE/Pong-v5", render_mode='rgb_array')
-    agent = Agent(env)
-    agent.train(max_episodes=1000)
-
-
-if __name__ == "__main__":
-    main()

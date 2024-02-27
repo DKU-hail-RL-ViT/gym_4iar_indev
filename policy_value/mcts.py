@@ -243,8 +243,6 @@ class MCTSPlayer(object):
             print("WARNING: the board is full")
 
     def oppo_node_update(self, move):
-        # TODO 이 줄이 selfplay 중에도 하다보니 문제가 생길 수 있지 않을까 하는 생각
-        # 원래는 없없던 코드
         self.mcts.update_with_move(move)
 
     def __str__(self):

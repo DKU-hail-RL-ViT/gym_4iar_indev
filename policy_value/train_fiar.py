@@ -14,7 +14,7 @@ from policy_value.mcts import MCTSPlayer
 
 """ tuning parameter """
 # [TODO] HERE!!
-n_playout = 20  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+n_playout = 50  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
 check_freq = 1  # = more selfplaying & training 1, 10, 20, 50, 100
 
 
@@ -65,11 +65,11 @@ def get_equi_data(env, play_data):
 def collect_selfplay_data(mcts_player, n_games=30):  # [Todo] 이부분 수정 해야함
     last_n_games = 20 * check_freq
     for i in range(n_games * check_freq):
-        # temp = 1 if i <= 15 else 0.1
+        temp = 1 if i <= 15 * check_freq else 0.1
         rewards, play_data = self_play(env, mcts_player, temp=temp)
         play_data = list(play_data)[:]
 
-        if i >= (n_games*check_freq - last_n_games):
+        if i >= (n_games * check_freq - last_n_games):
             play_data = get_equi_data(env, play_data)
             data_buffer.extend(play_data)
 
