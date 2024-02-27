@@ -14,7 +14,7 @@ from policy_value.mcts import MCTSPlayer
 
 """ tuning parameter """
 # [TODO] HERE!!
-n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+n_playout = 20  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
 check_freq = 1  # = more selfplaying & training 1, 10, 20, 50, 100
 
 
