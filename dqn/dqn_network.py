@@ -24,21 +24,21 @@ class ReplayBuffer:
     def __init__(self, capacity=10000):
         self.buffer = deque(maxlen=capacity)
 
-    def put(self, state, action, reward, next_state, done):
-        self.buffer.append((state, action, reward, next_state, done))
+    def put(self, state, action, reward, next_state, terminated):
+        self.buffer.append((state, action, reward, next_state, terminated))
 
     def sample(self, batch_size):
+        # 아 여기서 state를 뽑을 때 잘줘야할 수도 있음
         sample = random.sample(self.buffer, batch_size)
-        states, actions, rewards, next_states, dones = zip(*sample)
+        states, actions, rewards, next_states, terminated = zip(*sample)
 
-        # PyTorch 텐서로 변환
         states = torch.tensor(states, dtype=torch.float32)
         actions = torch.tensor(actions, dtype=torch.long)
         rewards = torch.tensor(rewards, dtype=torch.float32)
         next_states = torch.tensor(next_states, dtype=torch.float32)
-        dones = torch.tensor(dones, dtype=torch.float32)
+        terminated = torch.tensor( terminated, dtype=torch.float32)
 
-        return states, actions, rewards, next_states, dones
+        return states, actions, rewards, next_states, terminated
 
     def size(self):
         return len(self.buffer)
@@ -93,12 +93,17 @@ class CNN_DQN(nn.Module):
         return q_values.numpy()
 
     def get_action(self, state):
-        state = np.reshape(state, (1, ) + self.state_dim)
+
+        available = np.where(state[3].flatten() == 0)[0]
+        sensible_moves = available
+
+        state = np.reshape(state, (1, ) + self.state_dim)   # state.shape (1, 5, 9, 4)
         self.epsilon *= args.eps_decay
         self.epsilon = max(self.epsilon, args.eps_min)
         q_value = self.predict(state)[0]
         if np.random.random() < self.epsilon:
-            return random.randint(0, self.action_dim - 1)
+            # return np.random.choice(self.action_dim)
+            return np.random.choice(sensible_moves)
         return np.argmax(q_value)
 
 
@@ -122,13 +127,13 @@ class Agent:
     def replay(self):
         if len(self.buffer) < args.batch_size:
             return
-        states, actions, rewards, next_states, done = self.buffer.sample()
+        states, actions, rewards, next_states,  terminated = self.buffer.sample()
 
         states = torch.tensor(states, dtype=torch.float32)
         next_states = torch.tensor(next_states, dtype=torch.float32)
         actions = torch.tensor(actions, dtype=torch.long)
         rewards = torch.tensor(rewards, dtype=torch.float32)
-        done = torch.tensor(done, dtype=torch.float32)
+        terminated = torch.tensor(terminated, dtype=torch.float32)
 
         # Q 값 예측
         q_values = self.model(states)
@@ -137,7 +142,7 @@ class Agent:
         # 선택된 액션에 대한 Q 값
         q_value = q_values.gather(1, actions.unsqueeze(-1)).squeeze(-1)
         next_q_value = next_q_values.max(1)[0]
-        expected_q_value = rewards + args.gamma * next_q_value * (1 - done)
+        expected_q_value = rewards + args.gamma * next_q_value * (1 - terminated)
 
         # 손실 계산 및 최적화
         loss = F.mse_loss(q_value, expected_q_value.detach())
@@ -152,18 +157,25 @@ class Agent:
             done = False
 
             while not done:
-                action = self.model.get_action(state) # 이걸 그냥 리턴 하면 안되고
-                print('wtf')
-                next_state, reward, done, _, _ = self.env.step(action)
+                action = self.model.get_action(state)   # 이걸 그냥 리턴 하면 안되고
+                print(action) # get_action안에서 지워야할거 같음
+                next_state, reward,  terminated, info = self.env.step(action)
 
-                self.buffer.put(state[0], action, reward, next_state, done)
+                # when drawn, black defeat then, give -1
+                if not reward[0]:
+                    reward = (reward[0], 0)
+                elif reward[0] and reward[1] == -0.5:
+                    reward = (reward[0], -1)
+
+                # dqn 버퍼에(5,9,4)를 넣는게 맞나 (9,4)를 넣는게 맞나
+                self.buffer.put(state, action, reward[1], next_state,  terminated)
 
                 state = next_state
-                total_reward += reward
+                total_reward += reward[1]
 
-                if done:
+                if terminated:
                     print(f"Episode: {episode + 1}, Total Reward: {total_reward}")
-                    break
+                    self.env.reset()
 
             if len(self.buffer) > args.batch_size:
                 self.replay()
