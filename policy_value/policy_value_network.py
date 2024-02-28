@@ -18,8 +18,6 @@ class Net(nn.Module):
 
     def __init__(self, board_width, board_height):
         super(Net, self).__init__()
-        self.c_puct = 5
-        self.n_playout = 2
 
         self.board_width = board_width
         self.board_height = board_height
@@ -55,7 +53,7 @@ class Net(nn.Module):
         return x_act, x_val
 
 
-class PolicyValueNet():
+class PolicyValueNet:
     """policy-value network """
 
     def __init__(self, board_width, board_height,
