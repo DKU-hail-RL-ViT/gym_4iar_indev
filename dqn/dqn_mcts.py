@@ -136,7 +136,6 @@ class MCTS(object):
             # print('node_children:', len(node._children))
             assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) >= len(node._children)
 
-
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
@@ -232,6 +231,7 @@ class MCTSPlayer(object):
 
             else:
                 """ DQN start"""
+                """agent의 위치를 바꿔야하는데 나중에 함"""
                 agent = Agent(env)
                 agent.train(max_episodes=1000)
 
@@ -312,8 +312,6 @@ class MCTSPlayer_leaf(object):
             print("WARNING: the board is full")
 
     def oppo_node_update(self, move):
-        # TODO 이 줄이 selfplay 중에도 하다보니 문제가 생길 수 있지 않을까 하는 생각
-        # 원래는 없없던 코드
         self.mcts.update_with_move(move)
 
     def __str__(self):

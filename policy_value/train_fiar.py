@@ -304,7 +304,8 @@ if __name__ == '__main__':
 
                     policy_evaluate(env, curr_mcts_player, curr_mcts_player)
 
-                    model_file = 'nmcts{}_iter{}/train_{}.pth'.format(n_playout, check_freq, i + 1)
+                    model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:03d}.pth"
+
                     policy_value_net.save_model(model_file)
 
                     # meaning it is the first one and never saved any
@@ -313,11 +314,11 @@ if __name__ == '__main__':
 
                 else:
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in os.listdir('nmcts{}_iter{}'.format(n_playout, check_freq))
-                                      if file.startswith('pure_mcts_')]
+                                      for file in os.listdir(f"nmcts{n_playout}_iter{check_freq}")
+                                      if file.startswith('train_')]
                     old_i = max(existing_files) if existing_files else check_freq
 
-                    best_old_model = 'nmcts{}_iter{}/train_{}.pth'.format(n_playout, check_freq, old_i)
+                    best_old_model = f"nmcts{n_playout}_iter{check_freq}/train_{old_i:03d}.pth"
                     policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], best_old_model)
 
                     old_mcts_player = MCTSPlayer(policy_value_net_old, c_puct, n_playout, is_selfplay=0)
@@ -325,7 +326,8 @@ if __name__ == '__main__':
                     print("\t win rate : ", win_ratio * 100, "%")
 
                     if win_ratio > 0.5:
-                        model_file = 'nmcts{}_iter{}/train_{}.pth'.format(n_playout, check_freq, i + 1)
+                        model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:03d}.pth"
+
                         best_mcts_player.policy_value_fn.save_model(model_file)
                         print("\t New best policy!!!")
 
