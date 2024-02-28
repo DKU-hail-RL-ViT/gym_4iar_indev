@@ -2,10 +2,26 @@ import numpy as np
 import copy
 import random
 import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 
-from dqn.policy_value_network import Net
-from dqn_network import Agent
+import argparse
 
+from dqn.policy_value_network import CNN_DQN
+from collections import deque
+
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--gamma', type=float, default=0.95)
+parser.add_argument('--lr', type=float, default=0.005)
+parser.add_argument('--batch_size', type=int, default=64)
+parser.add_argument('--eps', type=float, default=1.0)
+parser.add_argument('--eps_decay', type=float, default=0.995)
+parser.add_argument('--eps_min', type=float, default=0.01)
+
+args = parser.parse_args()
 
 
 def softmax(x):
@@ -14,6 +30,7 @@ def softmax(x):
     return probs
 
 
+# TODO 여기 수정 필요
 def policy_value_fn(board, net):
     available = np.where(board[3].flatten() == 0)[0]
     current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
@@ -119,21 +136,21 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
 
+
     def _playout(self, env):  # obs.shape = (5,9,4)
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
         # print('\t init playout')
-        net = Net(env.state_.shape[1], env.state_.shape[2])
+        net = CNN_DQN(env.state_.shape[1], env.state_.shape[2], env.state_.shape)
         node = self._root
         # print('\t init while')
 
         while (1):
             if node.is_leaf():
-                # print('\t node is none')
                 break
-            # print('node_children:', len(node._children))
+
             assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) >= len(node._children)
 
             # Greedily select next move.
@@ -141,6 +158,7 @@ class MCTS(object):
             obs, reward, terminated, info = env.step(action)
 
         # print('\t out of while')
+        # Todo 여기 밑에서 q-learning , leaf_value는 우째 가져오지
         action_probs, leaf_value = policy_value_fn(env.state_, net)
         # print('available:', len(action_probs))
 
@@ -169,7 +187,7 @@ class MCTS(object):
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
-        for n in range(self._n_playout):  # for 400 times
+        for n in range(self._n_playout):
             self._playout(copy.deepcopy(env))  # state_copy.shape = (5,9,4)
 
         # calc the move probabilities based on visit counts at the root node
@@ -209,14 +227,40 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
+
+    # TODO 여기도 수정
+    def predict(self, state):
+        state = torch.tensor(state, dtype=torch.float32)
+        with torch.no_grad():
+            q_values = self.forward(state)
+        return q_values.numpy()
+
+
+    # TODO 여기도 수정
     def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
+
+        state = np.reshape(env.state_, (1,) + self.state_dim)  # state.shape (1, 5, 9, 4)
+
+        self.epsilon *= args.eps_decay
+        self.epsilon = max(self.epsilon, args.eps_min)
+        q_value = self.predict(state)[0]
+        if np.random.random() < self.epsilon:
+            # return np.random.choice(self.action_dim)
+            return np.random.choice(sensible_moves)
+        return np.argmax(q_value)
+
+
+
+
         # the pi vector returned by MCTS as in the alphaGo Zero paper
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
+            # get_move_probs 이건 network랑 문제 없음
+
             move_probs[list(acts)] = probs
 
             if self._is_selfplay:
@@ -227,13 +271,8 @@ class MCTSPlayer(object):
                 )
                 # # update the root node and reuse the search tree
                 self.mcts.update_with_move(move)
-                # self.mcts.update_with_move(-1)
 
             else:
-                """ DQN start"""
-                """agent의 위치를 바꿔야하는데 나중에 함"""
-                agent = Agent(env)
-                agent.train(max_episodes=1000)
 
 
 

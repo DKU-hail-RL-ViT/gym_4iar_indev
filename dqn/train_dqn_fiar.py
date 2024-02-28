@@ -2,6 +2,7 @@ import numpy as np
 import random
 import os
 import copy
+import argparse
 
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
@@ -9,7 +10,6 @@ from fiar_env import Fiar, turn, action2d_ize
 from policy_value_network import PolicyValueNet
 from dqn.dqn_mcts import MCTSPlayer
 from dqn_network import Agent
-
 
 # from policy_value.policy_value_mcts_pure import RandomAction
 
@@ -21,7 +21,7 @@ check_freq = 1  # = iter & training 1, 10, 20, 50, 100
 
 
 """ MCTS parameter """
-buffer_size = 10000
+buffer_size = 10000     # capacity selfplay data
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_sizes = 1
@@ -43,6 +43,16 @@ init_model = None
 
 
 """ DQN parameter """
+parser = argparse.ArgumentParser()
+parser.add_argument('--gamma', type=float, default=0.95)
+parser.add_argument('--lr', type=float, default=0.005)
+parser.add_argument('--batch_size', type=int, default=64)
+parser.add_argument('--eps', type=float, default=1.0)
+parser.add_argument('--eps_decay', type=float, default=0.995)
+parser.add_argument('--eps_min', type=float, default=0.01)
+
+args = parser.parse_args()
+
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -281,13 +291,16 @@ if __name__ == '__main__':
 
     if init_model:
         # start training from an initial policy-value net
-        policy_value_net = PolicyValueNet(env.state().shape[1],
+        policy_value_net = PolicyValueNet(env,
+                                          env.state().shape[1],
                                           env.state().shape[2],
                                           model_file=init_model)
     else:
         # start training from a new policy-value net
-        policy_value_net = PolicyValueNet(env.state().shape[1],
+        policy_value_net = PolicyValueNet(env,
+                                          env.state().shape[1],
                                           env.state().shape[2])
+
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
     curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=1)
@@ -297,7 +310,7 @@ if __name__ == '__main__':
             collect_selfplay_data(curr_mcts_player, self_play_sizes)
 
             if len(data_buffer) > batch_size:
-                loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,                                                          policy_value_net=policy_value_net)
+                loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier, policy_value_net=policy_value_net)
                 # wandb.log({"loss": loss, "entropy": entropy})
 
             if (i + 1) % check_freq == 0:

@@ -4,20 +4,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 import numpy as np
-import gym
 import argparse
 import random
 from collections import deque
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--gamma', type=float, default=0.95)
-parser.add_argument('--lr', type=float, default=0.005)
-parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--eps', type=float, default=1.0)
-parser.add_argument('--eps_decay', type=float, default=0.995)
-parser.add_argument('--eps_min', type=float, default=0.01)
 
-args = parser.parse_args()
 
 
 class ReplayBuffer:
@@ -28,7 +19,7 @@ class ReplayBuffer:
         self.buffer.append((state, action, reward, next_state, terminated))
 
     def sample(self, batch_size):
-        # 아 여기서 state를 뽑을 때 잘줘야할 수도 있음
+        # 아 여기서 state를 뽑을 때 잘 줘야할 수도 있음
         sample = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, terminated = zip(*sample)
 
@@ -36,7 +27,7 @@ class ReplayBuffer:
         actions = torch.tensor(actions, dtype=torch.long)
         rewards = torch.tensor(rewards, dtype=torch.float32)
         next_states = torch.tensor(next_states, dtype=torch.float32)
-        terminated = torch.tensor( terminated, dtype=torch.float32)
+        terminated = torch.tensor(terminated, dtype=torch.float32)
 
         return states, actions, rewards, next_states, terminated
 
@@ -44,21 +35,13 @@ class ReplayBuffer:
         return len(self.buffer)
 
 
-class DQN(nn.Module):
-    def __init__(self, state_dim, action_dim):
-        super(DQN, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 100)
-        self.fc2 = nn.Linear(100, action_dim)
-
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
-
 
 class CNN_DQN(nn.Module):
-    def __init__(self, state_dim, action_dim, lr=0.005, eps_decay=0.995, eps_min=0.01):
+    def __init__(self, board_width, board_height, state_dim, action_dim, lr=0.005, eps_decay=0.995, eps_min=0.01):
         super(CNN_DQN, self).__init__()
+        self.board_width = board_width
+        self.board_height = board_height
+
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.batch_size = 64
@@ -67,8 +50,6 @@ class CNN_DQN(nn.Module):
         self.eps_min = eps_min
         self.epsilon = 1.0
 
-        self.board_width = state_dim[1]
-        self.board_height = state_dim[2]
 
         self.conv1 = nn.Conv2d(in_channels=5, out_channels=32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
