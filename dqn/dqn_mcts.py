@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 import argparse
 
-from dqn.policy_value_network import CNN_DQN
+from dqn.policy_value_network import DQN
 from collections import deque
 
 
@@ -143,7 +143,7 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         # print('\t init playout')
-        net = CNN_DQN(env.state_.shape[1], env.state_.shape[2], env.state_.shape)
+        net = DQN(env.state_.shape[1], env.state_.shape[2], env.state_.shape)
         node = self._root
         # print('\t init while')
 
@@ -241,21 +241,6 @@ class MCTSPlayer(object):
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
 
-        state = np.reshape(env.state_, (1,) + self.state_dim)  # state.shape (1, 5, 9, 4)
-
-        self.epsilon *= args.eps_decay
-        self.epsilon = max(self.epsilon, args.eps_min)
-        q_value = self.predict(state)[0]
-        if np.random.random() < self.epsilon:
-            # return np.random.choice(self.action_dim)
-            return np.random.choice(sensible_moves)
-        return np.argmax(q_value)
-
-
-
-
-        # the pi vector returned by MCTS as in the alphaGo Zero paper
-        move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
@@ -264,7 +249,7 @@ class MCTSPlayer(object):
             move_probs[list(acts)] = probs
 
             if self._is_selfplay:
-                # add Dirichlet Noise for exploration (needed for self-play training)
+                # 항상 q_value를 반환해야할거 같은데
                 move = np.random.choice(
                     acts,
                     p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
@@ -274,16 +259,13 @@ class MCTSPlayer(object):
 
             else:
 
-
-
-
                 move = np.random.choice(acts, p=probs)
                 print("my name")
                 # reset the root node
                 assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
                 self.mcts.update_with_move(-1)
 
-            if return_prob:
+            if return_prob:  # TODO 어차피 probs반환 못하니까 move만 return 하면 됨
                 return move, move_probs
             else:
                 return move
@@ -300,7 +282,17 @@ class MCTSPlayer(object):
 
 
 
+"""
+        state = np.reshape(env.state_, (1,) + env.state_.shape)  # state.shape (1, 5, 9, 4)
 
+        self.epsilon *= args.eps_decay
+        self.epsilon = max(self.epsilon, args.eps_min)
+        q_value = self.predict(state)[0]
+        if np.random.random() < self.epsilon:
+            # return np.random.choice(self.action_dim)
+            return np.random.choice(sensible_moves)
+        return np.argmax(q_value)
+        """
 
 
 

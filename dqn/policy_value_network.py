@@ -4,15 +4,16 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-import numpy as np
 import argparse
 import os
+import random
+import numpy as np
 
+from collections import deque
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--gamma', type=float, default=0.95)
-parser.add_argument('--lr', type=float, default=0.005)
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--eps', type=float, default=1.0)
 parser.add_argument('--eps_decay', type=float, default=0.995)
@@ -30,14 +31,13 @@ def set_learning_rate(optimizer, lr):
 
 
 class ReplayBuffer:
-    def __init__(self, capacity=10000):
+    def __init__(self, capacity=1000):
         self.buffer = deque(maxlen=capacity)
 
     def put(self, state, action, reward, next_state, terminated):
         self.buffer.append((state, action, reward, next_state, terminated))
 
     def sample(self, batch_size):
-        # 아 여기서 state를 뽑을 때 잘줘야할 수도 있음
         sample = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, terminated = zip(*sample)
 
@@ -45,7 +45,7 @@ class ReplayBuffer:
         actions = torch.tensor(actions, dtype=torch.long)
         rewards = torch.tensor(rewards, dtype=torch.float32)
         next_states = torch.tensor(next_states, dtype=torch.float32)
-        terminated = torch.tensor( terminated, dtype=torch.float32)
+        terminated = torch.tensor(terminated, dtype=torch.float32)
 
         return states, actions, rewards, next_states, terminated
 
@@ -54,21 +54,9 @@ class ReplayBuffer:
 
 
 class DQN(nn.Module):
-    def __init__(self, state_dim, action_dim):
-        super(DQN, self).__init__()
-        self.fc1 = nn.Linear(state_dim, 100)
-        self.fc2 = nn.Linear(100, action_dim)
-
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
-
-
-class CNN_DQN(nn.Module):
     def __init__(self, board_width, board_height, state_dim, action_dim,
                  lr=0.005, eps_decay=0.995, eps_min=0.01):
-        super(CNN_DQN, self).__init__()
+        super(DQN, self).__init__()
 
         self.board_width = board_width
         self.board_height = board_height
@@ -80,17 +68,19 @@ class CNN_DQN(nn.Module):
         self.eps_min = eps_min
         self.epsilon = 1.0
 
-        self.conv1 = nn.Conv2d(in_channels=5, out_channels=32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
         self.flatten = nn.Flatten()
 
-        self.fc1 = nn.Linear(self.batch_size * self.board_width * self.board_height, 64)
+        self.fc1 = nn.Linear(128 * self.board_width * self.board_height, 64)
         self.fc2 = nn.Linear(64, 16)
         self.fc3 = nn.Linear(16, action_dim)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
         x = self.flatten(x)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -98,19 +88,38 @@ class CNN_DQN(nn.Module):
         return x
 
 
-# TODO 이부분은 train_dqn쪽으로 뺴보는것도 생각
-class Agent:
-    def __init__(self, env):
+class DQNAgent:
+    def __init__(self, env, board_width, board_height,
+                 model_file=None, use_gpu=False):
+
         self.env = env
+        self.use_gpu = use_gpu
         self.action_dim = env.action_space.n
         self.state_dim = env.observation_space.shape
+        self.board_width = board_width  # 9
+        self.board_height = board_height  # 4
+        self.l2_const = 1e-4  # coef of l2 penalty
 
         # CNN model
-        self.model = CNN_DQN(self.state_dim, self.action_dim)
-        self.target_model = CNN_DQN(self.state_dim, self.action_dim)
-        self.target_update()
+        if self.use_gpu:
+            self.model = DQN(self.board_width, self.board_height,
+                             self.state_dim, self.action_dim).cuda()
+            self.target_model = DQN(self.board_width, self.board_height,
+                                    self.state_dim, self.action_dim).cuda()
+        else:
+            self.model = DQN(self.board_width, self.board_height,
+                             self.state_dim, self.action_dim)
+            self.target_model = DQN(self.board_width, self.board_height,
+                                    self.state_dim, self.action_dim)
+        self.optimizer = optim.Adam(self.model.parameters(),
+                                    weight_decay=self.l2_const)  # default 5e-3
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr)
+        if model_file:
+            state_dict = torch.load(model_file)
+            self.model.load_state_dict(state_dict)
+            # self.target_model.load_state_dict(state_dict) # TODO 여긴 주석처리를 풀어야할지 아직 고민
+
+        self.target_update()  # TODO 여기에 target update가 있는게 맞나
         self.buffer = ReplayBuffer()
 
     def target_update(self):
@@ -119,9 +128,9 @@ class Agent:
     def replay(self):
         if len(self.buffer) < args.batch_size:
             return
-        states, actions, rewards, next_states,  terminated = self.buffer.sample()
+        states, actions, rewards, next_states,  terminated = self.buffer.sample(args.batch_size)
 
-        """states = torch.tensor(states, dtype=torch.float32)
+        states = torch.tensor(states, dtype=torch.float32)
         next_states = torch.tensor(next_states, dtype=torch.float32)
         actions = torch.tensor(actions, dtype=torch.long)
         rewards = torch.tensor(rewards, dtype=torch.float32)
@@ -140,7 +149,7 @@ class Agent:
         loss = F.mse_loss(q_value, expected_q_value.detach())
         self.optimizer.zero_grad()
         loss.backward()
-        self.optimizer.step()"""
+        self.optimizer.step()
 
     def train(self, max_episodes=1000):
         for episode in range(max_episodes):
@@ -191,12 +200,12 @@ class PolicyValueNet:
 
         # the policy value net module
         if self.use_gpu:
-            self.policy_value_net = CNN_DQN(board_width, board_height,
-                                            env.state_, env.action_space.n).cuda()
+            self.policy_value_net = DQN(board_width, board_height,
+                                        env.state_, env.action_space.n).cuda()
         else:
-            self.policy_value_net = CNN_DQN(board_width, board_height,
+            self.policy_value_net = DQN(board_width, board_height,
                                             env.state_, env.action_space.n)
-        self.target_policy_value_net = CNN_DQN(board_width, board_height,
+        self.target_policy_value_net = DQN(board_width, board_height,
                                                self.state_dim, self.action_dim)
         self.target_update()
         self.optimizer = optim.Adam(self.policy_value_net.parameters(),
@@ -287,27 +296,6 @@ class PolicyValueNet:
         self.optimizer.step()
 
         return loss.item()
-
-        """# zero the parameter gradients
-        self.optimizer.zero_grad()
-        # set learning rate
-        set_learning_rate(self.optimizer, lr)
-
-        # forward
-        log_act_probs, value = self.policy_value_net(state_batch)
-        # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
-        # Note: the L2 penalty is incorporated in optimizer
-        value_loss = F.mse_loss(value.view(-1), winner_batch)
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-        loss = value_loss + policy_loss
-        # backward and optimize
-        loss.backward()
-        self.optimizer.step()
-        # calc policy entropy, for monitoring only
-        entropy = -torch.mean(
-            torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
-        )
-        return loss.item(), entropy.item()"""
 
 
 

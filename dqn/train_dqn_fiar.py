@@ -7,7 +7,7 @@ import argparse
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
 
-from policy_value_network import PolicyValueNet
+from policy_value_network import DQN, DQNAgent
 from dqn.dqn_mcts import MCTSPlayer
 from dqn_network import Agent
 
@@ -15,7 +15,6 @@ from dqn_network import Agent
 
 
 """ tuning parameter """
-# [TODO] HERE!!
 n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
 check_freq = 1  # = iter & training 1, 10, 20, 50, 100
 
@@ -80,7 +79,7 @@ def get_equi_data(env, play_data):
 def collect_selfplay_data(mcts_player, temp, n_games=100):
     for i in range(n_games):
         rewards, play_data = self_play(env, mcts_player, temp)
-        play_data = list(play_data)[:]
+        play_data = list(play_data)[:]  # TODO dqn에서 들어가야할게 고민 그대로 들어가긴 어려울듯
 
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
@@ -110,6 +109,7 @@ def self_play(env, mcts_player, temp):
                 print('self_play_draw')
             else:
                 move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
+                print("\t complete return action")
                 action = move
             action2d = action2d_ize(action)
 
@@ -155,7 +155,7 @@ def self_play(env, mcts_player, temp):
             return winners, zip(states, mcts_probs, winners_z)
 
 
-def policy_update(lr_mul, policy_value_net):
+def policy_update(lr_mul, policy_value_net):  # TODO 여기 싹다 없어져야함
     kl, loss, entropy = 0, 0, 0
     lr_multiplier = lr_mul
 
@@ -292,38 +292,36 @@ if __name__ == '__main__':
 
     if init_model:
         # start training from an initial policy-value net
-        policy_value_net = PolicyValueNet(env,
-                                          env.state().shape[1],
-                                          env.state().shape[2],
-                                          model_file=init_model)
+        policy_value_net = DQNAgent(env, env.state().shape[1],
+                                    env.state().shape[2], model_file=init_model)
     else:
         # start training from a new policy-value net
-        policy_value_net = PolicyValueNet(env,
-                                          env.state().shape[1],
-                                          env.state().shape[2])
-
+        policy_value_net = DQNAgent(env, env.state().shape[1],
+                                    env.state().shape[2])
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
     curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=1)
 
     try:
         for i in range(self_play_times):
-            temperature = 1 if i < 15 else 0.1
+            temperature = 1 if i < 15 * check_freq else 0.1
+            print("\t start collect selfplay data")
             collect_selfplay_data(curr_mcts_player, temperature, self_play_sizes)
 
             if len(data_buffer) > batch_size:
+                print("\t start policy_update")
                 loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier, policy_value_net=policy_value_net)
                 # wandb.log({"loss": loss, "entropy": entropy})
 
             if (i + 1) % check_freq == 0:
                 # When MCTS evaluate level self play turn off
+                print("\t first MCTSPlayer generation")
                 curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=0)
 
                 if (i + 1) == check_freq:
-
+                    print("\t start evalutate")
                     policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-
-                    model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:03d}.pth"
+                    model_file = f"nmcts{n_playout}_iter{check_freq}/train_{(i + 1)/check_freq:03d}.pth"
 
                     policy_value_net.save_model(model_file)
 
@@ -344,7 +342,7 @@ if __name__ == '__main__':
                     win_ratio, best_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
                     print("\t win rate : ", win_ratio * 100, "%")
 
-                    if win_ratio > 0.5:
+                    if win_ratio > 0.6:
                         model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:03d}.pth"
 
                         best_mcts_player.policy_value_fn.save_model(model_file)

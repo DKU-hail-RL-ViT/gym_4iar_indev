@@ -3,10 +3,6 @@
 ```bash
 pip install sb3-contrib
 pip install 'stable-baselines3[extra]'
-pip install torch
-pip install gymnasium
-pip install scipy
-pip install pyglet
 ```
 
 # SH
@@ -32,11 +28,7 @@ Task : four in a row (9 x 4)
 
 
 
-
-
-
-### version  
-수정해야함
+### version
 
 Black: MCTS policy trained through the policy value network
 White: MCTS policy based solely on pure MCTS
@@ -46,23 +38,32 @@ White win -> Reward: -1 or 1e-3 (undecided)
 Draw -> Reward: -1
 
 
-## adjust hyperparameter :  policy_value.train_fiar.py 285
-batch_size = 128   # previous 512  (toooo slow)
+# adjust hyperparameter
+### tuning parameter 
+n_playout = 20  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+check_freq = 1  # = more self_playing & training 1, 10, 20, 50, 100
 
 
-## adjust hyperparameter :  policy_value.train_fiar.py 13 ~ 33
-n_playout = 200  # previous 400
-pure_mcts_playout_num = 500     # previous 1000 
-
-
-
+### MCTS parameter
+buffer_size = 1000
+c_puct = 5
+epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_sizes = 1
-temp = 1e-3
-buffer_size = 10000
-epochs = 5  # num of train_steps for each update
-self_play_times = 1000   # previous 1500
-pure_mcts_playout_num = 500     # previous 1000
+self_play_times = 100 
+temperature = 0.1
 
+
+### Policy update parameter 
+batch_size = 64  # previous 512
+learn_rate = 2e-4  # previous 2e-3
+lr_mul = 1.0
+lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
+kl_targ = 0.02  # previous 0.02
+
+
+### Policy evaluate parameter 
+win_ratio = 0.0
+init_model = None
 
 
 
