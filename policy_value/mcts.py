@@ -161,7 +161,7 @@ class MCTS(object):
 
         node.update_recursive(-leaf_value)
 
-    def get_move_probs(self, env, temp=1e-3):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
 
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
@@ -209,7 +209,7 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
         # the pi vector returned by MCTS as in the alphaGo Zero paper
@@ -243,6 +243,7 @@ class MCTSPlayer(object):
             print("WARNING: the board is full")
 
     def oppo_node_update(self, move):
+        # 원래는 없없던 코드
         self.mcts.update_with_move(move)
 
     def __str__(self):
@@ -263,7 +264,7 @@ class MCTSPlayer_leaf(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         # available = [i for i in range(36) if env.state_[3][i // 4][i % 4] != 1]
         sensible_moves = available

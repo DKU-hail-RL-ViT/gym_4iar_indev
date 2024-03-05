@@ -180,7 +180,7 @@ class MCTS(object):
 
         node.update_recursive(-leaf_value)
 
-    def get_move_probs(self, env, temp=1e-3):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
 
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
@@ -237,7 +237,7 @@ class MCTSPlayer(object):
 
 
     # TODO 여기도 수정
-    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
 
@@ -318,7 +318,7 @@ class MCTSPlayer_leaf(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         # available = [i for i in range(36) if env.state_[3][i // 4][i % 4] != 1]
         sensible_moves = available

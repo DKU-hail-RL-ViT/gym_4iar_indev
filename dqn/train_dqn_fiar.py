@@ -21,12 +21,12 @@ check_freq = 1  # = iter & training 1, 10, 20, 50, 100
 
 
 """ MCTS parameter """
-buffer_size = 10000     # capacity selfplay data
+buffer_size = 1000    # capacity selfplay data
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_sizes = 1
-self_play_times = check_freq * 100    # 비교할 논문에서는 100번 했다고 함. # previous 1500
-temp = 0.1
+self_play_times = 100    # 비교할 논문에서는 100번 했다고 함. # previous 1500
+temperature = 0.1
 
 
 """ Policy update parameter """
@@ -77,19 +77,20 @@ def get_equi_data(env, play_data):
     return extend_data
 
 
-def collect_selfplay_data(mcts_player, n_games=30):  # [Todo] 이부분 수정 해야함
-    last_n_games = 20 * check_freq
-    for i in range(n_games * check_freq):
-        # temp = 1 if i <= 15 else 0.1
-        rewards, play_data = self_play(env, mcts_player, temp=temp)
+def collect_selfplay_data(mcts_player, temp, n_games=100):
+    for i in range(n_games):
+        rewards, play_data = self_play(env, mcts_player, temp)
         play_data = list(play_data)[:]
 
-        if i >= (n_games*check_freq - last_n_games):
-            play_data = get_equi_data(env, play_data)
-            data_buffer.extend(play_data)
+        play_data = get_equi_data(env, play_data)
+        data_buffer.extend(play_data)
+
+        # if i >= (n_games*check_freq - last_n_games):
+        #     play_data = get_equi_data(env, play_data)
+        #     data_buffer.extend(play_data)
 
 
-def self_play(env, mcts_player, temp=1e-3):
+def self_play(env, mcts_player, temp):
     states, mcts_probs, current_player = [], [], []
     obs, _ = env.reset()
 
@@ -108,7 +109,7 @@ def self_play(env, mcts_player, temp=1e-3):
             if obs[3].sum() == 36:
                 print('self_play_draw')
             else:
-                move, move_probs = mcts_player.get_action(env, temp=temp, return_prob=1)
+                move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
                 action = move
             action2d = action2d_ize(action)
 
@@ -225,7 +226,8 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
 
         winner = start_play(env,
                             current_mcts_player,
-                            pure_mcts_player)
+                            pure_mcts_player,
+                            temperature)
         if winner == -0.5:
             winner = 0
         win_cnt[winner] += 1
@@ -236,8 +238,7 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     return win_ratio, curr_mcts_player
 
 
-
-def start_play(env, player1, player2):
+def start_play(env, player1, player2, temp):
     """start a game between two players"""
     obs, _ = env.reset()
 
@@ -252,8 +253,8 @@ def start_play(env, player1, player2):
 
     while True:
         # synchronize the MCTS tree with the current state of the game
-        move = player_in_turn.get_action(env)
-        # print(move)
+        move = player_in_turn.get_action(env, temp)
+
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
@@ -307,7 +308,8 @@ if __name__ == '__main__':
 
     try:
         for i in range(self_play_times):
-            collect_selfplay_data(curr_mcts_player, self_play_sizes)
+            temperature = 1 if i < 15 else 0.1
+            collect_selfplay_data(curr_mcts_player, temperature, self_play_sizes)
 
             if len(data_buffer) > batch_size:
                 loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier, policy_value_net=policy_value_net)
