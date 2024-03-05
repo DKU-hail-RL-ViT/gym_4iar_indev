@@ -1,15 +1,13 @@
 import numpy as np
 import random
 import os
-import copy
 import argparse
 
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
 
-from policy_value_network import DQN, DQNAgent
+from policy_value_network import DQNAgent
 from dqn.dqn_mcts import MCTSPlayer
-from dqn_network import Agent
 
 # from policy_value.policy_value_mcts_pure import RandomAction
 

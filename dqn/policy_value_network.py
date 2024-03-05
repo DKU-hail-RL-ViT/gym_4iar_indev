@@ -119,7 +119,7 @@ class DQNAgent:
             self.model.load_state_dict(state_dict)
             # self.target_model.load_state_dict(state_dict) # TODO 여긴 주석처리를 풀어야할지 아직 고민
 
-        self.target_update()  # TODO 여기에 target update가 있는게 맞나
+        self.target_update()  # TODO 이 안의 코드도 좀 변경되어야함
         self.buffer = ReplayBuffer()
 
     def target_update(self):
