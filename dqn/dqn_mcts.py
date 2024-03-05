@@ -30,7 +30,7 @@ def softmax(x):
     return probs
 
 
-# TODO 여기 수정 필요
+# TODO 음..
 def policy_value_fn(board, net):
     available = np.where(board[3].flatten() == 0)[0]
     current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
@@ -143,7 +143,8 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         # print('\t init playout')
-        net = DQN(env.state_.shape[1], env.state_.shape[2], env.state_.shape)
+        dqn_shape = np.reshape(env.state_, (1,) + env.state_.shape)
+        net = DQN(env.state_.shape[1], env.state_.shape[2], dqn_shape, env.state_.shape[1]*env.state_.shape[2])
         node = self._root
         # print('\t init while')
 
@@ -158,7 +159,7 @@ class MCTS(object):
             obs, reward, terminated, info = env.step(action)
 
         # print('\t out of while')
-        # Todo 여기 밑에서 q-learning , leaf_value는 우째 가져오지
+        # Todo dqn 방식에서 leaf_value data는 우째 가져오지, 위의 코드 자체가 안돌아가는데
         action_probs, leaf_value = policy_value_fn(env.state_, net)
         # print('available:', len(action_probs))
 
@@ -240,21 +241,29 @@ class MCTSPlayer(object):
     def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
-
+        move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
-            # get_move_probs 이건 network랑 문제 없음
+
 
             move_probs[list(acts)] = probs
 
             if self._is_selfplay:
                 # 항상 q_value를 반환해야할거 같은데
-                move = np.random.choice(
-                    acts,
-                    p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
-                )
-                # # update the root node and reuse the search tree
+                state = np.reshape(env.state_, (1,) + env.state_.shape)  # state.shape (1, 5, 9, 4)
+
+                self.epsilon *= args.eps_decay
+                self.epsilon = max(self.epsilon, args.eps_min)
+                q_value = self.predict(state)[0]
+                if np.random.random() < self.epsilon:
+                    # return np.random.choice(self.action_dim)
+                    print(np.random.choice(sensible_moves))
+                print(np.argmax(q_value))
+                    # return np.random.choice(sensible_moves) # TODO 여기 수정해야함 주석처리한게 원래 코드
+                # return np.argmax(q_value)
+
+                # update the root node and reuse the search tree
                 self.mcts.update_with_move(move)
 
             else:
