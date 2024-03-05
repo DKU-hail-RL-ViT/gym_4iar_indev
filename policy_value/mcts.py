@@ -132,8 +132,7 @@ class MCTS(object):
                 # print('\t node is none')
                 break
             # print('node_children:', len(node._children))
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) >= len(node._children)
-
+            assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1))[0]) >= len(node._children)
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
@@ -176,7 +175,6 @@ class MCTS(object):
                       for act, node in self._root._children.items()]
 
         acts, visits = zip(*act_visits)
-
         act_probs = softmax(1.0 / temp * np.log(np.array(visits) + 1e-10))
 
         return acts, act_probs

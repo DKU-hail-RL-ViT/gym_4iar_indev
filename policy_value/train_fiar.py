@@ -11,23 +11,20 @@ from policy_value.mcts import MCTSPlayer
 
 
 """ tuning parameter """
-# [TODO] HERE!!
-
-n_playout = 50  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
-check_freq = 1  # = more selfplaying & training 1, 10, 20, 50, 100
-
+n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+check_freq = 20  # = more self_playing & training 1, 10, 20, 50, 100
 
 """ MCTS parameter """
 buffer_size = 1000
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_sizes = 1
-self_play_times = 100  # 비교할 논문에서는 100번 했다고 함. # previous 1500
+self_play_times = check_freq * 100
 temperature = 0.1
 
 """ Policy update parameter """
 batch_size = 64  # previous 512
-learn_rate = 2e-4  # previous 2e-3
+learn_rate = 5e-4  # previous 2e-3
 lr_mul = 1.0
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
 kl_targ = 0.02  # previous 0.02
@@ -59,17 +56,6 @@ def get_equi_data(env, play_data):
     return extend_data
 
 
-def collect_selfplay_data(mcts_player, n_games=30):  # [Todo] 이부분 수정 해야함
-    last_n_games = 20 * check_freq
-    for i in range(n_games * check_freq):
-        temp = 1 if i <= 15 * check_freq else 0.1
-        rewards, play_data = self_play(env, mcts_player, temp=temp)
-        play_data = list(play_data)[:]
-
-        if i >= (n_games * check_freq - last_n_games):
-            play_data = get_equi_data(env, play_data)
-            data_buffer.extend(play_data)
-
 def collect_selfplay_data(mcts_player, temp, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
 
@@ -82,7 +68,6 @@ def collect_selfplay_data(mcts_player, temp, n_games=100):
         # if i >= (n_games - last_n_games):
         #    play_data = get_equi_data(env, play_data)
         #    data_buffer.extend(play_data)
-
 
 
 def self_play(env, mcts_player, temp):
@@ -302,7 +287,7 @@ if __name__ == '__main__':
         for i in range(self_play_times):
             """ During the first 15 steps of each self-play game,
             the temperature is set to 1 to induce variability in the data """
-            temperature = 1 if i < 15 else 0.1
+            temperature = 1 if i < 15 * check_freq else 0.1
             collect_selfplay_data(curr_mcts_player, temperature, self_play_sizes)
 
             if len(data_buffer) > batch_size:
@@ -318,7 +303,7 @@ if __name__ == '__main__':
 
                     policy_evaluate(env, curr_mcts_player, curr_mcts_player)
 
-                    model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:03d}.pth"
+                    model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:05d}.pth"
 
                     policy_value_net.save_model(model_file)
 
@@ -332,20 +317,15 @@ if __name__ == '__main__':
                                       if file.startswith('train_')]
                     old_i = max(existing_files) if existing_files else check_freq
 
-                    best_old_model = f"nmcts{n_playout}_iter{check_freq}/train_{old_i:03d}.pth"
+                    best_old_model = f"nmcts{n_playout}_iter{check_freq}/train_{old_i:05d}.pth"
                     policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], best_old_model)
 
                     old_mcts_player = MCTSPlayer(policy_value_net_old, c_puct, n_playout, is_selfplay=0)
                     win_ratio, best_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
                     print("\t win rate : ", win_ratio * 100, "%")
 
-
-                    if win_ratio > 0.5:
-                        model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:03d}.pth"
-
-
                     if win_ratio > 0.6:
-                        model_file = 'nmcts{}_iter{}/train_{}.pth'.format(n_playout, check_freq, i + 1)
+                        model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:05d}.pth"
 
                         best_mcts_player.policy_value_fn.save_model(model_file)
                         print("\t New best policy!!!")
