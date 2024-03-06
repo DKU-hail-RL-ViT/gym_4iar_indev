@@ -6,7 +6,7 @@ import argparse
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
 
-from policy_value_network import DQNAgent
+from dqn_network import DQNAgent
 from dqn.dqn_mcts import MCTSPlayer
 
 # from policy_value.policy_value_mcts_pure import RandomAction
@@ -16,15 +16,13 @@ from dqn.dqn_mcts import MCTSPlayer
 n_playout = 2  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
 check_freq = 1  # = iter & training 1, 10, 20, 50, 100
 
-
 """ MCTS parameter """
-buffer_size = 1000    # capacity selfplay data
+buffer_size = 1000  # capacity selfplay data
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_sizes = 1
-self_play_times = 100    # 비교할 논문에서는 100번 했다고 함. # previous 1500
+self_play_times = 100  # 비교할 논문에서는 100번 했다고 함. # previous 1500
 temperature = 0.1
-
 
 """ Policy update parameter """
 batch_size = 64  # previous 512
@@ -33,11 +31,9 @@ lr_mul = 1.0
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
 kl_targ = 0.02  # previous 0.02
 
-
 """ Policy evaluate parameter """
 win_ratio = 0.0
 init_model = None
-
 
 """ DQN parameter """
 parser = argparse.ArgumentParser()
@@ -49,7 +45,6 @@ parser.add_argument('--eps_decay', type=float, default=0.995)
 parser.add_argument('--eps_min', type=float, default=0.01)
 
 args = parser.parse_args()
-
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -77,7 +72,7 @@ def get_equi_data(env, play_data):
 def collect_selfplay_data(mcts_player, temp, n_games=100):
     for i in range(n_games):
         rewards, play_data = self_play(env, mcts_player, temp)
-        play_data = list(play_data)[:]  # TODO dqn에서 들어가야할게 고민 그대로 들어가긴 어려울듯
+        play_data = list(play_data)[:]
 
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
@@ -88,7 +83,7 @@ def collect_selfplay_data(mcts_player, temp, n_games=100):
 
 
 def self_play(env, mcts_player, temp):
-    states, mcts_probs, current_player = [], [], []
+    states, current_player = [], []
     obs, _ = env.reset()
 
     player_0 = turn(obs)
@@ -102,13 +97,12 @@ def self_play(env, mcts_player, temp):
     while True:
         while True:
             action = None
-            move_probs = None
             if obs[3].sum() == 36:
                 print('self_play_draw')
             else:
-                move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
-                print("\t complete return action")
+                move = mcts_player.get_action(env, temp, return_prob=1)
                 action = move
+
             action2d = action2d_ize(action)
 
             if obs[3, action2d[0], action2d[1]] == 0.0:
@@ -116,7 +110,6 @@ def self_play(env, mcts_player, temp):
 
         # store the data
         states.append(obs)
-        mcts_probs.append(move_probs)
         current_player.append(turn(obs))
 
         obs, reward, terminated, info = env.step(action)
@@ -150,7 +143,7 @@ def self_play(env, mcts_player, temp):
                     winners = 0
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
-            return winners, zip(states, mcts_probs, winners_z)
+            return winners, zip(states, winners_z)
 
 
 def policy_update(lr_mul, policy_value_net):  # TODO 여기 싹다 없어져야함
@@ -290,15 +283,15 @@ if __name__ == '__main__':
 
     if init_model:
         # start training from an initial policy-value net
-        policy_value_net = DQNAgent(env, env.state().shape[1],
-                                    env.state().shape[2], model_file=init_model)
+        agent = DQNAgent(env, env.state().shape[1],
+                         env.state().shape[2], model_file=init_model)
     else:
         # start training from a new policy-value net
-        policy_value_net = DQNAgent(env, env.state().shape[1],
-                                    env.state().shape[2])
+        agent = DQNAgent(env, env.state().shape[1],
+                         env.state().shape[2])
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
-    curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=1)
+    curr_mcts_player = MCTSPlayer(agent, c_puct, n_playout, is_selfplay=1)
 
     try:
         for i in range(self_play_times):
@@ -306,10 +299,11 @@ if __name__ == '__main__':
             print("\t start collect selfplay data")
             collect_selfplay_data(curr_mcts_player, temperature, self_play_sizes)
 
-            if len(data_buffer) > batch_size:
-                print("\t start policy_update")
-                loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier, policy_value_net=policy_value_net)
-                # wandb.log({"loss": loss, "entropy": entropy})
+            if len(data_buffer) > batch_size:  #  TODO policy update 하는 부분도 수정
+                loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
+                                                                               policy_value_net=policy_value_net)
+
+
 
             if (i + 1) % check_freq == 0:
                 # When MCTS evaluate level self play turn off
@@ -319,7 +313,7 @@ if __name__ == '__main__':
                 if (i + 1) == check_freq:
                     print("\t start evalutate")
                     policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-                    model_file = f"nmcts{n_playout}_iter{check_freq}/train_{(i + 1)/check_freq:03d}.pth"
+                    model_file = f"nmcts{n_playout}_iter{check_freq}/train_{(i + 1) / check_freq:03d}.pth"
 
                     policy_value_net.save_model(model_file)
 
