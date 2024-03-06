@@ -87,6 +87,9 @@ class DQN(nn.Module):
         x = self.fc3(x)
         return x
 
+    # TODO 여기에 optimizer 구현해야함
+
+
 
 class DQNAgent:
     def __init__(self, env, board_width, board_height,
@@ -94,8 +97,12 @@ class DQNAgent:
 
         self.env = env
         self.use_gpu = use_gpu
-        self.action_dim = env.action_space.n
+
         self.state_dim = env.observation_space.shape
+        self.action_dim = len(np.where(env.state_[3].flatten() == 0)[0])
+        # 이렇게 해도 될지 몰겠음
+        # 원래는 9 x 4 36이 맞는데 play되면 둘 수 있는 action수가 주니까 저게 맞나..
+
         self.board_width = board_width  # 9
         self.board_height = board_height  # 4
         self.l2_const = 1e-4  # coef of l2 penalty
@@ -111,30 +118,64 @@ class DQNAgent:
                              self.state_dim, self.action_dim)
             self.target_model = DQN(self.board_width, self.board_height,
                                     self.state_dim, self.action_dim)
+
+        self.target_update()
+        self.buffer = ReplayBuffer()
         self.optimizer = optim.Adam(self.model.parameters(),
                                     weight_decay=self.l2_const)  # default 5e-3
 
         if model_file:
             state_dict = torch.load(model_file)
             self.model.load_state_dict(state_dict)
-            # self.target_model.load_state_dict(state_dict) # TODO 여긴 주석처리를 풀어야할지 아직 고민
 
-        self.target_update()  # TODO 이 안의 코드도 좀 변경되어야함
+        self.target_update()
         self.buffer = ReplayBuffer()
 
     def target_update(self):
         self.target_model.load_state_dict(self.model.state_dict())
 
     def replay(self):
-        if len(self.buffer) < args.batch_size:
-            return
-        states, actions, rewards, next_states,  terminated = self.buffer.sample(args.batch_size)
+        for _ in range(10):
+            if self.buffer.size() < args.batch_size:
+                return
+            states, actions, rewards, next_states, done = self.buffer.sample()
+            states = states  # TODO 여기 수정해야함
+            next_states = next_states   # TODO 여기 수정해야함
 
-        states = torch.tensor(states, dtype=torch.float32)
-        next_states = torch.tensor(next_states, dtype=torch.float32)
-        actions = torch.tensor(actions, dtype=torch.long)
-        rewards = torch.tensor(rewards, dtype=torch.float32)
-        terminated = torch.tensor(terminated, dtype=torch.float32)
+            with torch.no_grad():
+                next_q_values = self.target_model(next_states).max(1)[0]
+                target_q_values = rewards + (1 - done) * next_q_values * args.gamma
+
+            current_q_values = self.model(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
+            loss = torch.nn.functional.mse_loss(current_q_values, target_q_values)
+
+            self.model.optimizer.zero_grad()
+            loss.backward()
+            self.model.optimizer.step()
+
+
+
+    def train_step(self, state_batch, mcts_probs, winner_batch, lr):
+        """perform a training step"""
+        # wrap in Variable
+        if self.use_gpu:
+            state_batch_np = np.array(state_batch)
+            mcts_probs_np = np.array(mcts_probs)
+            winner_batch_np = np.array(winner_batch)
+
+            state_batch = Variable(torch.FloatTensor(state_batch_np).cuda())
+            mcts_probs = Variable(torch.FloatTensor(mcts_probs_np).cuda())
+            winner_batch = Variable(torch.FloatTensor(winner_batch_np).cuda())
+
+        else:
+            state_batch_np = np.array(state_batch)
+            mcts_probs_np = np.array(mcts_probs)
+            winner_batch_np = np.array(winner_batch)
+
+            state_batch = Variable(torch.FloatTensor(state_batch_np))
+            mcts_probs = Variable(torch.FloatTensor(mcts_probs_np))
+            winner_batch = Variable(torch.FloatTensor(winner_batch_np))
+
 
         # Q 값 예측
         q_values = self.model(states)
@@ -148,8 +189,16 @@ class DQNAgent:
         # 손실 계산 및 최적화
         loss = F.mse_loss(q_value, expected_q_value.detach())
         self.optimizer.zero_grad()
+
+        # backward and optimize
         loss.backward()
         self.optimizer.step()
+
+        return loss.item()
+
+
+
+
 
     def train(self, max_episodes=1000):
         for episode in range(max_episodes):
@@ -184,123 +233,8 @@ class DQNAgent:
             self.target_update()
 
 
-
-class PolicyValueNet:
-    """policy-value network """
-    def __init__(self, env, board_width, board_height,
-                 model_file=None, use_gpu=False):
-
-        self.action_dim = env.action_space.n  # TODO action_dim 여기도 수정해야함
-        self.state_dim = env.state_
-        self.use_gpu = use_gpu
-        self.board_width = board_width  # 9
-        self.board_height = board_height  # 4
-        self.l2_const = 1e-4  # coef of l2 penalty
-        self.buffer = ReplayBuffer()
-
-        # the policy value net module
-        if self.use_gpu:
-            self.policy_value_net = DQN(board_width, board_height,
-                                        env.state_, env.action_space.n).cuda()
-        else:
-            self.policy_value_net = DQN(board_width, board_height,
-                                            env.state_, env.action_space.n)
-        self.target_policy_value_net = DQN(board_width, board_height,
-                                               self.state_dim, self.action_dim)
-        self.target_update()
-        self.optimizer = optim.Adam(self.policy_value_net.parameters(),
-                                    weight_decay=self.l2_const)
-
-        if model_file:
-            state_dict = torch.load(model_file)
-            self.policy_value_net.load_state_dict(state_dict)
-
-
-    def target_update(self):
-        self.target_model.load_state_dict(self.policy_value_net.state_dict())
-
-
-    def policy_value(self, state_batch):
-        """
-        input: a batch of states
-        output: a batch of action probabilities and state values
-        """
-        if self.use_gpu:
-            state_batch_np = np.array(state_batch)
-            state_batch = Variable(torch.FloatTensor(state_batch_np).cuda())
-            log_act_probs, value = self.policy_value_net(state_batch)
-            act_probs = np.exp(log_act_probs.data.cpu().numpy())
-            return act_probs, value.data.cpu().numpy()
-        else:
-            state_batch_np = np.array(state_batch)
-            state_batch = torch.FloatTensor(state_batch_np)
-            log_act_probs, value = self.policy_value_net(state_batch)
-            act_probs = np.exp(log_act_probs.data.numpy())
-            return act_probs, value.detach().cpu().numpy()
-
-    def policy_value_fn(self, board):
-        """
-        input: board
-        output: a list of (action, probability) tuples for each available
-        action and the score of the board state
-        """
-        legal_positions = board.availables
-        current_state = np.ascontiguousarray(board.current_state().reshape(
-            -1, 5, self.board_width, self.board_height))
-
-        log_act_probs, value = self.policy_value_net(
-            Variable(torch.from_numpy(current_state)).float())
-
-        act_probs = np.exp(log_act_probs.data.detach().numpy().flatten())
-        act_probs = list(zip(legal_positions, act_probs[legal_positions]))
-        value = value.data[0][0]
-        return act_probs, value
-
-    def train_step(self, state_batch, mcts_probs, winner_batch, lr):
-        """perform a training step"""
-        # wrap in Variable
-        if self.use_gpu:
-            state_batch_np = np.array(state_batch)
-            mcts_probs_np = np.array(mcts_probs)
-            winner_batch_np = np.array(winner_batch)
-
-            state_batch = Variable(torch.FloatTensor(state_batch_np).cuda())
-            mcts_probs = Variable(torch.FloatTensor(mcts_probs_np).cuda())
-            winner_batch = Variable(torch.FloatTensor(winner_batch_np).cuda())
-
-        else:
-            state_batch_np = np.array(state_batch)
-            mcts_probs_np = np.array(mcts_probs)
-            winner_batch_np = np.array(winner_batch)
-
-            state_batch = Variable(torch.FloatTensor(state_batch_np))
-            mcts_probs = Variable(torch.FloatTensor(mcts_probs_np))
-            winner_batch = Variable(torch.FloatTensor(winner_batch_np))
-
-
-        # Q 값 예측
-        q_values = self.policy_value_net(states)
-        next_q_values = self.target_policy_value_net(next_states)
-
-        # 선택된 액션에 대한 Q 값
-        q_value = q_values.gather(1, actions.unsqueeze(-1)).squeeze(-1)
-        next_q_value = next_q_values.max(1)[0]
-        expected_q_value = rewards + args.gamma * next_q_value * (1 - terminated)
-
-        # 손실 계산 및 최적화
-        loss = F.mse_loss(q_value, expected_q_value.detach())
-        self.optimizer.zero_grad()
-
-        # backward and optimize
-        loss.backward()
-        self.optimizer.step()
-
-        return loss.item()
-
-
-
     def get_policy_param(self):
-        net_params = self.policy_value_net.state_dict()
+        net_params = self.model.state_dict()
         return net_params
 
 
@@ -310,3 +244,4 @@ class PolicyValueNet:
         # Ensure that the directory exists before saving the file
         os.makedirs(os.path.dirname(model_file), exist_ok=True)
         torch.save(net_params, model_file)
+
