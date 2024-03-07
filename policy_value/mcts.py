@@ -3,7 +3,7 @@ import copy
 import torch
 import random
 
-from policy_value.policy_value_network import Net
+from policy_value.policy_value_network import AC, DQN, QRDQN, Net
 
 
 def softmax(x):
@@ -113,7 +113,7 @@ class MCTS(object):
             relying on the prior more.
         """
         self._root = TreeNode(None, 1.0)
-        self._policy = policy_value_fn
+        self._policy = policy_value_fn.policy_value_net
         self._c_puct = c_puct
         self._n_playout = n_playout
 
@@ -123,7 +123,6 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         # print('\t init playout')
-        net = Net(env.state_.shape[1], env.state_.shape[2])
         node = self._root
         # print('\t init while')
 
@@ -139,7 +138,7 @@ class MCTS(object):
             obs, reward, terminated, info = env.step(action)
 
         # print('\t out of while')
-        action_probs, leaf_value = policy_value_fn(env.state_, net)
+        action_probs, leaf_value = policy_value_fn(env.state_, self._policy)
         # print('available:', len(action_probs))
 
         # Check for end of game
