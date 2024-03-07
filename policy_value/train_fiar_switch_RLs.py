@@ -293,7 +293,7 @@ if __name__ == '__main__':
             """ During the first 15 steps of each self-play game,
             the temperature is set to 1 to induce variability in the data """
             temperature = 1 if i < 15 * check_freq else 0.1
-            collect_selfplay_data(curr_mcts_player, temperature, self_play_sizes)
+            collect_selfplay_data(curr_mcts_player, temperature, self_play_sizes) # TODO mcts가 playout 할때마다 새로 Net 선언함
 
             if len(data_buffer) > batch_size:
                 loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
