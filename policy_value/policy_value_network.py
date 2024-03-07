@@ -13,11 +13,10 @@ def set_learning_rate(optimizer, lr):
         param_group['lr'] = lr
 
 
-class Net(nn.Module):
+class AC(nn.Module):
     """policy-value network module"""
-
     def __init__(self, board_width, board_height):
-        super(Net, self).__init__()
+        super(AC, self).__init__()
 
         self.board_width = board_width
         self.board_height = board_height
@@ -53,20 +52,113 @@ class Net(nn.Module):
         return x_act, x_val
 
 
+class DQN(nn.Module):
+    """policy-value network module"""
+    def __init__(self, board_width, board_height):
+        super(DQN, self).__init__()
+
+        self.board_width = board_width
+        self.board_height = board_height
+        # common layers
+        self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+
+        # action value layers
+        self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
+        self.act_fc1 = nn.Linear(4 * board_width * board_height,
+                                 64)
+        self.act_fc2 = nn.Linear(64,
+                                 board_width * board_height)
+
+    def forward(self, state_input):
+        # common layers
+        x = F.relu(self.conv1(state_input))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+
+        # action value layers
+        x_act = F.relu(self.act_conv1(x))
+        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
+        x_act = F.relu(self.act_fc1(x_act))
+        x_act = self.act_fc2(x_act)
+        x_prob = F.log_softmax(x_act, dim=1) # TODO 맞는지 확인 필요
+        x_val = self._cal_state_value(x_act, x_prob)
+
+        return x_prob, x_val
+
+    def _cal_state_value(self, x_act, x_prob): # TODO 맞는지 확인 필요
+        # use x_act and x_prob to get expected value
+        x_val = torch.sum(x_act.detach() * x_prob.detach(), 1)
+
+        return x_val
+
+class QRDQN(nn.Module):
+    """policy-value network module"""
+
+    def __init__(self, board_width, board_height):
+        super(QRDQN, self).__init__()
+
+        self.board_width = board_width
+        self.board_height = board_height
+        # common layers
+        self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        # action policy layers
+        self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
+        self.act_fc1 = nn.Linear(4 * board_width * board_height,
+                                 board_width * board_height)
+        # state value layers
+        self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
+        self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
+        self.val_fc2 = nn.Linear(64, 1)
+
+    def forward(self, state_input):
+        # common layers
+        x = F.relu(self.conv1(state_input))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+
+        # action policy layers
+        x_act = F.relu(self.act_conv1(x))
+        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
+        x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
+
+        # state value layers
+        x_val = F.relu(self.val_conv1(x))
+        x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
+        x_val = F.relu(self.val_fc1(x_val))
+        x_val = F.tanh(self.val_fc2(x_val))
+        return x_act, x_val
+
 class PolicyValueNet:
     """policy-value network """
 
     def __init__(self, board_width, board_height,
-                 model_file=None, use_gpu=False):
+                 model_file=None, use_gpu=False, rl_model = "AC"):
         self.use_gpu = use_gpu
         self.board_width = board_width  # 9
         self.board_height = board_height  # 4
         self.l2_const = 1e-4  # coef of l2 penalty
         # the policy value net module
         if self.use_gpu:
-            self.policy_value_net = Net(board_width, board_height).cuda()
+
+            if rl_model == "AC":
+                self.policy_value_net = AC(board_width, board_height).cuda()
+            elif rl_model == "DQN":
+                self.policy_value_net = DQN(board_width, board_height).cuda()
+            elif rl_model =="QRDQN":
+                self.policy_value_net = QRDQN(board_width, board_height).cuda()
         else:
-            self.policy_value_net = Net(board_width, board_height)
+            if rl_model == "AC":
+                self.policy_value_net = AC(board_width, board_height)
+            elif rl_model == "DQN":
+                self.policy_value_net = DQN(board_width, board_height)
+            elif rl_model =="QRDQN":
+                self.policy_value_net = QRDQN(board_width, board_height)
+
+
         self.optimizer = optim.Adam(self.policy_value_net.parameters(),
                                     weight_decay=self.l2_const)
         if model_file:
@@ -141,7 +233,7 @@ class PolicyValueNet:
         # Note: the L2 penalty is incorporated in optimizer
         value_loss = F.mse_loss(value.view(-1), winner_batch)
         policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-        loss = value_loss + policy_loss
+        loss = value_loss + policy_loss # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
         # backward and optimize
         loss.backward()
         self.optimizer.step()
