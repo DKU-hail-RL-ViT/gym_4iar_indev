@@ -179,6 +179,7 @@ class PolicyValueNet:
         self.board_width = board_width  # 9
         self.board_height = board_height  # 4
         self.l2_const = 1e-4  # coef of l2 penalty
+        self.rl_model = rl_model
         # the policy value net module
         if self.use_gpu:
             if rl_model == "AC":
@@ -270,7 +271,10 @@ class PolicyValueNet:
         # Note: the L2 penalty is incorporated in optimizer
         value_loss = F.mse_loss(value.view(-1), winner_batch)
         policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-        loss = value_loss + policy_loss # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
+        if self.rl_model == "AC":
+            loss = value_loss + policy_loss # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
+        else:
+            loss = policy_loss
         # backward and optimize
         loss.backward()
         self.optimizer.step()
