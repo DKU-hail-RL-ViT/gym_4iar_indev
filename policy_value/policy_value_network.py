@@ -15,6 +15,7 @@ def set_learning_rate(optimizer, lr):
 
 class Net(nn.Module):
     """policy-value network module"""
+
     def __init__(self, board_width, board_height):
         super(Net, self).__init__()
 
@@ -51,8 +52,10 @@ class Net(nn.Module):
         x_val = F.tanh(self.val_fc2(x_val))
         return x_act, x_val
 
+
 class AC(nn.Module):
     """policy-value network module"""
+
     def __init__(self, board_width, board_height):
         super(AC, self).__init__()
 
@@ -92,6 +95,7 @@ class AC(nn.Module):
 
 class DQN(nn.Module):
     """policy-value network module"""
+
     def __init__(self, board_width, board_height):
         super(DQN, self).__init__()
 
@@ -120,16 +124,17 @@ class DQN(nn.Module):
         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
         x_act = F.relu(self.act_fc1(x_act))
         x_act = self.act_fc2(x_act)
-        x_prob = F.log_softmax(x_act, dim=1) # TODO 맞는지 확인 필요
+        x_prob = F.log_softmax(x_act, dim=1)  # TODO 맞는지 확인 필요
         x_val = self._cal_state_value(x_act, x_prob)
 
         return x_prob, x_val
 
-    def _cal_state_value(self, x_act, x_prob): # TODO 맞는지 확인 필요
+    def _cal_state_value(self, x_act, x_prob):  # TODO 맞는지 확인 필요
         # use x_act and x_prob to get expected value
         x_val = torch.sum(x_act.detach() * x_prob.detach(), 1)
 
         return x_val
+
 
 class QRDQN(nn.Module):
     """policy-value network module"""
@@ -170,11 +175,12 @@ class QRDQN(nn.Module):
         x_val = F.tanh(self.val_fc2(x_val))
         return x_act, x_val
 
+
 class PolicyValueNet:
     """policy-value network """
 
     def __init__(self, board_width, board_height,
-                 model_file=None, use_gpu=False, rl_model = "AC"):
+                 model_file=None, use_gpu=False, rl_model="AC"):
         self.use_gpu = use_gpu
         self.board_width = board_width  # 9
         self.board_height = board_height  # 4
@@ -186,16 +192,15 @@ class PolicyValueNet:
                 self.policy_value_net = AC(board_width, board_height).cuda()
             elif rl_model == "DQN":
                 self.policy_value_net = DQN(board_width, board_height).cuda()
-            elif rl_model =="QRDQN":
+            elif rl_model == "QRDQN":
                 self.policy_value_net = QRDQN(board_width, board_height).cuda()
         else:
             if rl_model == "AC":
                 self.policy_value_net = AC(board_width, board_height)
             elif rl_model == "DQN":
                 self.policy_value_net = DQN(board_width, board_height)
-            elif rl_model =="QRDQN":
+            elif rl_model == "QRDQN":
                 self.policy_value_net = QRDQN(board_width, board_height)
-
 
         self.optimizer = optim.Adam(self.policy_value_net.parameters(),
                                     weight_decay=self.l2_const)
@@ -221,23 +226,21 @@ class PolicyValueNet:
             act_probs = np.exp(log_act_probs.data.numpy())
             return act_probs, value.detach().cpu().numpy()
 
-    def policy_value_fn(self, board):
+    def policy_value_fn(self, board, net):
         """
         input: board
         output: a list of (action, probability) tuples for each available
         action and the score of the board state
         """
-        legal_positions = board.availables
-        current_state = np.ascontiguousarray(board.current_state().reshape(
-            -1, 5, self.board_width, self.board_height))
+        available = np.where(board[3].flatten() == 0)[0]
+        current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
+        log_act_probs, value = net(torch.from_numpy(current_state).float())
 
-        log_act_probs, value = self.policy_value_net(
-            Variable(torch.from_numpy(current_state)).float())
+        act_probs = np.exp(log_act_probs.data.numpy().flatten())
+        filtered_act_probs = [(action, prob) for action, prob in zip(available, act_probs) if action in available]
+        state_value = value.item()
 
-        act_probs = np.exp(log_act_probs.data.detach().numpy().flatten())
-        act_probs = list(zip(legal_positions, act_probs[legal_positions]))
-        value = value.data[0][0]
-        return act_probs, value
+        return filtered_act_probs, state_value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
@@ -272,7 +275,7 @@ class PolicyValueNet:
         value_loss = F.mse_loss(value.view(-1), winner_batch)
         policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
         if self.rl_model == "AC":
-            loss = value_loss + policy_loss # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
+            loss = value_loss + policy_loss  # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
         else:
             loss = policy_loss
         # backward and optimize

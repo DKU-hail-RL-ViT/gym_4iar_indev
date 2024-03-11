@@ -12,18 +12,6 @@ def softmax(x):
     return probs
 
 
-def policy_value_fn(board, net):
-    available = np.where(board[3].flatten() == 0)[0]
-    current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
-    log_act_probs, value = net(torch.from_numpy(current_state).float())
-
-    act_probs = np.exp(log_act_probs.data.numpy().flatten())
-    filtered_act_probs = [(action, prob) for action, prob in zip(available, act_probs) if action in available]
-    state_value = value.item()
-
-    return filtered_act_probs, state_value
-
-
 class TreeNode(object):
     """A node in the MCTS tree. Each node keeps track of its own value Q,
     prior probability P, and its visit-count-adjusted prior score u.
@@ -131,7 +119,7 @@ class MCTS(object):
                 # print('\t node is none')
                 break
             # print('node_children:', len(node._children))
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1))[0]) >= len(node._children)
+            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) >= len(node._children)
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
@@ -229,7 +217,7 @@ class MCTSPlayer(object):
             else:
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
-                assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
+                assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(self.mcts._root.children)
                 self.mcts.update_with_move(-1)
 
             if return_prob:
@@ -240,7 +228,6 @@ class MCTSPlayer(object):
             print("WARNING: the board is full")
 
     def oppo_node_update(self, move):
-        # 원래는 없없던 코드
         self.mcts.update_with_move(move)
 
     def __str__(self):
@@ -283,7 +270,7 @@ class MCTSPlayer_leaf(object):
             else:
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
-                assert len(np.where(np.abs(env.state_[3].reshape((-1,))-1 ))[0]) == len(self.mcts._root.children)
+                assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(self.mcts._root.children)
                 self.mcts.update_with_move(-1)
 
             if return_prob:

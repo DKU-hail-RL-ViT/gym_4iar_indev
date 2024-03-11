@@ -19,7 +19,7 @@ buffer_size = 1000
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_sizes = 1
-self_play_times = check_freq * 100
+game_batch_num = check_freq * 100
 temperature = 0.1
 
 """ Policy update parameter """
@@ -32,6 +32,11 @@ kl_targ = 0.02  # previous 0.02
 """ Policy evaluate parameter """
 win_ratio = 0.0
 init_model = None
+
+""" RL name """
+# rl_model = "AC"
+rl_model = "DQN"
+# rl_model = "QRDQN"
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -274,21 +279,21 @@ if __name__ == '__main__':
         # start training from an initial policy-value net
         policy_value_net = PolicyValueNet(env.state().shape[1],
                                           env.state().shape[2],
-                                          model_file=init_model)
+                                          model_file=init_model, rl_model = rl_model)
     else:
         # start training from a new policy-value net
         policy_value_net = PolicyValueNet(env.state().shape[1],
-                                          env.state().shape[2])
+                                          env.state().shape[2], rl_model = rl_model)
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
-    curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=1)
+    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=1)
 
     try:
-        for i in range(self_play_times):
+        for i in range(game_batch_num):
             """ During the first 15 steps of each self-play game,
             the temperature is set to 1 to induce variability in the data """
             temperature = 1 if i < 15 * check_freq else 0.1
-            collect_selfplay_data(curr_mcts_player, temperature, self_play_sizes)
+            collect_selfplay_data(curr_mcts_player, temperature, self_play_sizes) # TODO mcts가 playout 할때마다 새로 Net 선언함
 
             if len(data_buffer) > batch_size:
                 loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
@@ -330,7 +335,6 @@ if __name__ == '__main__':
                         best_mcts_player.policy_value_fn.save_model(model_file)
                         print("\t New best policy!!!")
 
-                        # TODO 머리가 안돌아가 check_iter에 안걸릴땐 selfplay를 하면 안되니까 0이 맞는걸로 보이는데
                         curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=0)
                         # policy_value_net_old = copy.deepcopy(policy_value_net)
 
@@ -338,7 +342,6 @@ if __name__ == '__main__':
                         pass
 
             else:
-                # TODO 여긴 evaluate를 하지 않으니까 selfplay를 계속 켜두는게 맞는거 같고
                 curr_mcts_player = MCTSPlayer(policy_value_net, c_puct, n_playout, is_selfplay=1)
 
     except KeyboardInterrupt:
