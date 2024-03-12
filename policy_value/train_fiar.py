@@ -34,8 +34,8 @@ win_ratio = 0.0
 init_model = None
 
 """ RL name """
-# rl_model = "AC"
-rl_model = "DQN"
+rl_model = "AC"
+# rl_model = "DQN"
 # rl_model = "QRDQN"
 
 
@@ -279,11 +279,11 @@ if __name__ == '__main__':
         # start training from an initial policy-value net
         policy_value_net = PolicyValueNet(env.state().shape[1],
                                           env.state().shape[2],
-                                          model_file=init_model, rl_model = rl_model)
+                                          model_file=init_model, rl_model=rl_model)
     else:
         # start training from a new policy-value net
         policy_value_net = PolicyValueNet(env.state().shape[1],
-                                          env.state().shape[2], rl_model = rl_model)
+                                          env.state().shape[2], rl_model=rl_model)
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
     curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=1)
@@ -307,9 +307,7 @@ if __name__ == '__main__':
                 if (i + 1) == check_freq:
 
                     policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-
                     model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:05d}.pth"
-
                     policy_value_net.save_model(model_file)
 
                     # meaning it is the first one and never saved any

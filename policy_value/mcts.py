@@ -3,7 +3,7 @@ import copy
 import torch
 import random
 
-from policy_value.policy_value_network import AC, DQN, QRDQN, Net
+# from policy_value.policy_value_network import AC, DQN, QRDQN, Net
 
 
 def softmax(x):
@@ -101,7 +101,7 @@ class MCTS(object):
             relying on the prior more.
         """
         self._root = TreeNode(None, 1.0)
-        self._policy = policy_value_fn.policy_value_net
+        self._policy = policy_value_fn
         self._c_puct = c_puct
         self._n_playout = n_playout
 
@@ -112,6 +112,7 @@ class MCTS(object):
         """
         # print('\t init playout')
         node = self._root
+        policy = self._policy
         # print('\t init while')
 
         while (1):
@@ -126,7 +127,7 @@ class MCTS(object):
             obs, reward, terminated, info = env.step(action)
 
         # print('\t out of while')
-        action_probs, leaf_value = policy_value_fn(env.state_, self._policy)
+        action_probs, leaf_value = self._policy(env.state_)
         # print('available:', len(action_probs))
 
         # Check for end of game
@@ -183,9 +184,8 @@ class MCTS(object):
 class MCTSPlayer(object):
     """AI player based on MCTS"""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=2000, is_selfplay=0):
-        self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
-        self.policy_value_fn = policy_value_fn
+    def __init__(self, policy_value_function, c_puct=5, n_playout=2000, is_selfplay=0):
+        self.mcts = MCTS(policy_value_function, c_puct, n_playout)
         self._is_selfplay = is_selfplay
 
     def set_player_ind(self, p):
