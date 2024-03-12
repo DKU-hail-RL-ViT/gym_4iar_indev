@@ -226,7 +226,7 @@ class PolicyValueNet:
             act_probs = np.exp(log_act_probs.data.numpy())
             return act_probs, value.detach().cpu().numpy()
 
-    def policy_value_fn(self, board, net):
+    def policy_value_fn(self, board):
         """
         input: board
         output: a list of (action, probability) tuples for each available
@@ -234,9 +234,18 @@ class PolicyValueNet:
         """
         available = np.where(board[3].flatten() == 0)[0]
         current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
-        log_act_probs, value = net(torch.from_numpy(current_state).float())
+        # log_act_probs, value = net(torch.from_numpy(current_state).float())
+        # act_probs = np.exp(log_act_probs.data.numpy().flatten())
 
-        act_probs = np.exp(log_act_probs.data.numpy().flatten())
+        if self.use_gpu:
+            log_act_probs, value = self.policy_value_net(
+                    Variable(torch.from_numpy(current_state)).cuda().float())
+            act_probs = np.exp(log_act_probs.data.cpu().numpy().flatten())
+        else:
+            log_act_probs, value = self.policy_value_net(
+                    Variable(torch.from_numpy(current_state)).float())
+            act_probs = np.exp(log_act_probs.data.numpy().flatten())
+
         filtered_act_probs = [(action, prob) for action, prob in zip(available, act_probs) if action in available]
         state_value = value.item()
 
