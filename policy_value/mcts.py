@@ -112,14 +112,11 @@ class MCTS(object):
         """
         # print('\t init playout')
         node = self._root
-        policy = self._policy
         # print('\t init while')
 
         while (1):
             if node.is_leaf():
-                # print('\t node is none')
                 break
-            # print('node_children:', len(node._children))
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) >= len(node._children)
 
             # Greedily select next move.
@@ -281,7 +278,6 @@ class MCTSPlayer_leaf(object):
             print("WARNING: the board is full")
 
     def oppo_node_update(self, move):
-        # TODO 이 줄이 selfplay 중에도 하다보니 문제가 생길 수 있지 않을까 하는 생각
         # 원래는 없없던 코드
         self.mcts.update_with_move(move)
 

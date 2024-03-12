@@ -6,13 +6,11 @@ pip install 'stable-baselines3[extra]'
 ```
 
 
-https://github.com/junxiaosong/AlphaZero_Gomoku
-
-
-
 # SH
 
 python version 3.10
+
+https://github.com/junxiaosong/AlphaZero_Gomoku
 
 ```bash
 pip install torch
@@ -30,7 +28,8 @@ Task : four in a row (9 x 4)
 
 
 ### Problem
-
+evaluate하고 policy_value_net이 update되지 않음
+이거 좀 생각 해봐야하고, wandb적용해야 함
 
 
 ### version
