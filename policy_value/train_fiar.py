@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import os
+import wandb
 
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
@@ -11,8 +12,8 @@ from policy_value.mcts import MCTSPlayer
 
 
 """ tuning parameter """
-n_playout = 10  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
-check_freq = 2  # = more self_playing & training 1, 10, 20, 50, 100
+n_playout = 100  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+check_freq = 50  # = more self_playing & training 1, 10, 20, 50, 100
 
 """ MCTS parameter """
 buffer_size = 1000
@@ -121,7 +122,6 @@ def self_play(env, mcts_player, temp):
         if end:
             if obs[3].sum() == 36:
                 print('self_play_draw')
-            print(env)
             obs, _ = env.reset()
 
             # reset MCTS root node
@@ -206,14 +206,11 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     for j in range(n_games):
 
         # reset for each game
-        winner = start_play(env,
-                            training_mcts_player,
-                            opponent_mcts_player,
-                            temperature)
+        winner = start_play(env, training_mcts_player, opponent_mcts_player, temperature)
         if winner == -0.5:
             winner = 0
         win_cnt[winner] += 1
-        print("{} / 30 ".format(j + 1))
+        # print("{} / 30 ".format(j + 1))
 
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("win: {}, lose: {}, tie:{}".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
@@ -236,7 +233,6 @@ def start_play(env, player1, player2, temp):
     while True:
         # synchronize the MCTS tree with the current state of the game
         move = player_in_turn.get_action(env, temp)
-        # print(move)
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
@@ -248,16 +244,16 @@ def start_play(env, player1, player2, temp):
             player_in_turn.oppo_node_update(move)
 
         else:
-            print(env)
+            # print(env)
             obs, _ = env.reset()
             return winner
 
 
 if __name__ == '__main__':
 
-    # wandb.init(mode="offline",
-    #           entity="hails",
-    #           project="policy_value_4iar")
+    wandb.init(mode="online",
+               entity="hails",
+               project="gym_4iar")
 
     env = Fiar()
     obs, _ = env.reset()
@@ -295,9 +291,7 @@ if __name__ == '__main__':
             if len(data_buffer) > batch_size:
                 loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
                                                                                policy_value_net=policy_value_net)
-                print(policy_value_net)
-                print('\t update 직후 policy_value_net')
-                # wandb.log({"loss": loss, "entropy": entropy})
+                wandb.log({"loss": loss, "entropy": entropy})
 
             if (i + 1) % check_freq == 0:
                 # When MCTS evaluate level self play turn off
@@ -308,46 +302,40 @@ if __name__ == '__main__':
                     model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:05d}.pth"
                     policy_value_net.save_model(model_file)
 
-                    # meaning it is the first one and never saved any
-                    policy_value_net_old = policy_value_net
-                    old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, is_selfplay=0)
-                    print("sdf")
-
                 else:
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in os.listdir(f"nmcts{n_playout}_iter{check_freq}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files) if existing_files else check_freq
-                    best_old_model = f"nmcts{n_playout}_iter{check_freq}/train_{old_i:05d}.pth" # 이것도 하나로 줄일수 있을거 같은데
+                    best_old_model = f"nmcts{n_playout}_iter{check_freq}/train_{old_i:05d}.pth"
 
-                    policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], best_old_model)
+                    policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
+                                                          best_old_model, rl_model=rl_model)
                     old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, is_selfplay=0)
+                    win_ratio, eval_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
-                    win_ratio, best_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
                     print("\t win rate : ", win_ratio * 100, "%")
+                    wandb.log({"Win Rate Evaluation": win_ratio * 100})
 
-                    if win_ratio > 0.5:
-                        curr_mcts_player = best_mcts_player
-
+                    if win_ratio > 0.6:
+                        old_mcts_player = eval_mcts_player
 
                         model_file = f"nmcts{n_playout}_iter{check_freq}/train_{i + 1:05d}.pth"
                         policy_value_net.save_model(model_file)
-                        # best_mcts_player.policy_value_fn.save_model(model_file)
                         print("\t New best policy!!!")
 
-                        print("\t 자 policy_value_net이 바뀌나요?")
-                        print(policy_value_net)
-
-                        # curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=0)
-                        # policy_value_net_old = copy.deepcopy(policy_value_net)
-                        print("\t high win-rate 60%")
-
-                    else:  # if worse it just reject and does not go back
-                        print("\t low win-rate 60%")
+                        if (i + 2) == check_freq:
+                            curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn,
+                                                          c_puct, n_playout, is_selfplay=1)
+                        else:
+                            curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn,
+                                                          c_puct, n_playout, is_selfplay=0)
+                    else:
+                        print("\t low win-rate") # if worse it just reject and does not go back
 
             else:
                 curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=1)
-                print("\t no check-point")
-                print(policy_value_net)
+                print("\t keep going self_play")
+
     except KeyboardInterrupt:
         print('\n\rquit')
