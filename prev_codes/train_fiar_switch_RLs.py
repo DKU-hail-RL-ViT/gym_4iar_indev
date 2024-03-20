@@ -61,18 +61,15 @@ def get_equi_data(env, play_data):
     return extend_data
 
 
-def collect_selfplay_data(mcts_player, temp, n_games=100):
+def collect_selfplay_data(mcts_player, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
 
     for i in range(n_games):
-        rewards, play_data = self_play(env, mcts_player, temp=temp)
+        rewards, play_data = self_play(env, mcts_player,)
         play_data = list(play_data)[:]
 
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
-        # if i >= (n_games - last_n_games):
-        #    play_data = get_equi_data(env, play_data)
-        #    data_buffer.extend(play_data)
 
 
 def self_play(env, mcts_player, temp):

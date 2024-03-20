@@ -121,7 +121,7 @@ class DQN(nn.Module):
 
         # action value layers
         x_act = F.relu(self.act_conv1(x))
-        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
+        x_act = x_act.view(-1, 5 * self.board_width * self.board_height)
         x_act = F.relu(self.act_fc1(x_act))
         x_act = self.act_fc2(x_act)
         x_prob = F.log_softmax(x_act, dim=1)  # TODO 맞는지 확인 필요
@@ -285,7 +285,7 @@ class PolicyValueNet:
         policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
         if self.rl_model == "AC":
             loss = value_loss + policy_loss  # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
-        else:
+        else:   # DQN, QR-DQN
             loss = policy_loss
         # backward and optimize
         loss.backward()
