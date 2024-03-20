@@ -112,6 +112,7 @@ class MCTS(object):
         """
         # print('\t init playout')
         node = self._root
+        obs = None
         # print('\t init while')
 
         while (1):
@@ -128,7 +129,7 @@ class MCTS(object):
         # print('available:', len(action_probs))
 
         # Check for end of game
-        end, result = env.winner()
+        end, result = env.winner(obs)
 
         if not end:
             # print("\t node expand")
