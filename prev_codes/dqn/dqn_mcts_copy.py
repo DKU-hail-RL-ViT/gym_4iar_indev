@@ -3,15 +3,10 @@ import copy
 import random
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 
 import argparse
 
-from dqn.dqn_network import DQN
-from collections import deque
-
+from prev_codes.dqn.dqn_network import DQN
 
 parser = argparse.ArgumentParser()
 
