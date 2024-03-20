@@ -12,6 +12,8 @@ python version 3.10
 
 https://github.com/junxiaosong/AlphaZero_Gomoku
 
+https://escholarship.org/uc/item/8wm748d8
+
 ```bash
 pip install torch
 pip install gymnasium

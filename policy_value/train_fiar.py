@@ -16,28 +16,27 @@ import argparse
 parser = argparse.ArgumentParser()
 """ tuning parameter """
 parser.add_argument("--n_playout", type=int, default=100)
-# parser.add_argument("--check_freq", type=int, default=50)
-parser.add_argument("--buffer_size", type=int, default=1000) # TODO: 20 training iteration 의 데이터가 들어가야하는데 지금 1000 번밖에 안들어감 100 * 20
+parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
 parser.add_argument("--self_play_sizes", type=int, default=100)
-# parser.add_argument("--game_batch_num_mutliplier", type=int, default=100)
 parser.add_argument("--training_iterations", type=int, default=100)
-parser.add_argument("--temperature", type=float, default=0.1)
+parser.add_argument("--temp", type=float, default=0.1)
+parser.add_argument("--lr_multiplier", type=float, default=1.0)
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)
 parser.add_argument("--learn_rate", type=float, default=2e-4)
 parser.add_argument("--lr_mul", type=float, default=1.0)
-parser.add_argument("--lr_multiplier", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
-
 """ Policy evaluate parameter """
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
 
 """ RL name """
 parser.add_argument("--rl_model", type=str, default="AC")
+# parser.add_argument("--rl_model", type=str, default="DQN")
+# parser.add_argument("--rl_model", type=str, default="QRDQN")
 
 args = parser.parse_args()
 
@@ -50,7 +49,7 @@ c_puct = args.c_puct
 epochs = args.epochs
 self_play_sizes = args.self_play_sizes
 training_iterations = args.training_iterations
-temperature = args.temperature
+temp = args.temp
 batch_size = args.batch_size
 learn_rate = args.learn_rate
 lr_mul = args.lr_mul
@@ -59,34 +58,6 @@ kl_targ = args.kl_targ
 win_ratio = args.win_ratio
 init_model = args.init_model
 rl_model = args.rl_model
-
-
-
-
-
-# """ MCTS parameter """
-# buffer_size = 1000
-# c_puct = 5
-# epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
-# self_play_sizes = 1
-# game_batch_num = check_freq * 100
-# temperature = 0.1
-#
-# """ Policy update parameter """
-# batch_size = 64  # previous 512
-# learn_rate = 2e-4  # previous 2e-3
-# lr_mul = 1.0
-# lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
-# kl_targ = 0.02  # previous 0.02
-#
-# """ Policy evaluate parameter """
-# win_ratio = 0.0
-# init_model = None
-#
-# """ RL name """
-# rl_model = "AC"
-# # rl_model = "DQN"
-# # rl_model = "QRDQN"
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -113,24 +84,18 @@ def get_equi_data(env, play_data):
 
 def collect_selfplay_data(mcts_player, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
-    data_buffer = deque(maxlen=36*n_games)
-
-    for i in range(n_games):
-        # if i < 15:
-        temp = 0.1
-        rewards, play_data = self_play(env, mcts_player, temp=temp)
+    # in data_buffer store all steps of self-play so it should be large enough
+    data_buffer = deque(maxlen=36*n_games*25)
+    for self_play_i in range(n_games):
+        rewards, play_data = self_play(env, mcts_player, temp, self_play_i)
         play_data = list(play_data)[:]
-
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
-        # if i >= (n_games - last_n_games):
-        #    play_data = get_equi_data(env, play_data)
-        #    data_buffer.extend(play_data)
 
     return data_buffer
 
 
-def self_play(env, mcts_player, temp):
+def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
     states, mcts_probs, current_player = [], [], []
     obs, _ = env.reset()
 
@@ -149,7 +114,7 @@ def self_play(env, mcts_player, temp):
             if obs[3].sum() == 36:
                 print('self_play_draw')
             else:
-                move, move_probs = mcts_player.get_action(env, temp=temp, return_prob=1)
+                move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
                 action = move
             action2d = action2d_ize(action)
 
@@ -182,7 +147,7 @@ def self_play(env, mcts_player, temp):
             mcts_player.reset_player()
 
             print("batch i:{}, episode_len:{}".format(
-                i + 1, len(current_player)))
+                self_play_i + 1, len(current_player)))
             winners_z = np.zeros(len(current_player))
 
             if winners != -1:
@@ -193,11 +158,11 @@ def self_play(env, mcts_player, temp):
             return winners, zip(states, mcts_probs, winners_z)
 
 
-def policy_update(lr_mul, policy_value_net, data_buffers = None):
-    kl, loss, entropy = 0, 0, 0
+def policy_update(lr_mul, policy_value_net, data_buffers=None):
+    k, kl, loss, entropy = 0, 0, 0, 0
     lr_multiplier = lr_mul
 
-    for data_buffer in data_buffers:
+    for k in data_buffers:
         """update the policy-value net"""
         mini_batch = random.sample(data_buffer, batch_size)
         state_batch = [data[0] for data in mini_batch]
@@ -261,7 +226,7 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     for j in range(n_games):
 
         # reset for each game
-        winner = start_play(env, training_mcts_player, opponent_mcts_player, temperature)
+        winner = start_play(env, training_mcts_player, opponent_mcts_player)
         if winner == -0.5:
             winner = 0
         win_cnt[winner] += 1
@@ -272,7 +237,7 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     return win_ratio, training_mcts_player
 
 
-def start_play(env, player1, player2, temp):
+def start_play(env, player1, player2):
     """start a game between two players"""
     obs, _ = env.reset()
 
@@ -287,7 +252,7 @@ def start_play(env, player1, player2, temp):
 
     while True:
         # synchronize the MCTS tree with the current state of the game
-        move = player_in_turn.get_action(env, temp)
+        move = player_in_turn.get_action(env)
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
@@ -310,7 +275,7 @@ if __name__ == '__main__':
     wandb.init(mode="online",
                entity="hails",
                project="gym_4iar",
-               name="FIAR-" + rl_model,
+               name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-iter" + str(training_iterations),
                config=args.__dict__
                )
 
@@ -343,28 +308,26 @@ if __name__ == '__main__':
 
     try:
         for i in range(training_iterations):
-            """ During the first 15 steps of each self-play game,
-            the temperature is set to 1 to induce variability in the data """
-            data_buffer_each = collect_selfplay_data(curr_mcts_player, self_play_sizes) # TODO mcts가 playout 할때마다 새로 Net 선언함
-
-            data_buffer_training_iters.append(data_buffer_each)
-
+            data_buffer_each = collect_selfplay_data(curr_mcts_player, self_play_sizes)     # collect self-play data
+            data_buffer_training_iters.append(data_buffer_each)  # append to the queue
 
             loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
-                                                                               policy_value_net=policy_value_net, data_buffers = data_buffer_training_iters)
+                                                                           policy_value_net=policy_value_net,
+                                                                           data_buffers=data_buffer_training_iters)
             wandb.log({"loss": loss, "entropy": entropy})
 
-            if i ==0:
+            if i==1:
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-                model_file = f"nmcts{n_playout}_iter{i}/train_{i + 1:05d}.pth"
+                model_file = f"nmcts{n_playout}/train_{i + 1:05d}.pth"
                 policy_value_net.save_model(model_file)
+                print("model saved")
             else:
                 existing_files = [int(file.split('_')[-1].split('.')[0])
-                                  for file in os.listdir(f"nmcts{n_playout}_iter{i-1}")
+                                  for file in os.listdir(f"nmcts{n_playout}")
                                   if file.startswith('train_')]
-                # old_i = max(existing_files) if existing_files else check_freq
-                old_i = i-1
-                best_old_model = f"nmcts{n_playout}_iter{i-1}/train_{old_i:05d}.pth"
+
+                old_i = max(existing_files)
+                best_old_model = f"nmcts{n_playout}/train_{old_i:05d}.pth"
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
                                                       best_old_model, rl_model=rl_model)
                 old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, is_selfplay=0)
@@ -376,7 +339,7 @@ if __name__ == '__main__':
                 if win_ratio > 0.6:
                     old_mcts_player = eval_mcts_player
 
-                    model_file = f"nmcts{n_playout}_iter{i}/train_{i + 1:05d}.pth"
+                    model_file = f"nmcts{n_playout}/train_{i + 1:05d}.pth"
                     policy_value_net.save_model(model_file)
                     print("\t New best policy!!!")
 
