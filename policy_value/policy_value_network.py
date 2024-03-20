@@ -108,10 +108,8 @@ class DQN(nn.Module):
 
         # action value layers
         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
-        self.act_fc1 = nn.Linear(4 * board_width * board_height,
-                                 64)
-        self.act_fc2 = nn.Linear(64,
-                                 board_width * board_height)
+        self.act_fc1 = nn.Linear(5 * board_width * board_height,64)
+        self.act_fc2 = nn.Linear(64, board_width * board_height)
 
     def forward(self, state_input):
         # common layers
