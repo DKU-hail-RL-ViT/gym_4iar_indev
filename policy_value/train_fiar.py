@@ -2,6 +2,7 @@ import numpy as np
 import random
 import os
 import wandb
+import datetime
 
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
@@ -20,7 +21,7 @@ parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
-parser.add_argument("--self_play_sizes", type=int, default=100)
+parser.add_argument("--self_play_sizes", type=int, default=6)      # temporary 6 , default 100
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
@@ -158,57 +159,57 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
             return winners, zip(states, mcts_probs, winners_z)
 
 
-def policy_update(lr_mul, policy_value_net, data_buffers=None):
+def policy_update(lr_mul, policy_value_net,  data_buffers=None):
     k, kl, loss, entropy = 0, 0, 0, 0
     lr_multiplier = lr_mul
+    update_data_buffer = [data for buffer in data_buffers for data in buffer]
 
-    for k in data_buffers:
-        """update the policy-value net"""
-        mini_batch = random.sample(data_buffer, batch_size)
-        state_batch = [data[0] for data in mini_batch]
-        mcts_probs_batch = [data[1] for data in mini_batch]
-        winner_batch = [data[2] for data in mini_batch]
-        old_probs, old_v = policy_value_net.policy_value(state_batch)
+    """update the policy-value net"""
+    mini_batch = random.sample(update_data_buffer, batch_size)
+    state_batch = [data[0] for data in mini_batch]
+    mcts_probs_batch = [data[1] for data in mini_batch]
+    winner_batch = [data[2] for data in mini_batch]
+    old_probs, old_v = policy_value_net.policy_value(state_batch)
 
-        for i in range(epochs):
-            loss, entropy = policy_value_net.train_step(
-                state_batch,
-                mcts_probs_batch,
-                winner_batch,
-                learn_rate * lr_multiplier)
-            new_probs, new_v = policy_value_net.policy_value(state_batch)
-            kl = np.mean(np.sum(old_probs * (
-                    np.log(old_probs + 1e-10) - np.log(new_probs + 1e-10)),
-                                axis=1)
-                         )
-            if kl > kl_targ * 4:  # early stopping if D_KL diverges badly
-                break
+    for i in range(epochs):
+        loss, entropy = policy_value_net.train_step(
+            state_batch,
+            mcts_probs_batch,
+            winner_batch,
+            learn_rate * lr_multiplier)
+        new_probs, new_v = policy_value_net.policy_value(state_batch)
+        kl = np.mean(np.sum(old_probs * (
+                np.log(old_probs + 1e-10) - np.log(new_probs + 1e-10)),
+                            axis=1)
+                     )
+        if kl > kl_targ * 4:  # early stopping if D_KL diverges badly
+            break
 
-        # adaptively adjust the learning rate
-        if kl > kl_targ * 2 and lr_multiplier > 0.1:
-            lr_multiplier /= 1.5
-        elif kl < kl_targ / 2 and lr_multiplier < 10:
-            lr_multiplier *= 1.5
+    # adaptively adjust the learning rate
+    if kl > kl_targ * 2 and lr_multiplier > 0.1:
+        lr_multiplier /= 1.5
+    elif kl < kl_targ / 2 and lr_multiplier < 10:
+        lr_multiplier *= 1.5
 
-        explained_var_old = (1 -
-                             np.var(np.array(winner_batch) - old_v.flatten()) /
-                             (np.var(np.array(winner_batch)) + 1e-10))
-        explained_var_new = (1 -
-                             np.var(np.array(winner_batch) - new_v.flatten()) /
-                             (np.var(np.array(winner_batch)) + 1e-10))
+    explained_var_old = (1 -
+                         np.var(np.array(winner_batch) - old_v.flatten()) /
+                         (np.var(np.array(winner_batch)) + 1e-10))
+    explained_var_new = (1 -
+                         np.var(np.array(winner_batch) - new_v.flatten()) /
+                         (np.var(np.array(winner_batch)) + 1e-10))
 
-        print(("kl:{:.5f},"
-               "lr_multiplier:{:.3f},"
-               "loss:{},"
-               "entropy:{},"
-               "explained_var_old:{:.3f},"
-               "explained_var_new:{:.3f}"
-               ).format(kl,
-                        lr_multiplier,
-                        loss,
-                        entropy,
-                        explained_var_old,
-                        explained_var_new))
+    print(("kl:{:.5f},"
+           "lr_multiplier:{:.3f},"
+           "loss:{},"
+           "entropy:{},"
+           "explained_var_old:{:.3f},"
+           "explained_var_new:{:.3f}"
+           ).format(kl,
+                    lr_multiplier,
+                    loss,
+                    entropy,
+                    explained_var_old,
+                    explained_var_new))
     return loss, entropy, lr_multiplier, policy_value_net
 
 
@@ -230,7 +231,7 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
         if winner == -0.5:
             winner = 0
         win_cnt[winner] += 1
-        # print("{} / 30 ".format(j + 1))
+        print("{} / 30 ".format(j + 1))
 
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("win: {}, lose: {}, tie:{}".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
@@ -252,19 +253,19 @@ def start_play(env, player1, player2):
 
     while True:
         # synchronize the MCTS tree with the current state of the game
-        move = player_in_turn.get_action(env)
+        move = player_in_turn.get_action(env, temp=0.1, return_prob=0)
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
 
         if not end:
-            # print("\t opponent_update")
             current_player = 1 - current_player
             player_in_turn = players[current_player]
             player_in_turn.oppo_node_update(move)
 
         else:
             # print(env)
+            wandb.log({"Reward": reward[1]})
             obs, _ = env.reset()
             return winner
 
@@ -275,7 +276,8 @@ if __name__ == '__main__':
     wandb.init(mode="online",
                entity="hails",
                project="gym_4iar",
-               name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-iter" + str(training_iterations),
+               name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
+                    "-Date" + str(datetime.date.today()) + "-Time" + str(datetime.datetime.now().time()),
                config=args.__dict__
                )
 
@@ -309,16 +311,16 @@ if __name__ == '__main__':
     try:
         for i in range(training_iterations):
             data_buffer_each = collect_selfplay_data(curr_mcts_player, self_play_sizes)     # collect self-play data
-            data_buffer_training_iters.append(data_buffer_each)  # append to the queue
+            data_buffer_training_iters.append(data_buffer_each)
 
             loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
                                                                            policy_value_net=policy_value_net,
                                                                            data_buffers=data_buffer_training_iters)
             wandb.log({"loss": loss, "entropy": entropy})
 
-            if i==1:
+            if i==0:
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-                model_file = f"nmcts{n_playout}/train_{i + 1:05d}.pth"
+                model_file = f"nmcts{n_playout}/train_{i + 1:03d}.pth"
                 policy_value_net.save_model(model_file)
                 print("model saved")
             else:
@@ -327,19 +329,21 @@ if __name__ == '__main__':
                                   if file.startswith('train_')]
 
                 old_i = max(existing_files)
-                best_old_model = f"nmcts{n_playout}/train_{old_i:05d}.pth"
+                best_old_model = f"nmcts{n_playout}/train_{old_i:03d}.pth"
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
                                                       best_old_model, rl_model=rl_model)
+                # when evaluating, non use dirichlet noise
+                curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=0)
                 old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, is_selfplay=0)
                 win_ratio, eval_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
-                print("\t win rate : ", win_ratio * 100, "%")
-                wandb.log({"Win Rate Evaluation": win_ratio * 100})
+                print("\t win rate : ", round(win_ratio * 100, 3), "%")
+                wandb.log({"Win Rate Evaluation": round(win_ratio * 100, 3)})
 
-                if win_ratio > 0.6:
+                if win_ratio > 0.6:  # if better, update the policy
                     old_mcts_player = eval_mcts_player
 
-                    model_file = f"nmcts{n_playout}/train_{i + 1:05d}.pth"
+                    model_file = f"nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(model_file)
                     print("\t New best policy!!!")
 

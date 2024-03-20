@@ -7,7 +7,7 @@ from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
 
 from dqn_network import DQNAgent
-from dqn.dqn_mcts import MCTSPlayer
+from prev_codes.dqn.dqn_mcts import MCTSPlayer
 
 # from policy_value.policy_value_mcts_pure import RandomAction
 

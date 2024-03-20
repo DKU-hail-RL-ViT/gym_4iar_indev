@@ -5,13 +5,13 @@ pip install sb3-contrib
 pip install 'stable-baselines3[extra]'
 ```
 
-
 # SH
-
 python version 3.10
 
+### References
 https://github.com/junxiaosong/AlphaZero_Gomoku
 
+### Requirements
 https://escholarship.org/uc/item/8wm748d8
 
 ```bash
