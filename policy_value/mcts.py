@@ -129,18 +129,18 @@ class MCTS(object):
         # print('available:', len(action_probs))
 
         # Check for end of game
-        end, result = env.winner(obs)
+        end, winners = env.winner()
 
         if not end:
             # print("\t node expand")
             node.expand(action_probs)
         else:
             # for end state，return the "true" leaf_value
-            if result == -1:  # tie
+            if winners == -1:  # tie
                 leaf_value = 0.0
             else:
                 leaf_value = (
-                    1.0 if result == 0 else -1.0
+                    1.0 if winners == env.turn() else -1.0
                 )
             obs, _ = env.reset()
 

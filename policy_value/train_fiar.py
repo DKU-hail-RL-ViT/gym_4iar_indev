@@ -21,7 +21,7 @@ parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
-parser.add_argument("--self_play_sizes", type=int, default=8)      # temporary 8 , default 100
+parser.add_argument("--self_play_sizes", type=int, default=10)      # temporary 8 , default 100
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
@@ -44,7 +44,6 @@ args = parser.parse_args()
 
 # make all args to variables
 n_playout = args.n_playout
-# check_freq = args.check_freq
 buffer_size = args.buffer_size
 c_puct = args.c_puct
 epochs = args.epochs
@@ -89,10 +88,6 @@ def collect_selfplay_data(mcts_player, n_games=100):
     data_buffer = deque(maxlen=36*n_games*20) # temporary 36*n_games*20 , default 36*n_games
     for self_play_i in range(n_games):
         rewards, play_data = self_play(env, mcts_player, temp, self_play_i)
-        print(rewards, "\t self play rewards")
-        print("\t wtf \n\n")
-
-
         play_data = list(play_data)[:]
         # augment the data
         play_data = get_equi_data(env, play_data)
@@ -142,35 +137,41 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
         obs_post[2] = np.zeros_like(obs[0])
         obs_post[3] = obs[player_0] + obs[player_1]
 
+        end, winners = env.self_play_winner()
 
-        end, winners = env.winner(obs)
-
+        if len(current_player) % 2 == 1:
+            winners = 1
+        else:
+            winners = -0.5
 
         if end:
-            carculate_area(obs, current_player)
-            print(winners, "\t 끝났을 때 이긴사람")
+
+            # print(winners, "\t 끝났을 때 이긴사람")
             if obs[3].sum() == 36:
                 print('self_play_draw')
             obs, _ = env.reset()
+
+            # reset MCTS root node
+            mcts_player.reset_player()
 
             print("batch i:{}, episode_len:{}".format(
                 self_play_i + 1, len(current_player)))
             winners_z = np.zeros(len(current_player))
 
+
             if winners != -1:  # non draw
                 if winners == -0.5:  # when win white player adjust to 0
                     winners = 0
 
-                print(winners, "winner") # if 0 백이 이김, if 1 흑이 이김
+                # print(winners, "winner") # if 0 백이 이김, if 1 흑이 이김
                 print(current_player, "current_players")
 
                 # if winner is current player, winner_z = 1
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
 
-            # reset MCTS root node
-            mcts_player.reset_player()
-            print(winners_z, "\n final update array \n")
+
+            # print(winners_z, "\n final update array \n")
 
             return winners, zip(states, mcts_probs, winners_z)
 
@@ -187,7 +188,7 @@ def policy_update(lr_mul, policy_value_net,  data_buffers=None):
     winner_batch = [data[2] for data in mini_batch]
     old_probs, old_v = policy_value_net.policy_value(state_batch)
 
-    for i in range(epochs):
+    for k in range(epochs):
         loss, entropy = policy_value_net.train_step(
             state_batch,
             mcts_probs_batch,
@@ -272,7 +273,7 @@ def start_play(env, player1, player2):
         move = player_in_turn.get_action(env, temp=0.1, return_prob=0)
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
-        end, winner = env.winner(obs)
+        end, winner = env.winner()
 
         if not end:
             current_player = 1 - current_player
@@ -289,11 +290,11 @@ def start_play(env, player1, player2):
 if __name__ == '__main__':
 
     # wandb intialize
-    wandb.init(mode="offline",
+    wandb.init(mode="online",
                entity="hails",
                project="gym_4iar",
                name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
-                    "-Date" + str(datetime.date.today()) + "-Time" + str(datetime.datetime.now().time()),
+                    "-Date" + str(datetime.datetime.now()),
                config=args.__dict__
                )
 

@@ -31,7 +31,6 @@ def carculate_area(state, current_player):
     # assert state[3].sum() != len(current_player)
 
 def winning(state):
-    print(state[3].sum(), "wtf")
     if state[3].sum() == 36.0:
         return -1  # draw
     elif state[3].sum() % 2 == 1.0:
@@ -378,6 +377,12 @@ class Fiar(gym.Env):
             'invalid_moves': invalid_moves(self.state_)
         }
 
+    def turn(self):
+        """
+        :return: Who's turn it is (govars.BLACK/govars.WHITE)
+        """
+        return turn(self.state_)
+
     def state(self):
         """
         :return: copy of state
@@ -390,11 +395,17 @@ class Fiar(gym.Env):
     def __str__(self):
         return str_(self.state_)
 
-    def winner(self, observation=None):
+    def winner(self):
         if not self.done:
             return False, -1
         else:
-            return True, winning(observation if observation is not None else self.state_)
+            return True, winning(self.state_)
+
+    def self_play_winner(self):
+        if not self.done:
+            return False, -1
+        else:
+            return True, winning(self.state_)
 
     def reward(self):
         return self.winner()
