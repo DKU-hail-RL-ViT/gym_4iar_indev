@@ -5,7 +5,7 @@ import wandb
 import datetime
 
 from collections import defaultdict, deque
-from fiar_env import Fiar, turn, action2d_ize
+from fiar_env import Fiar, turn, action2d_ize, carculate_area
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
 
@@ -21,7 +21,7 @@ parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
-parser.add_argument("--self_play_sizes", type=int, default=6)      # temporary 6 , default 100
+parser.add_argument("--self_play_sizes", type=int, default=10)      # temporary 10 , default 100
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
@@ -44,7 +44,6 @@ args = parser.parse_args()
 
 # make all args to variables
 n_playout = args.n_playout
-# check_freq = args.check_freq
 buffer_size = args.buffer_size
 c_puct = args.c_puct
 epochs = args.epochs
@@ -86,10 +85,11 @@ def get_equi_data(env, play_data):
 def collect_selfplay_data(mcts_player, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
     # in data_buffer store all steps of self-play so it should be large enough
-    data_buffer = deque(maxlen=36*n_games*25)
+    data_buffer = deque(maxlen=36*n_games*20) # temporary 36*n_games*20 , default 36*n_games
     for self_play_i in range(n_games):
         rewards, play_data = self_play(env, mcts_player, temp, self_play_i)
         play_data = list(play_data)[:]
+        # augment the data
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
 
@@ -137,9 +137,16 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
         obs_post[2] = np.zeros_like(obs[0])
         obs_post[3] = obs[player_0] + obs[player_1]
 
-        end, winners = env.winner()
+        end, winners = env.self_play_winner()
+
+        if len(current_player) % 2 == 1:
+            winners = 1
+        else:
+            winners = -0.5
 
         if end:
+
+            # print(winners, "\t 끝났을 때 이긴사람")
             if obs[3].sum() == 36:
                 print('self_play_draw')
             obs, _ = env.reset()
@@ -151,11 +158,20 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
                 self_play_i + 1, len(current_player)))
             winners_z = np.zeros(len(current_player))
 
-            if winners != -1:
-                if winners == -0.5:  # if win white return : 0.1
+
+            if winners != -1:  # non draw
+                if winners == -0.5:  # when win white player adjust to 0
                     winners = 0
+
+                # print(winners, "winner") # if 0 백이 이김, if 1 흑이 이김
+
+                # if winner is current player, winner_z = 1
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
+
+
+            # print(winners_z, "\n final update array \n")
+
             return winners, zip(states, mcts_probs, winners_z)
 
 
@@ -171,7 +187,7 @@ def policy_update(lr_mul, policy_value_net,  data_buffers=None):
     winner_batch = [data[2] for data in mini_batch]
     old_probs, old_v = policy_value_net.policy_value(state_batch)
 
-    for i in range(epochs):
+    for k in range(epochs):
         loss, entropy = policy_value_net.train_step(
             state_batch,
             mcts_probs_batch,
@@ -277,7 +293,7 @@ if __name__ == '__main__':
                entity="hails",
                project="gym_4iar",
                name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
-                    "-Date" + str(datetime.date.today()) + "-Time" + str(datetime.datetime.now().time()),
+                    "-Date" + str(datetime.datetime.now()),
                config=args.__dict__
                )
 
