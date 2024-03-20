@@ -21,7 +21,7 @@ parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
-parser.add_argument("--self_play_sizes", type=int, default=10)      # temporary 8 , default 100
+parser.add_argument("--self_play_sizes", type=int, default=10)      # temporary 10 , default 100
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
@@ -164,7 +164,6 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
                     winners = 0
 
                 # print(winners, "winner") # if 0 백이 이김, if 1 흑이 이김
-                print(current_player, "current_players")
 
                 # if winner is current player, winner_z = 1
                 winners_z[np.array(current_player) == 1 - winners] = 1.0

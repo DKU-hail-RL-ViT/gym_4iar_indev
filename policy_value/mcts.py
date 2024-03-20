@@ -113,13 +113,11 @@ class MCTS(object):
         # print('\t init playout')
         node = self._root
         obs = None
-        # print('\t init while')
 
         while (1):
             if node.is_leaf():
                 break
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) >= len(node._children)
-
+            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
@@ -138,12 +136,12 @@ class MCTS(object):
             # for end state，return the "true" leaf_value
             if winners == -1:  # tie
                 leaf_value = 0.0
+            elif winners == env.turn():
+                leaf_value = 1.0
             else:
-                leaf_value = (
-                    1.0 if winners == env.turn() else -1.0
-                )
-            obs, _ = env.reset()
+                leaf_value = -1.0
 
+            obs, _ = env.reset()
         node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
@@ -192,7 +190,7 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, temp,return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
         # the pi vector returned by MCTS as in the alphaGo Zero paper
@@ -210,8 +208,6 @@ class MCTSPlayer(object):
                 )
                 # # update the root node and reuse the search tree
                 self.mcts.update_with_move(move)
-                # self.mcts.update_with_move(-1)
-
             else:
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
