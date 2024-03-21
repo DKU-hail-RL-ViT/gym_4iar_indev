@@ -107,8 +107,8 @@ class DQN(nn.Module):
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
 
         # action value layers
-        self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
-        self.act_fc1 = nn.Linear(5 * board_width * board_height,64)
+        self.act_conv1 = nn.Conv2d(128, 5, kernel_size=1)
+        self.act_fc1 = nn.Linear(5 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, board_width * board_height)
 
     def forward(self, state_input):
@@ -237,11 +237,11 @@ class PolicyValueNet:
 
         if self.use_gpu:
             log_act_probs, value = self.policy_value_net(
-                    Variable(torch.from_numpy(current_state)).cuda().float())
+                Variable(torch.from_numpy(current_state)).cuda().float())
             act_probs = np.exp(log_act_probs.data.cpu().numpy().flatten())
         else:
             log_act_probs, value = self.policy_value_net(
-                    Variable(torch.from_numpy(current_state)).float())
+                Variable(torch.from_numpy(current_state)).float())
             act_probs = np.exp(log_act_probs.data.numpy().flatten())
 
         filtered_act_probs = [(action, prob) for action, prob in zip(available, act_probs) if action in available]
@@ -283,7 +283,7 @@ class PolicyValueNet:
         policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
         if self.rl_model == "AC":
             loss = value_loss + policy_loss  # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
-        else:   # DQN, QR-DQN
+        else:  # DQN, QR-DQN
             loss = policy_loss
         # backward and optimize
         loss.backward()
