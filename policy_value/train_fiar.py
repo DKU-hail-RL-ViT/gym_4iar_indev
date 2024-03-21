@@ -16,12 +16,12 @@ import argparse
 # make argparser
 parser = argparse.ArgumentParser()
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=100)
+parser.add_argument("--n_playout", type=int, default=2)
 parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
-parser.add_argument("--self_play_sizes", type=int, default=10)      # temporary 10 , default 100
+parser.add_argument("--self_play_sizes", type=int, default=100)      # temporary 10 , default 100
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
