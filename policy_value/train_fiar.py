@@ -36,7 +36,7 @@ parser.add_argument("--init_model", type=str, default=None)
 
 """ RL name """
 parser.add_argument("--rl_model", type=str, default="AC")
-# parser.add_argument("--rl_model", type=str, default="DQN")
+#parser.add_argument("--rl_model", type=str, default="DQN")
 # parser.add_argument("--rl_model", type=str, default="QRDQN")
 
 args = parser.parse_args()
@@ -336,16 +336,16 @@ if __name__ == '__main__':
 
             if i==0:
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-                model_file = f"nmcts{n_playout}/train_{i + 1:03d}.pth"
+                model_file = f"RL_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                 policy_value_net.save_model(model_file)
                 print("model saved")
             else:
                 existing_files = [int(file.split('_')[-1].split('.')[0])
-                                  for file in os.listdir(f"nmcts{n_playout}")
+                                  for file in os.listdir(f"RL_{rl_model}_nmcts{n_playout}")
                                   if file.startswith('train_')]
 
                 old_i = max(existing_files)
-                best_old_model = f"nmcts{n_playout}/train_{old_i:03d}.pth"
+                best_old_model = f"RL_{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
                                                       best_old_model, rl_model=rl_model)
                 # when evaluating, non use dirichlet noise
@@ -356,10 +356,10 @@ if __name__ == '__main__':
                 print("\t win rate : ", round(win_ratio * 100, 3), "%")
                 wandb.log({"Win Rate Evaluation": round(win_ratio * 100, 3)})
 
-                if win_ratio > 0.6:  # if better, update the policy
+                if win_ratio > 0.5:  # if better, update the policy
                     old_mcts_player = eval_mcts_player
 
-                    model_file = f"nmcts{n_playout}/train_{i + 1:03d}.pth"
+                    model_file = f"RL_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(model_file)
                     print("\t New best policy!!!")
 
