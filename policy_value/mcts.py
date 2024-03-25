@@ -244,7 +244,6 @@ class MCTSPlayer_leaf(object):
 
     def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
-        # available = [i for i in range(36) if env.state_[3][i // 4][i % 4] != 1]
         sensible_moves = available
         # the pi vector returned by MCTS as in the alphaGo Zero paper
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
