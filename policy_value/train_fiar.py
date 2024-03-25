@@ -27,7 +27,7 @@ parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)
-parser.add_argument("--learn_rate", type=float, default=1e-3)
+parser.add_argument("--learn_rate", type=float, default=2e-4)
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
@@ -156,9 +156,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
             winners = 1
         else:
             winners = -0.5
-
         if end:
-            # print(winners, "\t 끝났을 때 이긴사람")
             if obs[3].sum() == 36:
                 print('self_play_draw')
             obs, _ = env.reset()
@@ -247,7 +245,6 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     win_cnt = defaultdict(int)
 
     for j in range(n_games):
-
         # reset for each game
         winner = start_play(env, training_mcts_player, opponent_mcts_player)
         if winner == -0.5:
