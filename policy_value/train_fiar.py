@@ -311,16 +311,18 @@ if __name__ == '__main__':
 
     if init_model:
         # start training from an initial policy-value net
-        policy_value_net = PolicyValueNet(env.state().shape[1],
-                                          env.state().shape[2],
+        policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
                                           model_file=init_model, rl_model=rl_model)
     else:
         # start training from a new policy-value net
-        policy_value_net = PolicyValueNet(env.state().shape[1],
-                                          env.state().shape[2], rl_model=rl_model)
+        policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
+                                          rl_model=rl_model)
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
-    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=1)
+    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn,
+                                  c_puct,
+                                  n_playout,
+                                  is_selfplay=1)
 
     data_buffer_training_iters = deque(maxlen=20)
 
