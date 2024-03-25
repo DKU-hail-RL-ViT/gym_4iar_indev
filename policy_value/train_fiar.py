@@ -16,7 +16,7 @@ import argparse
 # make argparser
 parser = argparse.ArgumentParser()
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=2)
+parser.add_argument("--n_playout", type=int, default=10)
 parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
@@ -27,7 +27,7 @@ parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)
-parser.add_argument("--learn_rate", type=float, default=2e-4)
+parser.add_argument("--learn_rate", type=float, default=1e-3)
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
@@ -82,21 +82,33 @@ def get_equi_data(env, play_data):
     return extend_data
 
 
-def collect_selfplay_data(mcts_player, n_games=100):
+def collect_selfplay_data(mcts_player, game_iter, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
-    # in data_buffer store all steps of self-play so it should be large enough
+    # in data_buffer store all steps of self-play so, it should be large enough
     data_buffer = deque(maxlen=36*n_games*20) # temporary 36*n_games*20 , default 36*n_games
+    win_ratio = 0
+    win_cnt = defaultdict(int)
+
     for self_play_i in range(n_games):
-        rewards, play_data = self_play(env, mcts_player, temp, self_play_i)
+        rewards, play_data = self_play(env, mcts_player, temp, game_iter, self_play_i)
         play_data = list(play_data)[:]
         # augment the data
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
 
+        if rewards == -0.5:
+            rewards = 0
+        win_cnt[rewards] += 1
+
+    win_ratio = 1.0 * win_cnt[1] / n_games
+    print("Self-Play win: {}, lose: {}, tie:{}".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
+    print("\t win rate : ", round(win_ratio * 100, 3), "% \n")
+    wandb.log({"Self-Play Win Ratio": round(win_ratio * 100, 3)})
+
     return data_buffer
 
 
-def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
+def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     states, mcts_probs, current_player = [], [], []
     obs, _ = env.reset()
 
@@ -113,6 +125,7 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
             action = None
             move_probs = None
             if obs[3].sum() == 36:
+                print(env.state_)
                 print('self_play_draw')
             else:
                 move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
@@ -123,7 +136,7 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
                 break
 
         # store the data
-        states.append(obs)
+        states.append(obs_post.copy())
         mcts_probs.append(move_probs)
         current_player.append(turn(obs))
 
@@ -145,7 +158,6 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
             winners = -0.5
 
         if end:
-
             # print(winners, "\t 끝났을 때 이긴사람")
             if obs[3].sum() == 36:
                 print('self_play_draw')
@@ -154,23 +166,17 @@ def self_play(env, mcts_player, temp=1e-3, self_play_i=0):
             # reset MCTS root node
             mcts_player.reset_player()
 
-            print("batch i:{}, episode_len:{}".format(
-                self_play_i + 1, len(current_player)))
+            print("game: {}, self_play:{}, episode_len:{}".format(
+                game_iter+1, self_play_i+1, len(current_player)))
             winners_z = np.zeros(len(current_player))
-
 
             if winners != -1:  # non draw
                 if winners == -0.5:  # when win white player adjust to 0
                     winners = 0
 
-                # print(winners, "winner") # if 0 백이 이김, if 1 흑이 이김
-
                 # if winner is current player, winner_z = 1
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
-
-
-            # print(winners_z, "\n final update array \n")
 
             return winners, zip(states, mcts_probs, winners_z)
 
@@ -328,7 +334,8 @@ if __name__ == '__main__':
 
     try:
         for i in range(training_iterations):
-            data_buffer_each = collect_selfplay_data(curr_mcts_player, self_play_sizes)     # collect self-play data
+            # collect self-play data each iteration 100 games
+            data_buffer_each = collect_selfplay_data(curr_mcts_player, i, self_play_sizes)
             data_buffer_training_iters.append(data_buffer_each)
 
             loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
@@ -340,7 +347,7 @@ if __name__ == '__main__':
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
                 model_file = f"RL_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                 policy_value_net.save_model(model_file)
-                print("model saved")
+                print("model saved\n")
             else:
                 existing_files = [int(file.split('_')[-1].split('.')[0])
                                   for file in os.listdir(f"RL_{rl_model}_nmcts{n_playout}")
@@ -350,24 +357,25 @@ if __name__ == '__main__':
                 best_old_model = f"RL_{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
                                                       best_old_model, rl_model=rl_model)
+
                 # when evaluating, non use dirichlet noise
                 curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=0)
                 old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, is_selfplay=0)
                 win_ratio, eval_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
                 print("\t win rate : ", round(win_ratio * 100, 3), "%")
-                wandb.log({"Win Rate Evaluation": round(win_ratio * 100, 3)})
+                wandb.log({"Evaluation Win Rate": round(win_ratio * 100, 3)})
 
-                if win_ratio > 0.5:  # if better, update the policy
+                if win_ratio > 0.5:
+                    # if better, update the policy
                     old_mcts_player = eval_mcts_player
-
                     model_file = f"RL_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(model_file)
                     print("\t New best policy!!!")
 
                 else:
-                    print("\t low win-rate") # if worse it just reject and does not go back
-
+                    # if worse it just reject and does not go back to the old policy
+                    print("\t low win-rate")
 
     except KeyboardInterrupt:
         print('\n\rquit')

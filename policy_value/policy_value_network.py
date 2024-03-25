@@ -184,7 +184,7 @@ class PolicyValueNet:
         self.board_height = board_height  # 4
         self.l2_const = 1e-4  # coef of l2 penalty
         self.rl_model = rl_model
-        device = torch.device("cuda" if self.use_gpu and torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda" if self.use_gpu else "cpu")
         # the policy value net module
         if rl_model == "AC":
             self.policy_value_net = AC(board_width, board_height).to(device)
@@ -204,9 +204,10 @@ class PolicyValueNet:
         input: a batch of states
         output: a batch of action probabilities and state values
         """
-        device = torch.device("cuda" if self.use_gpu and torch.cuda.is_available() else "cpu")
-        state_batch_tensor = torch.FloatTensor(state_batch).to(device)
-        log_act_probs, value = self.policy_value_net(state_batch_tensor)
+        device = torch.device("cuda" if self.use_gpu else "cpu")
+        state_batch = np.array(state_batch)
+        state_batch = torch.from_numpy(state_batch).float().to(device)
+        log_act_probs, value = self.policy_value_net(state_batch)
         act_probs = np.exp(log_act_probs.cpu().detach().numpy())
         return act_probs, value.cpu().detach().numpy()
 
@@ -233,12 +234,16 @@ class PolicyValueNet:
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
-        # wrap in Variable
         device = torch.device("cuda" if self.use_gpu else "cpu")
 
-        state_batch = torch.FloatTensor(state_batch).to(device)
-        mcts_probs = torch.FloatTensor(mcts_probs).to(device)
-        winner_batch = torch.FloatTensor(winner_batch).to(device)
+        state_batch_np = np.array(state_batch)
+        mcts_probs_np = np.array(mcts_probs)
+        winner_batch_np = np.array(winner_batch)
+
+        # numpy array to tensor
+        state_batch = torch.tensor(state_batch_np, dtype=torch.float).to(device)
+        mcts_probs = torch.tensor(mcts_probs_np, dtype=torch.float).to(device)
+        winner_batch = torch.tensor(winner_batch_np, dtype=torch.float).to(device)
 
         # zero the parameter gradients
         self.optimizer.zero_grad()
