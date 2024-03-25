@@ -184,21 +184,14 @@ class PolicyValueNet:
         self.board_height = board_height  # 4
         self.l2_const = 1e-4  # coef of l2 penalty
         self.rl_model = rl_model
+        device = torch.device("cuda" if self.use_gpu and torch.cuda.is_available() else "cpu")
         # the policy value net module
-        if self.use_gpu:
-            if rl_model == "AC":
-                self.policy_value_net = AC(board_width, board_height).cuda()
-            elif rl_model == "DQN":
-                self.policy_value_net = DQN(board_width, board_height).cuda()
-            elif rl_model == "QRDQN":
-                self.policy_value_net = QRDQN(board_width, board_height).cuda()
-        else:
-            if rl_model == "AC":
-                self.policy_value_net = AC(board_width, board_height)
-            elif rl_model == "DQN":
-                self.policy_value_net = DQN(board_width, board_height)
-            elif rl_model == "QRDQN":
-                self.policy_value_net = QRDQN(board_width, board_height)
+        if rl_model == "AC":
+            self.policy_value_net = AC(board_width, board_height).to(device)
+        elif rl_model == "DQN":
+            self.policy_value_net = DQN(board_width, board_height).to(device)
+        elif rl_model == "QRDQN":
+            self.policy_value_net = QRDQN(board_width, board_height).to(device)
 
         self.optimizer = optim.Adam(self.policy_value_net.parameters(),
                                     weight_decay=self.l2_const)
@@ -211,18 +204,11 @@ class PolicyValueNet:
         input: a batch of states
         output: a batch of action probabilities and state values
         """
-        if self.use_gpu:
-            state_batch_np = np.array(state_batch)
-            state_batch = Variable(torch.FloatTensor(state_batch_np).cuda())
-            log_act_probs, value = self.policy_value_net(state_batch)
-            act_probs = np.exp(log_act_probs.data.cpu().numpy())
-            return act_probs, value.data.cpu().numpy()
-        else:
-            state_batch_np = np.array(state_batch)
-            state_batch = torch.FloatTensor(state_batch_np)
-            log_act_probs, value = self.policy_value_net(state_batch)
-            act_probs = np.exp(log_act_probs.data.numpy())
-            return act_probs, value.detach().cpu().numpy()
+        device = torch.device("cuda" if self.use_gpu and torch.cuda.is_available() else "cpu")
+        state_batch_tensor = torch.FloatTensor(state_batch).to(device)
+        log_act_probs, value = self.policy_value_net(state_batch_tensor)
+        act_probs = np.exp(log_act_probs.cpu().detach().numpy())
+        return act_probs, value.cpu().detach().numpy()
 
     def policy_value_fn(self, board):
         """
@@ -232,17 +218,13 @@ class PolicyValueNet:
         """
         available = np.where(board[3].flatten() == 0)[0]
         current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
+        device = torch.device("cuda" if self.use_gpu and torch.cuda.is_available() else "cpu")
         # log_act_probs, value = net(torch.from_numpy(current_state).float())
         # act_probs = np.exp(log_act_probs.data.numpy().flatten())
 
-        if self.use_gpu:
-            log_act_probs, value = self.policy_value_net(
-                Variable(torch.from_numpy(current_state)).cuda().float())
-            act_probs = np.exp(log_act_probs.data.cpu().numpy().flatten())
-        else:
-            log_act_probs, value = self.policy_value_net(
-                Variable(torch.from_numpy(current_state)).float())
-            act_probs = np.exp(log_act_probs.data.numpy().flatten())
+        curr_state = torch.from_numpy(current_state).float().to(device)
+        log_act_probs, value = self.policy_value_net(curr_state)
+        act_probs = np.exp(log_act_probs.cpu().detach().numpy().flatten())
 
         filtered_act_probs = [(action, prob) for action, prob in zip(available, act_probs) if action in available]
         state_value = value.item()
@@ -252,23 +234,11 @@ class PolicyValueNet:
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
         # wrap in Variable
-        if self.use_gpu:
-            state_batch_np = np.array(state_batch)
-            mcts_probs_np = np.array(mcts_probs)
-            winner_batch_np = np.array(winner_batch)
+        device = torch.device("cuda" if self.use_gpu else "cpu")
 
-            state_batch = Variable(torch.FloatTensor(state_batch_np).cuda())
-            mcts_probs = Variable(torch.FloatTensor(mcts_probs_np).cuda())
-            winner_batch = Variable(torch.FloatTensor(winner_batch_np).cuda())
-
-        else:
-            state_batch_np = np.array(state_batch)
-            mcts_probs_np = np.array(mcts_probs)
-            winner_batch_np = np.array(winner_batch)
-
-            state_batch = Variable(torch.FloatTensor(state_batch_np))
-            mcts_probs = Variable(torch.FloatTensor(mcts_probs_np))
-            winner_batch = Variable(torch.FloatTensor(winner_batch_np))
+        state_batch = torch.FloatTensor(state_batch).to(device)
+        mcts_probs = torch.FloatTensor(mcts_probs).to(device)
+        winner_batch = torch.FloatTensor(winner_batch).to(device)
 
         # zero the parameter gradients
         self.optimizer.zero_grad()
