@@ -16,7 +16,7 @@ import argparse
 # make argparser
 parser = argparse.ArgumentParser()
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=10)
+parser.add_argument("--n_playout", type=int, default=5)
 parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
@@ -27,16 +27,23 @@ parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)
-parser.add_argument("--learn_rate", type=float, default=2e-4)
+parser.add_argument("--learn_rate", type=float, default=5e-4)
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
+""" DQN parameter """
+parser.add_argument("--eps", type=float, default=1.0)     # default 1
+parser.add_argument("--eps_min", type=float, default=0.01)      # default 0.01
+parser.add_argument("--eps_decay", type=float, default=0.995)  # default 0.995
+parser.add_argument('--gamma', type=float, default=0.95)
+parser.add_argument("--tau", type=float, default=5e-3)
+
 
 """ RL name """
-parser.add_argument("--rl_model", type=str, default="AC")
-#parser.add_argument("--rl_model", type=str, default="DQN")
+# parser.add_argument("--rl_model", type=str, default="AC")
+parser.add_argument("--rl_model", type=str, default="DQN")
 # parser.add_argument("--rl_model", type=str, default="QRDQN")
 
 args = parser.parse_args()
@@ -58,6 +65,12 @@ kl_targ = args.kl_targ
 win_ratio = args.win_ratio
 init_model = args.init_model
 rl_model = args.rl_model
+
+eps = args.eps
+eps_min = args.eps_min
+eps_decay = args.eps_decay
+gamma = args.gamma
+tau = args.tau
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -179,7 +192,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
             return winners, zip(states, mcts_probs, winners_z)
 
 
-def policy_update(lr_mul, policy_value_net,  data_buffers=None):
+def policy_update(lr_mul, policy_value_net, data_buffers=None):
     k, kl, loss, entropy = 0, 0, 0, 0
     lr_multiplier = lr_mul
     update_data_buffer = [data for buffer in data_buffers for data in buffer]
@@ -292,7 +305,7 @@ def start_play(env, player1, player2):
 if __name__ == '__main__':
 
     # wandb intialize
-    wandb.init(mode="online",
+    wandb.init(mode="offline",
                entity="hails",
                project="gym_4iar",
                name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
