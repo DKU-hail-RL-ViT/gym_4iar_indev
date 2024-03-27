@@ -107,8 +107,8 @@ class DQN(nn.Module):
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
 
         # action value layers
-        self.act_conv1 = nn.Conv2d(128, 5, kernel_size=1)
-        self.act_fc1 = nn.Linear(5 * board_width * board_height, 64)
+        self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
+        self.act_fc1 = nn.Linear(4 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, board_width * board_height)
 
     def forward(self, state_input):
@@ -119,7 +119,7 @@ class DQN(nn.Module):
 
         # action value layers
         x_act = F.relu(self.act_conv1(x))
-        x_act = x_act.view(-1, 5 * self.board_width * self.board_height)
+        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
         x_act = F.relu(self.act_fc1(x_act))
         x_act = self.act_fc2(x_act)
         x_prob = F.log_softmax(x_act, dim=1)  # TODO 맞는지 확인 필요
@@ -127,10 +127,9 @@ class DQN(nn.Module):
 
         return x_prob, x_val
 
-    def _cal_state_value(self, x_act, x_prob):  # TODO 맞는지 확인 필요
+    def _cal_state_value(self, x_act, x_prob):
         # use x_act and x_prob to get expected value
-        x_val = torch.sum(x_act.detach() * x_prob.detach(), 1)
-
+        x_val = torch.sum(x_act.detach() * x_prob, 1)
         return x_val
 
 
@@ -184,6 +183,7 @@ class PolicyValueNet:
         self.board_height = board_height  # 4
         self.l2_const = 1e-4  # coef of l2 penalty
         self.rl_model = rl_model
+        self.gamma = 0.99
         device = torch.device("cuda" if self.use_gpu else "cpu")
         # the policy value net module
         if rl_model == "AC":
@@ -245,29 +245,50 @@ class PolicyValueNet:
         mcts_probs = torch.tensor(mcts_probs_np, dtype=torch.float).to(device)
         winner_batch = torch.tensor(winner_batch_np, dtype=torch.float).to(device)
 
-        # zero the parameter gradients
-        self.optimizer.zero_grad()
-        # set learning rate
-        set_learning_rate(self.optimizer, lr)
-
-        # forward
-        log_act_probs, value = self.policy_value_net(state_batch)
-        # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
-        # Note: the L2 penalty is incorporated in optimizer
-        value_loss = F.mse_loss(value.view(-1), winner_batch)
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
         if self.rl_model == "AC":
-            loss = value_loss + policy_loss  # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
-        else:  # DQN, QR-DQN
-            loss = policy_loss
-        # backward and optimize
-        loss.backward()
-        self.optimizer.step()
-        # calc policy entropy, for monitoring only
-        entropy = -torch.mean(
-            torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
-        )
-        return loss.item(), entropy.item()
+            # when call backward, the grad will accumulate. so zero grad before backward
+
+            set_learning_rate(self.optimizer, lr)
+
+            log_act_probs, value = self.policy_value_net(state_batch)
+            # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
+            # Note: the L2 penalty is incorporated in optimizer
+            value_loss = F.mse_loss(value.view(-1), winner_batch)
+            policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
+            if self.rl_model == "AC":
+                loss = value_loss + policy_loss  # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
+            else:
+                loss = policy_loss
+
+            # backward and optimize
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            entropy = -torch.mean(
+                torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
+            )
+            return loss.item(), entropy.item()
+
+        elif self.rl_model == "DQN" or "QRDQN":
+            # Sample transitions
+            # states, actions, rewards, next_states, done = state_batch
+            # current_q_values = self.policy_value_net(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
+
+            # Compute the target Q value
+            with torch.no_grad():
+                log_act_probs, value = self.policy_value_net(state_batch)
+
+                loss = F.mse_loss(value.view(-1), winner_batch)
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+            return loss.item(), None
+
+
+
 
     def get_policy_param(self):
         net_params = self.policy_value_net.state_dict()

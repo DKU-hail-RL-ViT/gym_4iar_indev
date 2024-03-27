@@ -112,7 +112,6 @@ class MCTS(object):
         """
         # print('\t init playout')
         node = self._root
-        obs = None
 
         while (1):
             if node.is_leaf():
@@ -145,7 +144,6 @@ class MCTS(object):
         node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
-
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
