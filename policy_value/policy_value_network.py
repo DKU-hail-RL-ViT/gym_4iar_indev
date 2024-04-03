@@ -65,7 +65,7 @@ class AC(nn.Module):
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        # action policy layers
+        # action value layers
         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
         self.act_fc1 = nn.Linear(4 * board_width * board_height,
                                  board_width * board_height)
@@ -80,7 +80,7 @@ class AC(nn.Module):
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
 
-        # action policy layers
+        # action value layers
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
         x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
@@ -93,14 +93,16 @@ class AC(nn.Module):
         return x_act, x_val
 
 
-class DQN(nn.Module):
+class QRAC(nn.Module):
     """policy-value network module"""
 
-    def __init__(self, board_width, board_height):
-        super(DQN, self).__init__()
+    def __init__(self, board_width, board_height, N):
+        super(QRAC, self).__init__()
 
         self.board_width = board_width
         self.board_height = board_height
+        self.N = N
+
         # common layers
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
@@ -108,8 +110,12 @@ class DQN(nn.Module):
 
         # action value layers
         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
-        self.act_fc1 = nn.Linear(4 * board_width * board_height, 64)
-        self.act_fc2 = nn.Linear(64, board_width * board_height)
+        self.act_fc1 = nn.Linear(4 * board_width * board_height,
+                                 board_width * board_height)
+        # state value layers
+        self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
+        self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
+        self.val_fc2 = nn.Linear(64, N)
 
     def forward(self, state_input):
         # common layers
@@ -120,24 +126,21 @@ class DQN(nn.Module):
         # action value layers
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
-        x_act = F.relu(self.act_fc1(x_act))
-        x_act = self.act_fc2(x_act)
-        x_prob = F.log_softmax(x_act, dim=1)  # TODO 맞는지 확인 필요
-        x_val = self._cal_state_value(x_act, x_prob)
+        x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
 
-        return x_prob, x_val
-
-    def _cal_state_value(self, x_act, x_prob):
-        # use x_act and x_prob to get expected value
-        x_val = torch.sum(x_act.detach() * x_prob, 1)
-        return x_val
+        # state value layers
+        x_val = F.relu(self.val_conv1(x))
+        x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
+        x_val = F.relu(self.val_fc1(x_val))
+        x_val = F.tanh(self.val_fc2(x_val))
+        return x_act, x_val
 
 
-class QRDQN(nn.Module):
+class EQRAC(nn.Module):
     """policy-value network module"""
 
-    def __init__(self, board_width, board_height):
-        super(QRDQN, self).__init__()
+    def __init__(self, board_width, board_height, N):
+        super(EQRAC, self).__init__()
 
         self.board_width = board_width
         self.board_height = board_height
@@ -145,7 +148,8 @@ class QRDQN(nn.Module):
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        # action policy layers
+
+        # action value layers
         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
         self.act_fc1 = nn.Linear(4 * board_width * board_height,
                                  board_width * board_height)
@@ -176,22 +180,28 @@ class QRDQN(nn.Module):
 class PolicyValueNet:
     """policy-value network """
 
-    def __init__(self, board_width, board_height,
+    def __init__(self, board_width, board_height, quantiles=32,
                  model_file=None, use_gpu=False, rl_model="AC"):
-        self.use_gpu = use_gpu
+
         self.board_width = board_width  # 9
         self.board_height = board_height  # 4
         self.l2_const = 1e-4  # coef of l2 penalty
+        self.quantiles = quantiles
+        self.use_gpu = use_gpu
         self.rl_model = rl_model
         self.gamma = 0.99
+
+        # taus = torch.arange(0, quantiles+1,device=self.use_gpu, dtype=torch.float32) / quantiles
+        # self.tau_hat = ((taus[1:] + taus[:-1]) / 2).view(1,quantiles)
         device = torch.device("cuda" if self.use_gpu else "cpu")
+
         # the policy value net module
         if rl_model == "AC":
             self.policy_value_net = AC(board_width, board_height).to(device)
-        elif rl_model == "DQN":
-            self.policy_value_net = DQN(board_width, board_height).to(device)
-        elif rl_model == "QRDQN":
-            self.policy_value_net = QRDQN(board_width, board_height).to(device)
+        elif rl_model == "QRAC":
+            self.policy_value_net = QRAC(board_width, board_height, quantiles).to(device)
+        elif rl_model == "EQRAC":
+            self.policy_value_net = EQRAC(board_width, board_height, quantiles).to(device)
 
         self.optimizer = optim.Adam(self.policy_value_net.parameters(),
                                     weight_decay=self.l2_const)
@@ -228,7 +238,7 @@ class PolicyValueNet:
         act_probs = np.exp(log_act_probs.cpu().detach().numpy().flatten())
 
         filtered_act_probs = [(action, prob) for action, prob in zip(available, act_probs) if action in available]
-        state_value = value.item()
+        state_value = value.item().mean()
 
         return filtered_act_probs, state_value
 
@@ -245,20 +255,18 @@ class PolicyValueNet:
         mcts_probs = torch.tensor(mcts_probs_np, dtype=torch.float).to(device)
         winner_batch = torch.tensor(winner_batch_np, dtype=torch.float).to(device)
 
+
+        # when call backward, the grad will accumulate. so zero grad before backward
+
+        set_learning_rate(self.optimizer, lr)
+        log_act_probs, value = self.policy_value_net(state_batch)
+        # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
+        # Note: the L2 penalty is incorporated in optimizer
+
         if self.rl_model == "AC":
-            # when call backward, the grad will accumulate. so zero grad before backward
-
-            set_learning_rate(self.optimizer, lr)
-
-            log_act_probs, value = self.policy_value_net(state_batch)
-            # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
-            # Note: the L2 penalty is incorporated in optimizer
             value_loss = F.mse_loss(value.view(-1), winner_batch)
             policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-            if self.rl_model == "AC":
-                loss = value_loss + policy_loss  # TODO value loss 는 우리의 경우는 계산할 필요가 없을수도 있다.
-            else:
-                loss = policy_loss
+            loss = value_loss + policy_loss
 
             # backward and optimize
             self.optimizer.zero_grad()
@@ -270,24 +278,44 @@ class PolicyValueNet:
             )
             return loss.item(), entropy.item()
 
-        elif self.rl_model == "DQN" or "QRDQN":
-            # Sample transitions
-            # states, actions, rewards, next_states, done = state_batch
-            # current_q_values = self.policy_value_net(states).gather(1, actions.unsqueeze(-1)).squeeze(-1)
+        elif self.rl_model == "QRAC" or "EQRAC":
+            # QR-DQN + AC model
+            # Compute the quantile values
 
-            # Compute the target Q value
-            with torch.no_grad():
-                log_act_probs, value = self.policy_value_net(state_batch)
+            # [batch_size, 1] -> [batch_size, 1, num_quantiles]
+            winner_batch_unsqueezed = winner_batch.unsqueeze(1)
 
-                loss = F.mse_loss(value.view(-1), winner_batch)
+            # calculate the quantile values
+            tau = torch.linspace(0.0 + 1.0 / self.quantiles, 1.0 - 1.0 / self.quantiles, self.quantiles).to(device)
+            tau = tau.unsqueeze(0).repeat(self.batch_size, 1)
+            errors = winner_batch_unsqueezed - value
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+            # calculate the quantile huber loss
+            value_loss = self.quantile_huber_loss(errors, tau, kappa=1.0)
+            policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
+            loss = value_loss + policy_loss
 
-            return loss.item(), None
 
+    def quantile_huber_loss(self, errors, tau, kappa=1.0):
+        # errors: , batch_size, num_quantiles]
+        # tau: 각 quantile ratio, [num_quantiles]
+        # kappa: Huber loss threshold
 
+        # Huber loss condition = |errors| <= kappa
+        condition = torch.abs(errors) <= kappa
+
+        # calculate Huber loss
+        squared_loss = 0.5 * errors ** 2
+        linear_loss = kappa * (torch.abs(errors) - 0.5 * kappa)
+
+        # calculate Quantile Huber loss
+        loss = torch.where(condition, squared_loss, linear_loss)
+
+        # Quantile weight
+        quantile_loss = torch.abs(tau - (errors.detach() < 0).float()) * loss
+
+        # calculate the mean loss over the batch and quantiles
+        return quantile_loss.mean()
 
 
     def get_policy_param(self):
