@@ -33,18 +33,21 @@ parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
-""" DQN parameter """
-parser.add_argument("--eps", type=float, default=1.0)     # default 1
-parser.add_argument("--eps_min", type=float, default=0.01)      # default 0.01
-parser.add_argument("--eps_decay", type=float, default=0.995)  # default 0.995
-parser.add_argument('--gamma', type=float, default=0.95)
-parser.add_argument("--tau", type=float, default=5e-3)
+parser.add_argument("--quantiles", type=int, default=32)
+
+
+# """ DQN parameter """
+# parser.add_argument("--eps", type=float, default=1.0)     # default 1
+# parser.add_argument("--eps_min", type=float, default=0.01)      # default 0.01
+# parser.add_argument("--eps_decay", type=float, default=0.995)  # default 0.995
+# parser.add_argument('--gamma', type=float, default=0.95)
+# parser.add_argument("--tau", type=float, default=5e-3)
 
 
 """ RL name """
 # parser.add_argument("--rl_model", type=str, default="AC")
-parser.add_argument("--rl_model", type=str, default="DQN")
-# parser.add_argument("--rl_model", type=str, default="QRDQN")
+parser.add_argument("--rl_model", type=str, default="QRAC")
+# parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 args = parser.parse_args()
 
@@ -65,12 +68,15 @@ kl_targ = args.kl_targ
 win_ratio = args.win_ratio
 init_model = args.init_model
 rl_model = args.rl_model
+quantiles = args.quantiles
 
-eps = args.eps
-eps_min = args.eps_min
-eps_decay = args.eps_decay
-gamma = args.gamma
-tau = args.tau
+# eps = args.eps
+# eps_min = args.eps_min
+# eps_decay = args.eps_decay
+# gamma = args.gamma
+# tau = args.tau
+
+
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -327,12 +333,12 @@ if __name__ == '__main__':
 
     if init_model:
         # start training from an initial policy-value net
-        policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
+        policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2], quantiles,
                                           model_file=init_model, rl_model=rl_model)
     else:
         # start training from a new policy-value net
         policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
-                                          rl_model=rl_model)
+                                          quantiles, rl_model=rl_model)
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
     curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn,
@@ -365,7 +371,7 @@ if __name__ == '__main__':
 
                 old_i = max(existing_files)
                 best_old_model = f"RL_{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
-                policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
+                policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantile,
                                                       best_old_model, rl_model=rl_model)
 
                 # when evaluating, non use dirichlet noise
