@@ -16,12 +16,12 @@ import argparse
 # make argparser
 parser = argparse.ArgumentParser()
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=5)
+parser.add_argument("--n_playout", type=int, default=50) # compare with 2, 10, 50, 100, 400
 parser.add_argument("--buffer_size", type=int, default=10000)
 """ MCTS parameter """
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
-parser.add_argument("--self_play_sizes", type=int, default=100)      # temporary 10 , default 100
+parser.add_argument("--self_play_sizes", type=int, default=100)      # default 100
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=0.1)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
@@ -33,8 +33,8 @@ parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
+""" Quantile Regression parameter """
 parser.add_argument("--quantiles", type=int, default=32)
-
 
 # """ DQN parameter """
 # parser.add_argument("--eps", type=float, default=1.0)     # default 1
@@ -120,8 +120,8 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
         win_cnt[rewards] += 1
 
     win_ratio = 1.0 * win_cnt[1] / n_games
-    print("Self-Play win: {}, lose: {}, tie:{}".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
-    print("\t win rate : ", round(win_ratio * 100, 3), "% \n")
+    print("\n ---------- Self-Play win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
+    print("Win rate : ", round(win_ratio * 100, 3), "%")
     wandb.log({"Self-Play Win Ratio": round(win_ratio * 100, 3)})
 
     return data_buffer
@@ -272,7 +272,7 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
         print("{} / 30 ".format(j + 1))
 
     win_ratio = 1.0 * win_cnt[1] / n_games
-    print("win: {}, lose: {}, tie:{}".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
+    print("---------- win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     return win_ratio, training_mcts_player
 
 
@@ -311,7 +311,7 @@ def start_play(env, player1, player2):
 if __name__ == '__main__':
 
     # wandb intialize
-    wandb.init(mode="offline",
+    wandb.init(mode="online",
                entity="hails",
                project="gym_4iar",
                name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
@@ -371,7 +371,7 @@ if __name__ == '__main__':
 
                 old_i = max(existing_files)
                 best_old_model = f"RL_{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
-                policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantile,
+                policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantiles,
                                                       best_old_model, rl_model=rl_model)
 
                 # when evaluating, non use dirichlet noise
@@ -379,7 +379,7 @@ if __name__ == '__main__':
                 old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, is_selfplay=0)
                 win_ratio, eval_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
-                print("\t win rate : ", round(win_ratio * 100, 3), "%")
+                print("Win rate : ", round(win_ratio * 100, 3), "%")
                 wandb.log({"Evaluation Win Rate": round(win_ratio * 100, 3)})
 
                 if win_ratio > 0.5:

@@ -90,23 +90,32 @@ def graphic(env, player1, player2, curr_player, move=None):
 
 if __name__ == '__main__':
     env = Fiar()
-    rl_model = 'AC'
-    n_playout = 2
     c_puct = 5
 
-    black = f"RL_{rl_model}_nmcts{n_playout}/train_088.pth"  # player 1
-    white = f"RL_{rl_model}_nmcts{n_playout}/train_100.pth"  # player 2
+    # player 1
+    p1_rl_model = "AC"
+    p1_n_playout = 10
+    p1_quantiles = 0
+
+    # player 2
+    p2_rl_model = "QRAC"
+    p2_n_playout = 10
+    p2_quantiles = 32
+
+
+    p1 = f"RL_{p1_rl_model}_nmcts{p1_n_playout}/train_088.pth"  # player 1
+    p2 = f"RL_{p2_rl_model}_nmcts{p2_n_playout}/train_099.pth"  # player 2
 
     save_dir = './vid/'
     # os.makedirs(os.path.join(save_dir, black.split('.')[0]), exist_ok=True)  # test
 
-    policy_value_net_b = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
-                                        black, rl_model=rl_model)
-    policy_value_net_w = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
-                                        white, rl_model=rl_model)
+    p1_net = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
+                                        p1_quantiles,model_file=p1, rl_model=p1_rl_model)
+    p2_net = PolicyValueNet(env.state_.shape[1], env.state_.shape[2],
+                                        p2_quantiles, model_file=p2, rl_model=p2_rl_model)
 
-    player1 = MCTSPlayer(policy_value_net_b.policy_value_fn, c_puct, n_playout, is_selfplay=0)
-    player2 = MCTSPlayer(policy_value_net_w.policy_value_fn, c_puct, n_playout, is_selfplay=0)
+    player1 = MCTSPlayer(p1_net.policy_value_fn, c_puct, p1_n_playout, is_selfplay=0)
+    player2 = MCTSPlayer(p2_net.policy_value_fn, c_puct, p2_n_playout, is_selfplay=0)
 
     # fig, ax = plt.subplots()
     # 0 ~ 3 0 ~ 8
