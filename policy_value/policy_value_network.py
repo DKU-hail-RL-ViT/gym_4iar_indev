@@ -133,6 +133,7 @@ class QRAC(nn.Module):
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
         x_val = F.tanh(self.val_fc2(x_val))
+        x_val = torch.mean(x_val, dim=1, keepdim=True)
         return x_act, x_val
 
 
@@ -174,6 +175,7 @@ class EQRAC(nn.Module):
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
         x_val = F.tanh(self.val_fc2(x_val))
+        x_val = torch.mean(x_val, dim=1, keepdim=True)
         return x_act, x_val
 
 
@@ -238,8 +240,7 @@ class PolicyValueNet:
         act_probs = np.exp(log_act_probs.cpu().detach().numpy().flatten())
 
         filtered_act_probs = [(action, prob) for action, prob in zip(available, act_probs) if action in available]
-        state_value = value.item().mean()
-
+        state_value = value.item()
         return filtered_act_probs, state_value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
@@ -255,45 +256,41 @@ class PolicyValueNet:
         mcts_probs = torch.tensor(mcts_probs_np, dtype=torch.float).to(device)
         winner_batch = torch.tensor(winner_batch_np, dtype=torch.float).to(device)
 
-
-        # when call backward, the grad will accumulate. so zero grad before backward
-
         set_learning_rate(self.optimizer, lr)
         log_act_probs, value = self.policy_value_net(state_batch)
         # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
         # Note: the L2 penalty is incorporated in optimizer
 
-        if self.rl_model == "AC":
-            value_loss = F.mse_loss(value.view(-1), winner_batch)
-            policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-            loss = value_loss + policy_loss
+        value_loss = F.mse_loss(value.view(-1), winner_batch)
+        policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
+        loss = value_loss + policy_loss
 
-            # backward and optimize
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+        # when call backward, the grad will accumulate. so zero grad before backward
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
-            entropy = -torch.mean(
-                torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
-            )
-            return loss.item(), entropy.item()
+        entropy = -torch.mean(
+            torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
+        )
+        return loss.item(), entropy.item()
 
-        elif self.rl_model == "QRAC" or "EQRAC":
+        # elif self.rl_model == "QRAC" or "EQRAC":
             # QR-DQN + AC model
             # Compute the quantile values
 
             # [batch_size, 1] -> [batch_size, 1, num_quantiles]
-            winner_batch_unsqueezed = winner_batch.unsqueeze(1)
+            # winner_batch_unsqueezed = winner_batch.unsqueeze(1)
 
             # calculate the quantile values
-            tau = torch.linspace(0.0 + 1.0 / self.quantiles, 1.0 - 1.0 / self.quantiles, self.quantiles).to(device)
-            tau = tau.unsqueeze(0).repeat(self.batch_size, 1)
-            errors = winner_batch_unsqueezed - value
+            # tau = torch.linspace(0.0 + 1.0 / self.quantiles, 1.0 - 1.0 / self.quantiles, self.quantiles).to(device)
+            # tau = tau.unsqueeze(0).repeat(self.batch_size, 1)
+            # errors = winner_batch_unsqueezed - value
 
             # calculate the quantile huber loss
-            value_loss = self.quantile_huber_loss(errors, tau, kappa=1.0)
-            policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-            loss = value_loss + policy_loss
+            # value_loss = self.quantile_huber_loss(errors, tau, kappa=1.0)
+            # policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
+            # loss = value_loss + policy_loss
 
 
     def quantile_huber_loss(self, errors, tau, kappa=1.0):

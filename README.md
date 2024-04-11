@@ -8,11 +8,17 @@ pip install 'stable-baselines3[extra]'
 # SH
 python version 3.10
 
-### References
+## References
+
+### AlphaZero_Gomoku
 https://github.com/junxiaosong/AlphaZero_Gomoku
+
+### Elo rating system
+https://en.wikipedia.org/wiki/Elo_rating_system#Mathematical_details
 
 ### Requirements
 https://escholarship.org/uc/item/8wm748d8
+
 
 ```bash
 pip install torch
@@ -30,8 +36,8 @@ Task : four in a row (9 x 4)
 
 
 ### Problem
-evaluate하고 policy_value_net이 update되지 않음
-이거 좀 생각 해봐야하고, wandb적용해야 함
+- AC Perfomance >= QRAC Performance ...? 
+
 
 
 ### version
@@ -70,7 +76,6 @@ kl_targ = 0.02  # previous 0.02
 ### Policy evaluate parameter 
 win_ratio = 0.0
 init_model = None
-
 
 
 
