@@ -1,8 +1,11 @@
-import numpy as np
+import argparse
+import datetime
 import random
 import os
+
+import numpy as np
+import torch
 import wandb
-import datetime
 
 from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize, carculate_area
@@ -10,21 +13,22 @@ from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
 
 # from policy_value.policy_value_mcts_pure import RandomAction
-import argparse
 
 
-# make argparser
 parser = argparse.ArgumentParser()
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=50) # compare with 2, 10, 50, 100, 400
-parser.add_argument("--buffer_size", type=int, default=10000)
+parser.add_argument("--n_playout", type=int, default=5)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=32)
+
 """ MCTS parameter """
+parser.add_argument("--buffer_size", type=int, default=10000)
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
-parser.add_argument("--self_play_sizes", type=int, default=100)      # default 100
+parser.add_argument("--lr_multiplier", type=float, default=1.0)
+parser.add_argument("--self_play_sizes", type=int, default=100)
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=0.1)
-parser.add_argument("--lr_multiplier", type=float, default=1.0)
+
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)
 parser.add_argument("--learn_rate", type=float, default=5e-4)
@@ -34,23 +38,13 @@ parser.add_argument("--kl_targ", type=float, default=0.02)
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
 """ Quantile Regression parameter """
-parser.add_argument("--quantiles", type=int, default=32)
 
-# """ DQN parameter """
-# parser.add_argument("--eps", type=float, default=1.0)     # default 1
-# parser.add_argument("--eps_min", type=float, default=0.01)      # default 0.01
-# parser.add_argument("--eps_decay", type=float, default=0.995)  # default 0.995
-# parser.add_argument('--gamma', type=float, default=0.95)
-# parser.add_argument("--tau", type=float, default=5e-3)
-
-
-""" RL name """
-# parser.add_argument("--rl_model", type=str, default="AC")
-parser.add_argument("--rl_model", type=str, default="QRAC")
+""" RL model """
+parser.add_argument("--rl_model", type=str, default="AC")
+# parser.add_argument("--rl_model", type=str, default="QRAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 args = parser.parse_args()
-
 
 # make all args to variables
 n_playout = args.n_playout
@@ -69,14 +63,6 @@ win_ratio = args.win_ratio
 init_model = args.init_model
 rl_model = args.rl_model
 quantiles = args.quantiles
-
-# eps = args.eps
-# eps_min = args.eps_min
-# eps_decay = args.eps_decay
-# gamma = args.gamma
-# tau = args.tau
-
-
 
 
 def policy_value_fn(board):  # board.shape = (9,4)
@@ -104,8 +90,7 @@ def get_equi_data(env, play_data):
 def collect_selfplay_data(mcts_player, game_iter, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
     # in data_buffer store all steps of self-play so, it should be large enough
-    data_buffer = deque(maxlen=36*n_games*20) # temporary 36*n_games*20 , default 36*n_games
-    win_ratio = 0
+    data_buffer = deque(maxlen=36 * n_games)
     win_cnt = defaultdict(int)
 
     for self_play_i in range(n_games):
@@ -130,7 +115,6 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
 def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     states, mcts_probs, current_player = [], [], []
     obs, _ = env.reset()
-
     player_0 = turn(obs)
     player_1 = 1 - player_0
 
@@ -184,7 +168,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
             mcts_player.reset_player()
 
             print("game: {}, self_play:{}, episode_len:{}".format(
-                game_iter+1, self_play_i+1, len(current_player)))
+                game_iter + 1, self_play_i + 1, len(current_player)))
             winners_z = np.zeros(len(current_player))
 
             if winners != -1:  # non draw
@@ -230,25 +214,11 @@ def policy_update(lr_mul, policy_value_net, data_buffers=None):
     elif kl < kl_targ / 2 and lr_multiplier < 10:
         lr_multiplier *= 1.5
 
-    explained_var_old = (1 -
-                         np.var(np.array(winner_batch) - old_v.flatten()) /
-                         (np.var(np.array(winner_batch)) + 1e-10))
-    explained_var_new = (1 -
-                         np.var(np.array(winner_batch) - new_v.flatten()) /
-                         (np.var(np.array(winner_batch)) + 1e-10))
-
     print(("kl:{:.5f},"
            "lr_multiplier:{:.3f},"
            "loss:{},"
-           "entropy:{},"
-           "explained_var_old:{:.3f},"
-           "explained_var_new:{:.3f}"
-           ).format(kl,
-                    lr_multiplier,
-                    loss,
-                    entropy,
-                    explained_var_old,
-                    explained_var_new))
+           "entropy:{}"
+           ).format(kl, lr_multiplier, loss, entropy))
     return loss, entropy, lr_multiplier, policy_value_net
 
 
@@ -259,8 +229,8 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     """
     training_mcts_player = current_mcts_player  # training Agent
     opponent_mcts_player = old_mcts_player
-    # leaf_mcts_player = MCTS_leaf(policy_value_fn, c_puct=c_puct, n_playout=n_playout)
-    # random_action_player = RandomAction() # random actions Agent
+    # leaf_mcts_player = MCTS_leaf(policy_value_fn, c_puct=c_puct, n_playout=n_playout) # [TODO] leaf node MCTS
+    # random_action_player = RandomAction()  # [TODO] random actions Agent
     win_cnt = defaultdict(int)
 
     for j in range(n_games):
@@ -279,7 +249,6 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
 def start_play(env, player1, player2):
     """start a game between two players"""
     obs, _ = env.reset()
-
     players = [0, 1]
     p1, p2 = players
     player1.set_player_ind(p1)
@@ -302,7 +271,6 @@ def start_play(env, player1, player2):
             player_in_turn.oppo_node_update(move)
 
         else:
-            # print(env)
             wandb.log({"Reward": reward[1]})
             obs, _ = env.reset()
             return winner
@@ -311,7 +279,7 @@ def start_play(env, player1, player2):
 if __name__ == '__main__':
 
     # wandb intialize
-    wandb.init(mode="online",
+    wandb.init(mode="offline",
                entity="hails",
                project="gym_4iar",
                name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
@@ -321,6 +289,13 @@ if __name__ == '__main__':
 
     env = Fiar()
     obs, _ = env.reset()
+
+    if torch.cuda.is_available():  # Windows
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():  # Mac OS
+        device = torch.device("mps")
+    else:  # CPU
+        device = torch.device("cpu")
 
     turn_A = turn(obs)
     turn_B = 1 - turn_A
@@ -359,39 +334,46 @@ if __name__ == '__main__':
                                                                            data_buffers=data_buffer_training_iters)
             wandb.log({"loss": loss, "entropy": entropy})
 
-            if i==0:
+            if i == 0:
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-                model_file = f"RL_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
+                model_file = f"RL_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"  # training version train_001
                 policy_value_net.save_model(model_file)
+                eval_model_file = f"Eval_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"  # eval version eval_001
+                policy_value_net.save_model(eval_model_file)
                 print("model saved\n")
+
             else:
                 existing_files = [int(file.split('_')[-1].split('.')[0])
                                   for file in os.listdir(f"RL_{rl_model}_nmcts{n_playout}")
                                   if file.startswith('train_')]
 
                 old_i = max(existing_files)
+
                 best_old_model = f"RL_{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantiles,
                                                       best_old_model, rl_model=rl_model)
 
-                # when evaluating, non use dirichlet noise
                 curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=0)
                 old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, is_selfplay=0)
-                win_ratio, eval_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
+                win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
+
+                if i + 1 % 10 == 0:  # save model 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 (1+10 : total 11)
+                    eval_model_file = f"Eval_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
+                    policy_value_net.save_model(eval_model_file)
 
                 print("Win rate : ", round(win_ratio * 100, 3), "%")
                 wandb.log({"Evaluation Win Rate": round(win_ratio * 100, 3)})
 
                 if win_ratio > 0.5:
                     # if better, update the policy
-                    old_mcts_player = eval_mcts_player
+                    old_mcts_player = curr_mcts_player
                     model_file = f"RL_{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(model_file)
-                    print("\t New best policy!!!")
+                    print(" ---------- New best policy!!! ---------- ")
 
                 else:
                     # if worse it just reject and does not go back to the old policy
-                    print("\t low win-rate")
+                    print(" ---------- Low win-rate ---------- ")
 
     except KeyboardInterrupt:
         print('\n\rquit')
