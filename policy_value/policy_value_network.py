@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.autograd import Variable
+
 import numpy as np
 import os
 
@@ -182,20 +182,23 @@ class EQRAC(nn.Module):
 class PolicyValueNet:
     """policy-value network """
 
-    def __init__(self, board_width, board_height, quantiles=32,
-                 model_file=None, use_gpu=False, rl_model="AC"):
+    def __init__(self, board_width, board_height, quantiles=None,
+                 model_file=None, rl_model="AC"):
 
         self.board_width = board_width  # 9
         self.board_height = board_height  # 4
         self.l2_const = 1e-4  # coef of l2 penalty
         self.quantiles = quantiles
-        self.use_gpu = use_gpu
         self.rl_model = rl_model
         self.gamma = 0.99
 
-        # taus = torch.arange(0, quantiles+1,device=self.use_gpu, dtype=torch.float32) / quantiles
-        # self.tau_hat = ((taus[1:] + taus[:-1]) / 2).view(1,quantiles)
-        device = torch.device("cuda" if self.use_gpu else "cpu")
+        if torch.cuda.is_available():            # Windows
+            device = torch.device("cuda")
+        elif torch.backends.mps.is_available():  # Mac OS
+            device = torch.device("mps")
+        else:                                    # CPU
+            device = torch.device("cpu")
+        self.use_gpu = device
 
         # the policy value net module
         if rl_model == "AC":
@@ -216,11 +219,11 @@ class PolicyValueNet:
         input: a batch of states
         output: a batch of action probabilities and state values
         """
-        device = torch.device("cuda" if self.use_gpu else "cpu")
+        device = self.use_gpu
         state_batch = np.array(state_batch)
         state_batch = torch.from_numpy(state_batch).float().to(device)
         log_act_probs, value = self.policy_value_net(state_batch)
-        act_probs = np.exp(log_act_probs.cpu().detach().numpy())
+        act_probs = np.exp(log_act_probs.cpu().detach().numpy())  # convert to numpy array (cpu
         return act_probs, value.cpu().detach().numpy()
 
     def policy_value_fn(self, board):
@@ -231,9 +234,7 @@ class PolicyValueNet:
         """
         available = np.where(board[3].flatten() == 0)[0]
         current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
-        device = torch.device("cuda" if self.use_gpu and torch.cuda.is_available() else "cpu")
-        # log_act_probs, value = net(torch.from_numpy(current_state).float())
-        # act_probs = np.exp(log_act_probs.data.numpy().flatten())
+        device = self.use_gpu
 
         curr_state = torch.from_numpy(current_state).float().to(device)
         log_act_probs, value = self.policy_value_net(curr_state)
@@ -245,8 +246,7 @@ class PolicyValueNet:
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
-        device = torch.device("cuda" if self.use_gpu else "cpu")
-
+        device = self.use_gpu
         state_batch_np = np.array(state_batch)
         mcts_probs_np = np.array(mcts_probs)
         winner_batch_np = np.array(winner_batch)
@@ -274,46 +274,6 @@ class PolicyValueNet:
             torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
         )
         return loss.item(), entropy.item()
-
-        # elif self.rl_model == "QRAC" or "EQRAC":
-            # QR-DQN + AC model
-            # Compute the quantile values
-
-            # [batch_size, 1] -> [batch_size, 1, num_quantiles]
-            # winner_batch_unsqueezed = winner_batch.unsqueeze(1)
-
-            # calculate the quantile values
-            # tau = torch.linspace(0.0 + 1.0 / self.quantiles, 1.0 - 1.0 / self.quantiles, self.quantiles).to(device)
-            # tau = tau.unsqueeze(0).repeat(self.batch_size, 1)
-            # errors = winner_batch_unsqueezed - value
-
-            # calculate the quantile huber loss
-            # value_loss = self.quantile_huber_loss(errors, tau, kappa=1.0)
-            # policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-            # loss = value_loss + policy_loss
-
-
-    def quantile_huber_loss(self, errors, tau, kappa=1.0):
-        # errors: , batch_size, num_quantiles]
-        # tau: 각 quantile ratio, [num_quantiles]
-        # kappa: Huber loss threshold
-
-        # Huber loss condition = |errors| <= kappa
-        condition = torch.abs(errors) <= kappa
-
-        # calculate Huber loss
-        squared_loss = 0.5 * errors ** 2
-        linear_loss = kappa * (torch.abs(errors) - 0.5 * kappa)
-
-        # calculate Quantile Huber loss
-        loss = torch.where(condition, squared_loss, linear_loss)
-
-        # Quantile weight
-        quantile_loss = torch.abs(tau - (errors.detach() < 0).float()) * loss
-
-        # calculate the mean loss over the batch and quantiles
-        return quantile_loss.mean()
-
 
     def get_policy_param(self):
         net_params = self.policy_value_net.state_dict()

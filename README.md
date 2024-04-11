@@ -1,15 +1,9 @@
-# DK
-
-```bash
-pip install sb3-contrib
-pip install 'stable-baselines3[extra]'
-```
-
 # SH
 python version 3.10
+torch version 2.2.1 (Mac OS M1)
+
 
 ## References
-
 ### AlphaZero_Gomoku
 https://github.com/junxiaosong/AlphaZero_Gomoku
 
@@ -34,50 +28,58 @@ pip install wandb
 
 Task : four in a row (9 x 4)
 
+### Thinking
+- Distribution RL Network output (64, quantile) -> ex(64, 32)
+so, loss and entropy are lager than AC model (complex calculation)
 
-### Problem
-- AC Perfomance >= QRAC Performance ...? 
+- Performance (AC model < QRAC model) 
+
+
+### TODO
+- train_fiar.py 233 line  (leaf node MCTS)
+- train_fiar.py 234 line  (random actions Agent)
 
 
 
 ### version
+- MCTS + RL
+1) MCTS + AC model (default alphazero)
+2) MCTS + QRAC model (Quantile Regression Actor Critic)
+3) MCTS + EQRAC model (Efficient Quantile Regression Actor Critic)
+
 
 Black: MCTS policy trained through the policy value network
 White: MCTS policy based solely on pure MCTS
 
 Black win -> Reward: 1
-White win -> Reward: -1 or 1e-3 (undecided)
+White win -> Reward: -5e-1
 Draw -> Reward: -1
 
 
 # adjust hyperparameter
 ### tuning parameter 
 n_playout = 20  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
-check_freq = 1  # = more self_playing & training 1, 10, 20, 50, 100
 
 
 ### MCTS parameter
-buffer_size = 1000
+buffer_size = queue(36 * 20) # board size * last 20 games
 c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
-self_play_sizes = 1
-self_play_times = 100 
+self_play_sizes = 100
 temperature = 0.1
 
 
 ### Policy update parameter 
-batch_size = 64  # previous 512
-learn_rate = 2e-4  # previous 2e-3
+batch_size = 64 
+learn_rate = 5e-4  # previous 2e-3
 lr_mul = 1.0
 lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
-kl_targ = 0.02  # previous 0.02
+kl_targ = 0.02  
 
 
 ### Policy evaluate parameter 
 win_ratio = 0.0
 init_model = None
-
-
 
 
 
