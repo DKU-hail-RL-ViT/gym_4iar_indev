@@ -44,7 +44,6 @@ parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
 """ Quantile Regression parameter """
 
-
 args = parser.parse_args()
 
 # make all args to variables
@@ -124,10 +123,10 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     obs_post[2] = np.zeros_like(obs[0])
     obs_post[3] = obs[player_0] + obs[player_1]
 
-    while True:
-        move = None
-        move_probs = None
+    move = None
+    move_probs = None
 
+    while True:
         while True:
             move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
             action2d = action2d_ize(move)
@@ -152,22 +151,22 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
 
         end, winners = env.self_play_winner()
 
-        if winners == -1:   # draw
-            pass
-        elif len(current_player) % 2 == 1:  # black player wins
-            winners = 1
-        elif len(current_player) % 2 == 0:  # white player wins
-            winners = -0.5
-        else:
-            assert False, "Error"
-
         if end:
-            if obs[3].sum() == 36:
-                print('self_play_draw')
-            obs, _ = env.reset()
+            # game end & winner is decided
+            if winners == -1:  # draw
+                pass
+            elif len(current_player) % 2 == 1:  # black player wins
+                winners = 1
+            elif len(current_player) % 2 == 0:  # white player wins
+                winners = -0.5
+            else:
+                assert False, "Error"
 
-            # reset MCTS root node
-            mcts_player.reset_player()
+            if obs[3].sum() == 36 and winners == -1:
+                print('self_play_draw')
+
+            obs, _ = env.reset()    # reset env
+            mcts_player.reset_player()  # reset MCTS root node
 
             print("game: {}, self_play:{}, episode_len:{}".format(
                 game_iter + 1, self_play_i + 1, len(current_player)))
@@ -305,11 +304,11 @@ if __name__ == '__main__':
     env = Fiar()
     obs, _ = env.reset()
 
-    if torch.cuda.is_available():           # Windows
+    if torch.cuda.is_available():  # Windows
         device = torch.device("cuda")
-    elif torch.backends.mps.is_available(): # Mac OS
+    elif torch.backends.mps.is_available():  # Mac OS
         device = torch.device("mps")
-    else:                                   # CPU
+    else:  # CPU
         device = torch.device("cpu")
 
     turn_A = turn(obs)
@@ -372,14 +371,15 @@ if __name__ == '__main__':
             else:
                 if rl_model == "AC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                  for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
-                                  if file.startswith('train_')]
+                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
+                                      if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
 
                 elif rl_model == "QRAC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
+                                      for file in
+                                      os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{old_i:03d}.pth"

@@ -17,7 +17,7 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=100)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=32)  # compare with 2, 16, 32, 64
 
 """ RL model """
@@ -123,17 +123,13 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     obs_post[2] = np.zeros_like(obs[0])
     obs_post[3] = obs[player_0] + obs[player_1]
 
+    move = None
+    move_probs = None
+
     while True:
         while True:
-            action = None
-            move_probs = None
-            if obs[3].sum() == 36:
-                print(env.state_)
-                print('self_play_draw')
-            else:
-                move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
-                action = move
-            action2d = action2d_ize(action)
+            move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
+            action2d = action2d_ize(move)
 
             if obs[3, action2d[0], action2d[1]] == 0.0:
                 break
@@ -143,7 +139,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
         mcts_probs.append(move_probs)
         current_player.append(turn(obs))
 
-        obs, reward, terminated, info = env.step(action)
+        obs, reward, terminated, info = env.step(move)
 
         player_0 = turn(obs)
         player_1 = 1 - player_0
@@ -155,22 +151,22 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
 
         end, winners = env.self_play_winner()
 
-        if winners == -1:  # draw
-            pass
-        elif len(current_player) % 2 == 1:  # black player wins
-            winners = 1
-        elif len(current_player) % 2 == 0:  # white player wins
-            winners = -0.5
-        else:
-            assert False, "Error"
-
         if end:
-            if obs[3].sum() == 36:
-                print('self_play_draw')
-            obs, _ = env.reset()
+            # game end & winner is decided
+            if winners == -1:  # draw
+                pass
+            elif len(current_player) % 2 == 1:  # black player wins
+                winners = 1
+            elif len(current_player) % 2 == 0:  # white player wins
+                winners = -0.5
+            else:
+                assert False, "Error"
 
-            # reset MCTS root node
-            mcts_player.reset_player()
+            if obs[3].sum() == 36 and winners == -1:
+                print('self_play_draw')
+
+            obs, _ = env.reset()    # reset env
+            mcts_player.reset_player()  # reset MCTS root node
 
             print("game: {}, self_play:{}, episode_len:{}".format(
                 game_iter + 1, self_play_i + 1, len(current_player)))
