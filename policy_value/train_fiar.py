@@ -113,9 +113,11 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
 
 
 def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
-    states, mcts_probs, current_player = [], [], []
+
     obs, _ = env.reset()
-    player_0 = turn(obs)
+    states, mcts_probs, current_player = [], [], []
+
+    player_0 = 0  # previous : turn(obs)
     player_1 = 1 - player_0
 
     obs_post[0] = obs[player_0]
@@ -130,19 +132,19 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
         while True:
             move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
             action2d = action2d_ize(move)
-
-            if obs[3, action2d[0], action2d[1]] == 0.0:
+            if env.state_[3, action2d[0], action2d[1]] == 0.0:
                 break
 
         # store the data
         states.append(obs_post.copy())
         mcts_probs.append(move_probs)
-        current_player.append(turn(obs))
+        current_player.append(turn(env.state_))
 
         obs, reward, terminated, info = env.step(move)
 
-        player_0 = turn(obs)
+        player_0 = turn(env.state_)
         player_1 = 1 - player_0
+
 
         obs_post[0] = obs[player_0]
         obs_post[1] = obs[player_1]
@@ -152,17 +154,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
         end, winners = env.self_play_winner()
 
         if end:
-            # game end & winner is decided
-            if winners == -1:  # draw
-                pass
-            elif len(current_player) % 2 == 1:  # black player wins
-                winners = 1
-            elif len(current_player) % 2 == 0:  # white player wins
-                winners = -0.5
-            else:
-                assert False, "Error"
-
-            if obs[3].sum() == 36 and winners == -1:
+            if len(current_player) == 36 and winners == -1:  # draw
                 print('self_play_draw')
 
             obs, _ = env.reset()    # reset env
