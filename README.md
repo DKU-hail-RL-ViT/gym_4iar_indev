@@ -1,6 +1,7 @@
 # SH
 python version 3.10
-torch version 2.2.1 (Mac OS M1)
+Windows : torch version 2.2.2+cu118 
+Mac OS M1: torch version 2.2.1
 
 
 ## References
@@ -29,10 +30,14 @@ pip install wandb
 Task : four in a row (9 x 4)
 
 ### Thinking
+- How many quantiles should be used?
+2, 4, 8, 16, 32, 64  ...?  (for c51)
+
 - Distribution RL Network output (64, quantile) -> ex(64, 32)
 so, loss and entropy are lager than AC model (complex calculation)
 
 - Performance (AC model < QRAC model) 
+
 
 
 ### TODO

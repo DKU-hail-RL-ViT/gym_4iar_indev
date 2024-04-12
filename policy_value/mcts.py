@@ -188,6 +188,11 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
+    def available(self, env):
+        if self.mcts._root.children == {}:
+            return False
+
+
     def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
