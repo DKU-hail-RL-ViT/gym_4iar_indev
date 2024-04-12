@@ -17,7 +17,7 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=50)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=32)  # compare with 2, 16, 32, 64
 
 """ RL model """
@@ -43,7 +43,6 @@ parser.add_argument("--kl_targ", type=float, default=0.02)
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
 """ Quantile Regression parameter """
-
 
 args = parser.parse_args()
 
@@ -125,12 +124,16 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     obs_post[3] = obs[player_0] + obs[player_1]
 
     while True:
-        move = None
-        move_probs = None
-
         while True:
-            move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
-            action2d = action2d_ize(move)
+            action = None
+            move_probs = None
+            if obs[3].sum() == 36:
+                print(env.state_)
+                print('self_play_draw')
+            else:
+                move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
+                action = move
+            action2d = action2d_ize(action)
 
             if obs[3, action2d[0], action2d[1]] == 0.0:
                 break
@@ -140,7 +143,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
         mcts_probs.append(move_probs)
         current_player.append(turn(obs))
 
-        obs, reward, terminated, info = env.step(move)
+        obs, reward, terminated, info = env.step(action)
 
         player_0 = turn(obs)
         player_1 = 1 - player_0
@@ -152,7 +155,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
 
         end, winners = env.self_play_winner()
 
-        if winners == -1:   # draw
+        if winners == -1:  # draw
             pass
         elif len(current_player) % 2 == 1:  # black player wins
             winners = 1
@@ -305,11 +308,11 @@ if __name__ == '__main__':
     env = Fiar()
     obs, _ = env.reset()
 
-    if torch.cuda.is_available():           # Windows
+    if torch.cuda.is_available():  # Windows
         device = torch.device("cuda")
-    elif torch.backends.mps.is_available(): # Mac OS
+    elif torch.backends.mps.is_available():  # Mac OS
         device = torch.device("mps")
-    else:                                   # CPU
+    else:  # CPU
         device = torch.device("cpu")
 
     turn_A = turn(obs)
@@ -372,14 +375,15 @@ if __name__ == '__main__':
             else:
                 if rl_model == "AC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                  for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
-                                  if file.startswith('train_')]
+                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
+                                      if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
 
                 elif rl_model == "QRAC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
+                                      for file in
+                                      os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{old_i:03d}.pth"
