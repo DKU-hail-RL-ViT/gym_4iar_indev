@@ -39,7 +39,6 @@ so, loss and entropy are lager than AC model (complex calculation)
 - Performance (AC model < QRAC model) 
 
 
-
 ### TODO
 - train_fiar.py 233 line  (leaf node MCTS)
 - train_fiar.py 234 line  (random actions Agent)
