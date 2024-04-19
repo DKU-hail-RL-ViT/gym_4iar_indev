@@ -3,12 +3,6 @@ __pycache__/
 .idea/
 logs/
 wandb/
-Eval/
-Training/
-vid/
-train_fiar_copy1.py
-train_fiar_copy2.py
-train_fiar_copy3.py
 *.log
 *.out
 *.model
