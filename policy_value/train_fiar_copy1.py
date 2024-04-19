@@ -17,12 +17,12 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=10)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=32)  # compare with 2, 16, 32, 64
+parser.add_argument("--n_playout", type=int, default=400)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
-parser.add_argument("--rl_model", type=str, default="AC")
-# parser.add_argument("--rl_model", type=str, default="QRAC")
+# parser.add_argument("--rl_model", type=str, default="AC")
+parser.add_argument("--rl_model", type=str, default="QRAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 """ MCTS parameter """
@@ -142,9 +142,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
         obs, reward, terminated, info = env.step(move)
 
         player_0 = turn(env.state_)
-        print("player_0 : ", player_0)
         player_1 = 1 - player_0
-        print("player_1 : ", player_1)
 
         obs_post[0] = obs[player_0]
         obs_post[1] = obs[player_1]

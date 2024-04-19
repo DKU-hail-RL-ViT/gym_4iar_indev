@@ -17,12 +17,12 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=32)  # compare with 2, 16, 32, 64
+parser.add_argument("--n_playout", type=int, default=400)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=64)  # compare with 2, 16, 32, 64
 
 """ RL model """
-parser.add_argument("--rl_model", type=str, default="AC")
-# parser.add_argument("--rl_model", type=str, default="QRAC")
+# parser.add_argument("--rl_model", type=str, default="AC")
+parser.add_argument("--rl_model", type=str, default="QRAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 """ MCTS parameter """

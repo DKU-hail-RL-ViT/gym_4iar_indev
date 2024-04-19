@@ -83,7 +83,7 @@ class AC(nn.Module):
         # action value layers
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
-        x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
+        x_act = F.log_softmax(self.act_fc1(x_act), dim=1) # output about log probability of each action
 
         # state value layers
         x_val = F.relu(self.val_conv1(x))
