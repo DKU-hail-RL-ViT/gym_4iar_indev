@@ -192,8 +192,7 @@ class MCTSPlayer(object):
         if self.mcts._root.children == {}:
             return False
 
-
-    def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp=0.1, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
         # the pi vector returned by MCTS as in the alphaGo Zero paper
@@ -245,7 +244,7 @@ class MCTSPlayer_leaf(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, temp, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp=0.1, return_prob=0):  # env.state_.shape = (5,9,4)
         available = np.where(env.state_[3].flatten() == 0)[0]
         sensible_moves = available
         # the pi vector returned by MCTS as in the alphaGo Zero paper

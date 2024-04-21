@@ -11,8 +11,6 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--init_elo', type=int, default=1500)  # initial Elo rating.
 parser.add_argument('--k_factor', type=int, default=32)  # sensitivity of the rating adjustment.
-# parser.add_argument('--training_iterations', type=int, default=100)  # number of training iterations.
-# parser.add_argument('--self_play_sizes', type=int, default=100)  # number of self-play games.
 parser.add_argument('--c_puct', type=int, default=5)
 
 args = parser.parse_args()
@@ -20,42 +18,47 @@ args = parser.parse_args()
 # Elo rating system
 init_elo = args.init_elo
 k_factor = args.k_factor
-
 c_puct = args.c_puct
 
 
-def policy_evaluate(env, player_1, player_2, n_games=100):
-    result = 0
+def wins(turns, winner, result=0):
+    """ black standard win = 1, draw = 0.5 ,lose = 0 """
+    if turns == 0 and winner == 1:  # p1 = black & p1 wins
+        result = 1
+    elif turns == 0 and winner == -0.5:  # p1 = black & p2 wins
+        result = 0
+    elif turns == 0 and winner == -1:  # p1 = black & draw
+        result = 0.5
+
+    elif turns == 1 and winner == -0.5:  # p1 = white & p1 wins
+        result = 1
+    elif turns == 1 and winner == 1:  # p1 = white & p2 wins
+        result = 0
+    elif turns == 1 and winner == -1:  # p1 = white & draw
+        result = 0.5
+    else:
+        assert False  # should not reach here
+    return result
+
+
+def policy_evaluate(env, player_1, player_2, n_games=10):
     turns = 0
     win_cnt = defaultdict(int)
 
     for i in range(n_games):
         winner = start_play(env, player_1, player_2)
-
-        """ black standard win = 1, lose = 0, draw = 0.5 """
-
-        if turns == 0 and winner == 1:  # p1 = black & p1 wins
-            result = 1
-        elif turns == 0 and winner == -0.5:  # p1 = black & p2 wins
-            result = 0
-        elif turns == 0 and winner == -1:  # p1 = black & draw
-            result = 0.5
-
-        elif turns == 1 and winner == -0.5:  # p1 = white & p1 wins
-            result = 0
-        elif turns == 1 and winner == 1:  # p1 = white & p2 wins
-            result = 0.5
-        elif turns == 1 and winner == -1:  # p1 = white & draw
-            result = 1
-        else:
-            assert False  # should not reach here
+        result = wins(turns, winner)
         win_cnt[result] += 1
 
         # switch the player side
         player_1, player_2 = player_2, player_1
         turns = 1 - turns
 
-    player_1, player_2 = player_2, player_1
+        winner = start_play(env, player_1, player_2)
+        result = wins(turns, winner)
+        win_cnt[result] += 1
+
+
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("Win ratio:", 1.0 * win_cnt[1])
     return win_ratio
@@ -114,18 +117,27 @@ if __name__ == '__main__':
 
     # player 1 info
     p1_rl_model = "AC"
-    p1_n_playout = 10
+    p1_n_playout = 400
     p1_quantiles = 32
+    p1_file_num = 90
     p1_elo = init_elo  # 1500
 
     # player 2 info
     p2_rl_model = "AC"
-    p2_n_playout = 10
+    p2_n_playout = 100
     p2_quantiles = 32
+    p2_file_num = 90
     p2_elo = init_elo  # 1500
 
-    p1 = f"RL_{p1_rl_model}_nmcts{p1_n_playout}/train_088.pth"  # player 1
-    p2 = f"RL_{p2_rl_model}_nmcts{p2_n_playout}/train_009.pth"  # player 2
+    if p1_rl_model == "AC":
+        p1 = f"Eval/{p1_rl_model}_nmcts{p1_n_playout}/train_{p1_file_num:03d}.pth"
+    else:
+        p1 = f"Eval/{p1_rl_model}_nmcts{p1_n_playout}_quantiles{p1_quantiles}/train_{p1_file_num:03d}.pth"
+    if p2_rl_model == "AC":
+        p2 = f"Eval/{p2_rl_model}_nmcts{p2_n_playout}/train_{p2_file_num:03d}.pth"
+    else:
+        p2 = f"Eval/{p2_rl_model}_nmcts{p2_n_playout}_quantiles{p2_quantiles}/train_{p2_file_num:03d}.pth"
+
 
     if p1_rl_model == "AC":
         p1_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
@@ -146,7 +158,7 @@ if __name__ == '__main__':
     player_2 = MCTSPlayer(p2_net.policy_value_fn, c_puct, p2_n_playout, is_selfplay=0)
 
     try:
-        n_games = 50
+        n_games = 20
         turns = 0
         win_cnt = defaultdict(int)
 
