@@ -296,11 +296,11 @@ if __name__ == '__main__':
     env = Fiar()
     obs, _ = env.reset()
 
-    if torch.cuda.is_available():  # Windows
+    if torch.cuda.is_available():           # Windows
         device = torch.device("cuda")
     elif torch.backends.mps.is_available():  # Mac OS
         device = torch.device("mps")
-    else:  # CPU
+    else:                                   # CPU
         device = torch.device("cpu")
 
     turn_A = turn(obs)

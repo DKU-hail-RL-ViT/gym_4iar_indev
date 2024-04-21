@@ -1,7 +1,13 @@
 # SH
 python version 3.10
-Windows : torch version 2.2.2+cu118 
-Mac OS M1: torch version 2.2.1
+
+### Windows
+torch version 2.2.2+cu118 
+
+### Mac OS
+M1: torch version 2.2.1
+if you open gif file, open gif file in the browser (not in the github) 
+ex : Chrome, Safari...  
 
 
 ## References
@@ -13,6 +19,9 @@ https://en.wikipedia.org/wiki/Elo_rating_system#Mathematical_details
 
 ### Requirements
 https://escholarship.org/uc/item/8wm748d8
+
+### GIF
+https://ransakaravihara.medium.com/how-to-create-gifs-using-matplotlib-891989d0d5ea
 
 
 ```bash
@@ -42,8 +51,7 @@ so, loss and entropy are lager than AC model (complex calculation)
 ### TODO
 - train_fiar.py 233 line  (leaf node MCTS)
 - train_fiar.py 234 line  (random actions Agent)
-
-
+- human_play.py 47~48 line (ai가 black일때만 mcts update하도록 했음) 아 머리가 안돌아간다 ~
 
 ### version
 - MCTS + RL
@@ -63,6 +71,7 @@ Draw -> Reward: -1
 # adjust hyperparameter
 ### tuning parameter 
 n_playout = 20  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
+quantiles = 16  # training 2, 16, 32, 64
 
 
 ### MCTS parameter
@@ -71,19 +80,6 @@ c_puct = 5
 epochs = 10  # During each training iteration, the DNN is trained for 10 epochs.
 self_play_sizes = 100
 temperature = 0.1
-
-
-### Policy update parameter 
-batch_size = 64 
-learn_rate = 5e-4  # previous 2e-3
-lr_mul = 1.0
-lr_multiplier = 1.0  # adaptively adjust the learning rate based on KL
-kl_targ = 0.02  
-
-
-### Policy evaluate parameter 
-win_ratio = 0.0
-init_model = None
 
 
 

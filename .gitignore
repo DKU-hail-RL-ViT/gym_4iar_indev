@@ -7,3 +7,4 @@ wandb/
 *.out
 *.model
 *.zip
+*.png
