@@ -8,22 +8,22 @@ from policy_value.mcts import MCTSPlayer
 from policy_value.policy_value_network import PolicyValueNet
 
 
-def check_game_type(env, player1, player2, human): 
+def check_game_type(env, player1, player2, human):
     print("========== Select game type ==========")
-    print("\t0 : AI vs AI")    
+    print("\t0 : AI vs AI")
     print("\t1 : Human vs AI (Human first)")
     print("\t2 : AI vs Human (AI first)")
     print("======================================")
     game_type = int(input("Select game type (range int 0~2) : "))
 
-    if game_type == 0:        
-        policy_evaluate(env, player1, player2)    
-    elif game_type == 1:        
-        policy_evaluate(env, human, player1)    
-    elif game_type == 2:        
-        policy_evaluate(env, player1, human)    
-    else:        
-        print("Invalid input")        
+    if game_type == 0:
+        policy_evaluate(env, player1, player2)
+    elif game_type == 1:
+        policy_evaluate(env, human, player1)
+    elif game_type == 2:
+        policy_evaluate(env, player1, human)
+    else:
+        print("Invalid input")
         check_game_type(env, player1, player2, human)
 
 
@@ -139,7 +139,7 @@ def graphic(env, save_num, move=None, file_prefix='game_board'):
     width = env.state_.shape[1]
     height = env.state_.shape[2]
 
-    if player1.info == "human":
+    if player1 == "human":
         p1 = f"Human_player"
     elif p1_rl_model == "AC":
         p1 = f"{p1_rl_model}_nmcts{p1_n_playout}/train_{p1_file_num:03d}"
@@ -148,7 +148,7 @@ def graphic(env, save_num, move=None, file_prefix='game_board'):
     else:
         assert False, "invaild"
 
-    if player2.info == "human":
+    if player2 == "human":
         p2 = f"Human_player"
     elif p2_rl_model == "AC":
         p2 = f"{p2_rl_model}_nmcts{p2_n_playout}/train_{p2_file_num:03d}"
@@ -200,10 +200,10 @@ if __name__ == '__main__':
     p1_file_num = 100
 
     # player 2 info
-    p2_rl_model = "QRAC"
-    p2_n_playout = 100
+    p2_rl_model = "AC"
+    p2_n_playout = 400
     p2_quantiles = 32
-    p2_file_num = 50
+    p2_file_num = 10
 
     # human player, input your move in the format: 2,3
     human = Human()

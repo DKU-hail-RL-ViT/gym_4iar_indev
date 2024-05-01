@@ -21,8 +21,8 @@ parser.add_argument("--n_playout", type=int, default=400)  # compare with 2, 10,
 parser.add_argument("--quantiles", type=int, default=64)  # compare with 2, 16, 32, 64
 
 """ RL model """
-# parser.add_argument("--rl_model", type=str, default="AC")
-parser.add_argument("--rl_model", type=str, default="QRAC")
+parser.add_argument("--rl_model", type=str, default="AC")
+# parser.add_argument("--rl_model", type=str, default="QRAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 """ MCTS parameter """
@@ -32,7 +32,7 @@ parser.add_argument("--epochs", type=int, default=10)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
 parser.add_argument("--self_play_sizes", type=int, default=100)
 parser.add_argument("--training_iterations", type=int, default=100)
-parser.add_argument("--temp", type=float, default=0.1)
+parser.add_argument("--temp", type=float, default=1e-3)
 
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)
@@ -272,7 +272,7 @@ def start_play(env, player1, player2):
 if __name__ == '__main__':
     # wandb intialize
     if rl_model == "AC":
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
@@ -281,7 +281,7 @@ if __name__ == '__main__':
                    )
 
     elif rl_model == "QRAC":
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
