@@ -18,21 +18,20 @@ parser = argparse.ArgumentParser()
 
 """ tuning parameter """
 parser.add_argument("--n_playout", type=int, default=400)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=64)  # compare with 2, 16, 32, 64
+parser.add_argument("--quantiles", type=int, default=32)  # compare with 2, 16, 32, 64
 
 """ RL model """
-parser.add_argument("--rl_model", type=str, default="AC")
-# parser.add_argument("--rl_model", type=str, default="QRAC")
+# parser.add_argument("--rl_model", type=str, default="AC")
+parser.add_argument("--rl_model", type=str, default="QRAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 """ MCTS parameter """
-parser.add_argument("--buffer_size", type=int, default=10000)
 parser.add_argument("--c_puct", type=int, default=5)
 parser.add_argument("--epochs", type=int, default=10)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
 parser.add_argument("--self_play_sizes", type=int, default=100)
 parser.add_argument("--training_iterations", type=int, default=100)
-parser.add_argument("--temp", type=float, default=1e-3)
+parser.add_argument("--temp", type=float, default=1e-6) # first temp 0.1 -> 0.000001
 
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)
@@ -48,7 +47,6 @@ args = parser.parse_args()
 
 # make all args to variables
 n_playout = args.n_playout
-buffer_size = args.buffer_size
 c_puct = args.c_puct
 epochs = args.epochs
 self_play_sizes = args.self_play_sizes
@@ -272,7 +270,7 @@ def start_play(env, player1, player2):
 if __name__ == '__main__':
     # wandb intialize
     if rl_model == "AC":
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
@@ -281,7 +279,7 @@ if __name__ == '__main__':
                    )
 
     elif rl_model == "QRAC":
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
@@ -363,7 +361,8 @@ if __name__ == '__main__':
             else:
                 if rl_model == "AC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
+                                      for file in os.listdir(
+                            f"Training/{rl_model}_nmcts{n_playout}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
@@ -371,7 +370,8 @@ if __name__ == '__main__':
                 elif rl_model == "QRAC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in
-                                      os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
+                                      os.listdir(
+                                          f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{old_i:03d}.pth"

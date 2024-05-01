@@ -75,11 +75,11 @@ if __name__ == '__main__':
     # player 1 info
     p1_rl_model = "AC"
     p1_n_playout = 400
-    p1_quantiles = 400
+    p1_quantiles = 0
     p1_file_num = 100
 
     # player 2 info
-    p2_rl_model = "QRAC"
+    p2_rl_model = "AC"
     p2_n_playout = 400
     p2_quantiles = 16
     p2_file_num = 60

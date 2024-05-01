@@ -2,8 +2,27 @@ from __future__ import print_function
 from fiar_env import Fiar, action2d_ize
 from policy_value_network import PolicyValueNet
 from mcts import MCTSPlayer
+from elo import define_players
 
 import numpy as np
+
+
+def check_game_type(env, player1, human):
+    print("========== Select game type ==========")
+    print("\t0 : Human vs AI (Human first)")
+    print("\t1 : AI vs Human (AI first)")
+    print("======================================")
+    game_type = int(input("Select game type (range int 0~1) : "))
+
+    if game_type == 0:
+        player = 0
+        start_play(env, human, player1, player)
+    elif game_type == 1:
+        player = 1
+        start_play(env, player1, human, player)
+    else:
+        print("Invalid input")
+        check_game_type(env, player1, human)
 
 
 def location_to_move(location, board_width=9, board_height=4):
@@ -35,8 +54,8 @@ def start_play(env, player1, player2, human_index=None):
         # synchronize the MCTS tree with the current state of the game
         if is_human_index:
             move = player_in_turn.get_action(env)
-        else:  # 모델이 플레이어라면, 매개변수를 조정하여 get_action 호출
-            move = player_in_turn.get_action(env, temp=0.1, return_prob=0)
+        else:
+            move = player_in_turn.get_action(env, temp=1e-6, return_prob=0)
 
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
@@ -47,7 +66,8 @@ def start_play(env, player1, player2, human_index=None):
             is_human_index = (current_player == human_index)
             player_in_turn = players[current_player]
             if current_player == 0:
-                player_in_turn.oppo_node_update(move)  # [ToDo] 여기 수정 해야 함
+                pass
+                # player_in_turn.oppo_node_update(move)  # [ToDo] 여기 수정 해야 함
         else:
             print(env)
             obs, _ = env.reset()
@@ -91,7 +111,7 @@ class Human(object):
         return "Human {}".format(self.player)
 
 
-def run(env, rl_model, n_playout, quantile, file_num, start_player=0):
+def run(env, ):
 
     if rl_model == "AC":
         model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{file_num:03d}.pth"
@@ -105,8 +125,6 @@ def run(env, rl_model, n_playout, quantile, file_num, start_player=0):
         mcts_player = MCTSPlayer(best_policy.policy_value_fn, c_puct=5,
                                  n_playout=n_playout)  # set larger n_playout for better performance
 
-        # human player, input your move in the format: 2,3
-        human = Human()
 
         if start_player == 0:  # set start_player=0 for human first
             player = 0
@@ -126,6 +144,10 @@ if __name__ == '__main__':
     p1_n_playout = 400
     p1_quantiles = 32
     p1_file_num = 100
-    start_player = 1  # start_player 0 : human(black), start_player 1 : human(white)
+    start_player = 0  # start_player 0 : human(black), start_player 1 : human(white)
 
-    run(env, p1_rl_model, p1_n_playout, p1_quantiles, p1_file_num, start_player)
+    # human player, input your move in the format: 2,3
+    human = Human()
+
+    player1 = define_players(p1_rl_model, p1_n_playout, p1_file_num, p1_quantiles)
+    check_game_type(env, player1, human)
