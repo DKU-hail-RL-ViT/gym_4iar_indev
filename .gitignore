@@ -3,6 +3,14 @@ __pycache__/
 .idea/
 logs/
 wandb/
+prev_models/Eval_temp_1e-3/
+prev_models/Eval_temp_1e-6/
+prev_models/Training_temp_1e-3/
+prev_models/Training_temp_1e-6/
+policy_value/train_fiar_copy1.py
+policy_value/train_fiar_copy2.py
+policy_value/train_fiar_copy3.py
+policy_value/train_fiar_copy4.py
 *.log
 *.out
 *.model

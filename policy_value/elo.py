@@ -1,67 +1,33 @@
-import numpy as np  # linear algebra
-import matplotlib.pyplot as plt
-
 from fiar_env import Fiar
-from collections import defaultdict, deque
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
+from itertools import product
 
 import argparse
+import csv
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--init_elo', type=int, default=1500)  # initial Elo rating.
-parser.add_argument('--k_factor', type=int, default=32)  # sensitivity of the rating adjustment.
+parser.add_argument('--init_elo', type=int, default=1500)  # initial Elo rating
+parser.add_argument('--k_factor', type=int, default=20)  # sensitivity of the rating adjustment
 parser.add_argument('--c_puct', type=int, default=5)
-
 args = parser.parse_args()
 
-# Elo rating system
 init_elo = args.init_elo
 k_factor = args.k_factor
 c_puct = args.c_puct
 
 
-def wins(turns, winner, result=0):
+def wins(winner, result=0):
     """ black standard win = 1, draw = 0.5 ,lose = 0 """
-    if turns == 0 and winner == 1:  # p1 = black & p1 wins
+    if winner == 1:  # p1 = black & p1 wins
         result = 1
-    elif turns == 0 and winner == -0.5:  # p1 = black & p2 wins
+    elif winner == -0.5:  # p1 = black & p2 wins
         result = 0
-    elif turns == 0 and winner == -1:  # p1 = black & draw
-        result = 0.5
-
-    elif turns == 1 and winner == -0.5:  # p1 = white & p1 wins
-        result = 1
-    elif turns == 1 and winner == 1:  # p1 = white & p2 wins
-        result = 0
-    elif turns == 1 and winner == -1:  # p1 = white & draw
+    elif winner == -1:  # p1 = black & draw
         result = 0.5
     else:
         assert False  # should not reach here
     return result
-
-
-def policy_evaluate(env, player_1, player_2, n_games=10):
-    turns = 0
-    win_cnt = defaultdict(int)
-
-    for i in range(n_games):
-        winner = start_play(env, player_1, player_2)
-        result = wins(turns, winner)
-        win_cnt[result] += 1
-
-        # switch the player side
-        player_1, player_2 = player_2, player_1
-        turns = 1 - turns
-
-        winner = start_play(env, player_1, player_2)
-        result = wins(turns, winner)
-        win_cnt[result] += 1
-
-
-    win_ratio = 1.0 * win_cnt[1] / n_games
-    print("Win ratio:", 1.0 * win_cnt[1])
-    return win_ratio
 
 
 def start_play(env, player1, player2):
@@ -79,7 +45,7 @@ def start_play(env, player1, player2):
 
     while True:
         # synchronize the MCTS tree with the current state of the game
-        move = player_in_turn.get_action(env, temp=0.1, return_prob=0)
+        move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)
         obs, reward, terminated, info = env.step(move)
         end, winner = env.winner()
 
@@ -93,118 +59,94 @@ def start_play(env, player1, player2):
             return winner
 
 
-def elo_rating(p1, p2, result, turns, k=20):
-    """
-    calculate elo expected win rate, init expected win rate == 0.5
-    """
-    expected_rate = round(1.0 / (1.0 + 10 ** ((p1 - p2) / 400)), 3)
-    opponent_rate = round(1 - expected_rate, 3)
+class Player:
+    def __init__(self, name, elo=None):
+        self.name = name
+        self.elo = elo if elo is not None else init_elo  # Set ELO to 1500 if not specified
 
-    print("Expected rate:", expected_rate)
-    print("Opponent rate:", opponent_rate)
 
-    # Elo rating formula
-    p1_rating = round(p1 + k * (result - expected_rate), 3)
-    p2_rating = round(p2 + k * (opponent_rate - result), 3)
+def update_elo(winner_elo, loser_elo, draw=False, k=k_factor):
+    expected_winner = 1 / (1 + 10 ** ((loser_elo - winner_elo) / 400))
+    expected_loser = 1 - expected_winner
+    score_winner = 0.5 if draw else 1
+    score_loser = 0.5 if draw else 0
 
-    return p1_rating, p2_rating
+    new_winner_elo = round(winner_elo + k * (score_winner - expected_winner), 1)
+    new_loser_elo = round(loser_elo + k * (score_loser - expected_loser), 1)
+    return new_winner_elo, new_loser_elo
+
+
+# Simulation of a game between two players
+def simulate_game(player1, player2):
+    # This is a stub function that randomly determines the outcome
+    winner = start_play(env, player1, player2)
+    result = wins(winner)
+    if result == 1:
+        player1.elo, player2.elo = update_elo(player1.elo, player2.elo)
+    elif result == 0:
+        player2.elo, player1.elo = update_elo(player2.elo, player1.elo)
+    elif result == 0.5:
+        player1.elo, player2.elo = update_elo(player1.elo, player2.elo, draw=True)
+    else:
+        assert False
 
 
 if __name__ == '__main__':
+
     env = Fiar()
     obs, _ = env.reset()
-    win_rate = 0
 
-    # player 1 info
-    p1_rl_model = "AC"
-    p1_n_playout = 400
-    p1_quantiles = 32
-    p1_file_num = 90
-    p1_elo = init_elo  # 1500
+    models = ["AC", "QRAC"]
+    playouts = [2, 10, 50, 100, 400]
+    file_nums = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    quantiles = [2, 16, 32, 64]
+    player_list = []
 
-    # player 2 info
-    p2_rl_model = "AC"
-    p2_n_playout = 100
-    p2_quantiles = 32
-    p2_file_num = 90
-    p2_elo = init_elo  # 1500
+    for model, playout, file_num in product(models, playouts, file_nums):
+        if model == "AC":
+            # AC 모델의 경우 quantile 없이 파일 경로 생성
+            model_file = f"Eval/{model}_nmcts{playout}/train_{file_num:03d}.pth"
+            policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
+                                              model_file=model_file, rl_model="AC")
+            player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, playout, is_selfplay=0)
+            player.name = f"{model}_nmcts{playout}_train_{file_num:03d}"
+            player_list.append(player)
 
-    if p1_rl_model == "AC":
-        p1 = f"Eval/{p1_rl_model}_nmcts{p1_n_playout}/train_{p1_file_num:03d}.pth"
-    else:
-        p1 = f"Eval/{p1_rl_model}_nmcts{p1_n_playout}_quantiles{p1_quantiles}/train_{p1_file_num:03d}.pth"
-    if p2_rl_model == "AC":
-        p2 = f"Eval/{p2_rl_model}_nmcts{p2_n_playout}/train_{p2_file_num:03d}.pth"
-    else:
-        p2 = f"Eval/{p2_rl_model}_nmcts{p2_n_playout}_quantiles{p2_quantiles}/train_{p2_file_num:03d}.pth"
+        elif model == "QRAC":
 
+            for quantile in quantiles:
+                model_file = f"Eval/{model}_nmcts{playout}_quantiles{quantile}/train_{file_num:03d}.pth"
+                policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2], quantile,
+                                                  model_file=model_file, rl_model="QRAC")
+                player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, playout, is_selfplay=0)
+                player.name = f"{model}_nmcts{playout}_quantiles{quantile}_train_{file_num:03d}.pth"
+                player_list.append(player)
+        else:
+            RuntimeError("wtf")
 
-    if p1_rl_model == "AC":
-        p1_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
-                                model_file=p1, rl_model=p1_rl_model)
-    else:
-        p1_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
-                                p1_quantiles, model_file=p1, rl_model=p1_rl_model)
+    # List to hold game results
+    game_results = []
 
-    if p2_rl_model == "AC":
-        p2_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
-                                model_file=p2, rl_model=p2_rl_model)
-    else:
-        p2_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
-                                p2_quantiles, model_file=p2, rl_model=p2_rl_model)
+    # Simulate games between all pairs of players
+    for i, player1 in enumerate(player_list):
+        for player2 in player_list[i + 1:]:
+            simulate_game(player1, player2)
+            print(f"{player1.name} ({player1.elo}) vs {player2.name} ({player2.elo})")
 
+    player_list.reverse()
+    # or using slicing
+    # player_list = player_list[::-1]
 
-    player_1 = MCTSPlayer(p1_net.policy_value_fn, c_puct, p1_n_playout, is_selfplay=0)
-    player_2 = MCTSPlayer(p2_net.policy_value_fn, c_puct, p2_n_playout, is_selfplay=0)
+    for i, player1 in enumerate(player_list):
+        for player2 in player_list[i + 1:]:
+            simulate_game(player1, player2)
+            print(f"{player1.name} ({player1.elo}) vs {player2.name} ({player2.elo})")
 
-    try:
-        n_games = 20
-        turns = 0
-        win_cnt = defaultdict(int)
+    player_list.reverse()
 
-        # for 100 games to update the Elo rating
-        for i in range(n_games):
-
-            winner = start_play(env, player_1, player_2)
-
-            """ black standard win = 1, lose = 0, draw = 0.5 """
-
-            if turns == 0 and winner == 1:  # p1 = black & p1 wins
-                result = 1
-            elif turns == 0 and winner == -0.5:  # p1 = black & p2 wins
-                result = 0
-            elif turns == 0 and winner == -1:  # p1 = black & draw
-                result = 0.5
-
-            elif turns == 1 and winner == -0.5:  # p1 = white & p2 wins
-                result = 1
-            elif turns == 1 and winner == 1:  # p1 = white & p1 wins
-                result = 0
-            elif turns == 1 and winner == -1:  # p1 = white & draw
-                result = 0.5
-            else:
-                assert False  # should not reach here
-
-            print("Result:", result)
-
-            if turns == 0:
-                p1_elo, p2_elo = elo_rating(p1_elo, p2_elo, result, turns)
-                print("Player A Elo:", p1_elo)
-                print("Player B Elo:", p2_elo)
-                print(f"{i + 1} / {n_games} \n")
-            else:
-                p2_elo, p1_elo = elo_rating(p2_elo, p1_elo, result, turns)
-                p1_elo, p2_elo = p2_elo, p1_elo
-                print("Player A Elo:", p1_elo)
-                print("Player B Elo:", p2_elo)
-                print(f"{i + 1} / {n_games} \n")
-
-            # switch the player side
-            player_2, player_1 = player_1, player_2
-            turns = 1 - turns
-
-
-
-
-    except KeyboardInterrupt:
-        print('\n\rquit')
+    # Write player_list information to CSV
+    with open('player_elo_result.csv', 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Player Name", "Elo Rating"])
+        for player in player_list:
+            writer.writerow([player.name, player.elo])

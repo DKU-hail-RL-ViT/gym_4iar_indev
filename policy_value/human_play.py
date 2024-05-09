@@ -2,7 +2,7 @@ from __future__ import print_function
 from fiar_env import Fiar, action2d_ize
 from policy_value_network import PolicyValueNet
 from mcts import MCTSPlayer
-from elo import define_players
+# from elo import define_players
 
 import numpy as np
 
@@ -140,10 +140,10 @@ def run(env, ):
 if __name__ == '__main__':
     env = Fiar()
 
-    p1_rl_model = "QRAC"
+    p1_rl_model = "AC"
     p1_n_playout = 400
     p1_quantiles = 32
-    p1_file_num = 100
+    p1_file_num = 40
     start_player = 0  # start_player 0 : human(black), start_player 1 : human(white)
 
     # human player, input your move in the format: 2,3
