@@ -2,6 +2,7 @@ import numpy as np
 import copy
 import torch
 import random
+
 # from policy_value.policy_value_network import AC, DQN, QRDQN, Net
 
 
@@ -177,9 +178,12 @@ class MCTS(object):
 class MCTSPlayer(object):
     """AI player based on MCTS"""
 
-    def __init__(self, policy_value_function, c_puct=5, n_playout=2000, is_selfplay=0):
+    def __init__(self, policy_value_function, c_puct=5, n_playout=2000, is_selfplay=0, name=None, elo=None):
         self.mcts = MCTS(policy_value_function, c_puct, n_playout)
         self._is_selfplay = is_selfplay
+        init_elo = 1500
+        self.elo = elo if elo is not None else init_elo
+        self.name = name
 
     def set_player_ind(self, p):
         self.player = p

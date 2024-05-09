@@ -17,12 +17,12 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=400)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=64)  # compare with 2, 16, 32, 64
+parser.add_argument("--n_playout", type=int, default=100)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
-parser.add_argument("--rl_model", type=str, default="AC")
-# parser.add_argument("--rl_model", type=str, default="QRAC")
+# parser.add_argument("--rl_model", type=str, default="AC")
+parser.add_argument("--rl_model", type=str, default="QRAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 """ MCTS parameter """
@@ -32,10 +32,10 @@ parser.add_argument("--epochs", type=int, default=10)
 parser.add_argument("--lr_multiplier", type=float, default=1.0)
 parser.add_argument("--self_play_sizes", type=int, default=100)
 parser.add_argument("--training_iterations", type=int, default=100)
-parser.add_argument("--temp", type=float, default=1e-3)
+parser.add_argument("--temp", type=float, default=1.0)
 
 """ Policy update parameter """
-parser.add_argument("--batch_size", type=int, default=64)
+parser.add_argument("--batch_size", type=int, default=256)  # previous 64
 parser.add_argument("--learn_rate", type=float, default=5e-4)
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
@@ -73,24 +73,39 @@ def policy_value_fn(board):  # board.shape = (9,4)
 
 
 def get_equi_data(env, play_data):
-    """augment the data set by flipping
+    """augment the data set by rotating 180 degrees and flipping both horizontally and vertically
     play_data: [(state, mcts_prob, winner_z), ..., ...]
     """
     extend_data = []
     for state, mcts_prob, winner in play_data:
-        # flip horizontally
-        equi_state = np.array([np.fliplr(s) for s in state])
-        equi_mcts_prob = np.fliplr(mcts_prob.reshape(env.state_.shape[1], env.state_.shape[2]))
-        extend_data.append((equi_state,
-                            np.flipud(equi_mcts_prob).flatten(),
-                            winner))
+        board_height, board_width = env.state_.shape[1], env.state_.shape[2]
+
+        # Original state and MCTS probabilities
+        extend_data.append((state, mcts_prob.flatten(), winner))
+
+        # Rotate 180 degrees
+        equi_state_180 = np.array([np.rot90(s, 2) for s in state])
+        equi_mcts_prob_180 = np.rot90(mcts_prob.reshape(board_height, board_width), 2)
+        extend_data.append((equi_state_180, equi_mcts_prob_180.flatten(), winner))
+
+        # Flip horizontally
+        equi_state_hor = np.array([np.fliplr(s) for s in state])
+        equi_mcts_prob_hor = np.fliplr(mcts_prob.reshape(board_height, board_width))
+        extend_data.append((equi_state_hor, equi_mcts_prob_hor.flatten(), winner))
+
+        # Flip vertically
+        equi_state_ver = np.array([np.flipud(s) for s in state])
+        equi_mcts_prob_ver = np.flipud(mcts_prob.reshape(board_height, board_width))
+        extend_data.append((equi_state_ver, equi_mcts_prob_ver.flatten(), winner))
+
     return extend_data
+
 
 
 def collect_selfplay_data(mcts_player, game_iter, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
     # in data_buffer store all steps of self-play so, it should be large enough
-    data_buffer = deque(maxlen=36 * n_games)
+    data_buffer = deque(maxlen=36 * n_games * 4) # board size * n_games * augmentation times
     win_cnt = defaultdict(int)
 
     for self_play_i in range(n_games):
@@ -253,7 +268,8 @@ def start_play(env, player1, player2):
 
     while True:
         # synchronize the MCTS tree with the current state of the game
-        move = player_in_turn.get_action(env, temp=0.1, return_prob=0)
+        # self-play temp=1.0, eval temp=1e-3
+        move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
@@ -272,7 +288,7 @@ def start_play(env, player1, player2):
 if __name__ == '__main__':
     # wandb intialize
     if rl_model == "AC":
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
@@ -281,7 +297,7 @@ if __name__ == '__main__':
                    )
 
     elif rl_model == "QRAC":
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
