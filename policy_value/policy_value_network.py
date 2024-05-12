@@ -140,7 +140,7 @@ class QRAC(nn.Module):
 class EQRAC(nn.Module):
     """policy-value network module"""
 
-    def __init__(self, board_width, board_height, N, threshold=1.0):
+    def __init__(self, board_width, board_height, N, threshold=0.1):
         super(EQRAC, self).__init__()
 
         self.board_width = board_width
@@ -160,46 +160,60 @@ class EQRAC(nn.Module):
         # state value layers
         self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
-        self.val_fc2 = nn.Linear(64, N)
+
+        if torch.cuda.is_available():  # Windows
+            device = torch.device("cuda")
+        elif torch.backends.mps.is_available():  # Mac OS
+            device = torch.device("mps")
+        else:  # CPU
+            device = torch.device("cpu")
+
+        self.device = device
+        self.init_state_value_layers()
+
+    def init_state_value_layers(self):
+        """ Initialize or update the state value output layer based on current self.N """
+        self.val_fc2 = nn.Linear(64, self.N).to(self.device)
 
     def forward(self, state_input):
-        # common layers
+        # Common layers processing
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
 
-        # action value layers
+        # Action value processing
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
         x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
 
-        # state value layers
+        # State value processing
+        x_value = self.compute_state_values(x)
+
+        while self.adjust_N(x_value):
+            self.init_state_value_layers()
+            x_value = self.compute_state_values(x)  # Recompute state values with updated layers
+        x_value = torch.mean(x_value, dim=1, keepdim=True)
+
+        return x_act, x_value
+
+    def compute_state_values(self, x):
         x_val = F.relu(self.val_conv1(x))
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
-        x_val = F.tanh(self.val_fc2(x_val))
+        x_value = F.tanh(self.val_fc2(x_val))
+        return x_value
 
-        x_val, N = self.adjust_N(x_val)
-        print(N, "qunatile 개수")
-
-        return x_act, x_val
-
-    def adjust_N(self, x_val):
+    def adjust_N(self, x_value):
         """Adjusts N based on the top two state values if their difference is below the threshold."""
-        top_values, _ = torch.topk(x_val, 2, dim=1)  # Get top 2 values
-        diff = (top_values[:, 0] - top_values[:, 1]).abs()  #
-        print((top_values[:, 0] - top_values[:, 1]).abs())
+        top_values, _ = torch.topk(x_value, 2, dim=1)  # Get top 2 values
+        diff = (top_values[:, 0] - top_values[:, 1]).abs()
+        print(diff)
 
-        # Double N if the condition is not met and N can still be increased
-        if (diff >= self.threshold) and (self.N < 64):
-            self.N = min(64, self.N * 2)
-            # self.val_fc2 = nn.Linear(64, self.N)
-            x_val = self.val_fc2(x_val, self.N)
+        if diff >= self.threshold and self.N < 64:
+            return False
         else:
-            self.N = self.N * 2
-            self.adjust_N(x_val, self.N)
-
-        return self.x_val, self.N
+            self.N = min(64, self.N * 2)
+            return True
 
 
 class PolicyValueNet:
