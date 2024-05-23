@@ -16,3 +16,4 @@ policy_value/train_fiar_copy4.py
 *.model
 *.zip
 *.png
+*.csv
