@@ -105,7 +105,7 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
 
-    def _playout(self, env):  # obs.shape = (5,9,4)
+    def _playout(self, env, sensible_moves):  # obs.shape = (5,9,4)
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
@@ -122,7 +122,10 @@ class MCTS(object):
             obs, reward, terminated, info = env.step(action)
 
         # print('\t out of while')
-        action_probs, leaf_value = self._policy(env.state_)
+        action_probs, leaf_action_value = self._policy(env.state_)
+        # max leaf_action_value as leaf_value
+        leaf_value = leaf_action_value.max() # TODO  이게 아마도 torch 로부터 나온 값이기 때문에 단순한 float 로 바꿔주는 코드가 한줄 더 있어야할거임
+
         # print('available:', len(action_probs))
 
         # Check for end of game
@@ -143,14 +146,14 @@ class MCTS(object):
             obs, _ = env.reset()
         node.update_recursive(-leaf_value)
 
-    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp, sensible_moves=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):  # for 400 times
-            self._playout(copy.deepcopy(env))  # state_copy.shape = (5,9,4)
+            self._playout(copy.deepcopy(env), sensible_moves)  # state_copy.shape = (5,9,4)
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -202,7 +205,7 @@ class MCTSPlayer(object):
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, temp, sensible_moves)  # board.shape = (5,9,4)
             move_probs[list(acts)] = probs
 
             if self._is_selfplay:
