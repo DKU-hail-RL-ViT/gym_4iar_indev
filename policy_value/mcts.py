@@ -124,7 +124,21 @@ class MCTS(object):
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
 
-        action_probs, leaf_action_value = self._policy(env.state_, sensible_moves)
+        threshold = 0.1
+        k=1
+        # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k)
+        while True:
+            action_probs, leaf_action_value = self._policy(env.state_,k)
+            # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
+            # get values of sensible_moves
+            leaf_action_value = leaf_action_value.flatten()
+            leaf_action_value = leaf_action_value[sensible_moves]
+            # compare max and second max of leaf_action_value
+            leaf_action_value.sorted()
+            if torch.abs(leaf_action_value[-1] - leaf_action_value[-2]) > threshold:
+                break
+            else:
+                k += 1
 
         # max leaf_action_value as leaf_value
         leaf_action_value = leaf_action_value.max().item()  # [TODO] 이게 아마도 torch 로부터 나온 값이기 때문에 단순한 float 로 바꿔주는 코드가 한줄 더 있어야할거임
