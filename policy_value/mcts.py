@@ -116,6 +116,9 @@ class MCTS(object):
         while (1):
             if node.is_leaf():
                 break
+            if len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) != len(node._children):
+                print('wt')
+
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
             # Greedily select next move.
             action, node = node.select(self._c_puct)

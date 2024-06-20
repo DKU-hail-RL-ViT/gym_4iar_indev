@@ -115,7 +115,7 @@ class AAC(nn.Module): # action value actor critic
         self.val_fc2 = nn.Linear(64, board_width * board_height)
 
     def forward(self, state_input, sensible_moves):
-        sensible_moves = [0,1,2,3,4,5,6,7,9,10,13,14,19,20,25,34]
+        # sensible_moves = [0,1,2,3,4,5,6,7,9,10,13,14,19,20,25,34]
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -124,7 +124,16 @@ class AAC(nn.Module): # action value actor critic
         # policy gradient layers
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
-        x_act = F.log_softmax(self.act_fc1(x_act), dim=1) # output about log probability of each action
+        x_act = self.act_fc1(x_act)
+        # 여기서 mask
+
+        # TODO: 디버깅할때 아래 디멘젼 이런거 잘 맞춰서 만들어야함
+        all_indices = set(range(x_act.size(1)))
+        sensible_moves_set = set(sensible_moves)
+        non_sensible_moves = list(all_indices - sensible_moves_set)
+
+        x_act[0, non_sensible_moves] = -torch.inf
+        x_act = F.log_softmax(x_act, dim=1) # output about log probability of each action
 
         # action value layers
         x_val = F.relu(self.val_conv1(x))
@@ -132,21 +141,16 @@ class AAC(nn.Module): # action value actor critic
         x_val = F.relu(self.val_fc1(x_val))
         x_val = F.tanh(self.val_fc2(x_val))
 
-        # TODO: 디버깅할때 아래 디멘젼 이런거 잘 맞춰서 만들어야함
-        # make mask using sensible moves
-        device = x_act.device
-        mask = torch.ones(x_act.size(), dtype=torch.float32, device=device)  # (1,36)
+        # # # sensible_moves 인덱스에 포함되지 않은 인덱스를 찾아 -torch.inf로 설정
+        # all_indices = set(range(mask.size(1)))
+        # sensible_moves_set = set(sensible_moves)
+        # non_sensible_moves = list(all_indices - sensible_moves_set)
+        #
+        # # non_sensible_moves 인덱스에 해당하는 값을 -torch.inf로 설정
+        # mask[:, non_sensible_moves] = -torch.inf
+        # # # mask[sensible_moves] = -torch.inf
 
-        # sensible_moves 인덱스에 포함되지 않은 인덱스를 찾아 -torch.inf로 설정
-        all_indices = set(range(mask.size(1)))
-        sensible_moves_set = set(sensible_moves)
-        non_sensible_moves = list(all_indices - sensible_moves_set)
-
-        # non_sensible_moves 인덱스에 해당하는 값을 -torch.inf로 설정
-        mask[:, non_sensible_moves] = -torch.inf
-        # mask[sensible_moves] = -torch.inf
-
-        x_val *= mask
+        # x_val *= mask
         # x_val가 minus 값이 었다면 강제로 -inf로
         x_val = torch.where(x_val == float('inf'), -torch.inf, x_val)
 
