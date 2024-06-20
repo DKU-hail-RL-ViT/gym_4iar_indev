@@ -121,12 +121,11 @@ class MCTS(object):
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
 
-        # print('\t out of while')
-        action_probs, leaf_action_value = self._policy(env.state_)
-        # max leaf_action_value as leaf_value
-        leaf_value = leaf_action_value.max() # TODO  이게 아마도 torch 로부터 나온 값이기 때문에 단순한 float 로 바꿔주는 코드가 한줄 더 있어야할거임
+        action_probs, leaf_action_value = self._policy(env.state_, sensible_moves)
 
-        # print('available:', len(action_probs))
+        # max leaf_action_value as leaf_value
+        leaf_action_value = leaf_action_value.max().item()  # [TODO] 이게 아마도 torch 로부터 나온 값이기 때문에 단순한 float 로 바꿔주는 코드가 한줄 더 있어야할거임
+        leaf_value = leaf_action_value
 
         # Check for end of game
         end, winners = env.winner()

@@ -136,6 +136,7 @@ def run(env, rl_model, n_playout, file_num, quantile=32, start_player=0):
 
     return mcts_player
 
+
 if __name__ == '__main__':
     env = Fiar()
 

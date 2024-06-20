@@ -22,7 +22,8 @@ parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="AC")
-parser.add_argument("--rl_model", type=str, default="QRAC")
+# parser.add_argument("--rl_model", type=str, default="QRAC")
+parser.add_argument("--rl_model", type=str, default="AAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 """ MCTS parameter """
@@ -35,7 +36,7 @@ parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=1.0)
 
 """ Policy update parameter """
-parser.add_argument("--batch_size", type=int, default=256)  # previous 64
+parser.add_argument("--batch_size", type=int, default=64)  # previous 64
 parser.add_argument("--learn_rate", type=float, default=5e-4)
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
@@ -237,8 +238,8 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     """
     training_mcts_player = current_mcts_player  # training Agent
     opponent_mcts_player = old_mcts_player
-    # leaf_mcts_player = MCTS_leaf(policy_value_fn, c_puct=c_puct, n_playout=n_playout) # [TODO] leaf node MCTS
-    # random_action_player = RandomAction()  # [TODO] random actions Agent
+    # leaf_mcts_player = MCTS_leaf(policy_value_fn, c_puct=c_puct, n_playout=n_playout)
+    # random_action_player = RandomAction()
     win_cnt = defaultdict(int)
 
     for j in range(n_games):
@@ -292,6 +293,14 @@ if __name__ == '__main__':
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
+                        "-Date" + str(datetime.datetime.now()),
+                   config=args.__dict__
+                   )
+    elif rl_model == "AAC":
+        wandb.init(mode="offline",
+                   entity="hails",
+                   project="gym_4iar",
+                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
                         "-Date" + str(datetime.datetime.now()),
                    config=args.__dict__
                    )
