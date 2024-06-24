@@ -112,6 +112,7 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
+        leaf_value = None
 
         while (1):
             if node.is_leaf():
@@ -122,17 +123,19 @@ class MCTS(object):
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
+            del node._children[action]
             obs, reward, terminated, info = env.step(action)
 
         threshold = 0.1
         k = 1
-        # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분
+        # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
 
         if self.rl_model == "DQN" or self.rl_model == "QRDQN":
-            action_probs = self._policy(env.state_, sensible_moves, k)
-            print(action_probs)
+            action_probs, leaf_value = self._policy(env.state_, sensible_moves)
+        elif self.rl_model == "AC" or self.rl_model == "QRAC":
+            action_probs, leaf_value = self._policy(env.state_, sensible_moves)
         else:
-            while True:  # [TODO]  원래 여기 while 아니긴 함
+            while True: # [TODO] 여기도 나눠져야 할 것
                 action_probs, leaf_action_value = self._policy(env.state_, sensible_moves, k)
                 # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
 
@@ -164,8 +167,7 @@ class MCTS(object):
                 leaf_value = -1.0
             obs, _ = env.reset()
 
-        if not self.rl_model == "DQN" or self.rl_model == "QRDQN":
-            node.update_recursive(-leaf_value) # [TODO] DQN의 경우 leaf_value를 계산하지 않기 때문에 끝났을때만 leaf value 계산하는데
+        node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, temp, sensible_moves=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
