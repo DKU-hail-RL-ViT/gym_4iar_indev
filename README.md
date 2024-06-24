@@ -49,12 +49,11 @@ so, loss and entropy are lager than AC model (complex calculation)
 
 
 ### TODO
-- train_fiar.py 233 line  (leaf node MCTS)
-- train_fiar.py 234 line  (random actions Agent)
-- human_play.py 47~48 line (ai가 black일때만 mcts update하도록 했음) 아 머리가 안돌아간다 ~
+
 
 ### version
 - MCTS + RL
+
 1) MCTS + AC model (default alphazero)
 2) MCTS + QRAC model (Quantile Regression Actor Critic)
 3) MCTS + EQRAC model (Efficient Quantile Regression Actor Critic)
