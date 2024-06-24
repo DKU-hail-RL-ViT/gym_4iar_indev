@@ -53,6 +53,50 @@ class Net(nn.Module):
         return x_act, x_val
 
 
+class DQN(nn.Module):
+    """policy-value network module"""
+
+    def __init__(self, board_width, board_height):
+        super(DQN, self).__init__()
+
+        self.board_width = board_width
+        self.board_height = board_height
+        self.num_actions = board_width * board_height
+
+        # common layers
+        self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        # action policy layers (previous state value)
+        self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
+        self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
+        self.act_fc2 = nn.Linear(64, self.num_actions)
+
+    def forward(self, state_input, sensible_moves): # [TODO] 여기 action masking 한거 input으로 넣어줘야함
+        # common layers
+        x = F.relu(self.conv1(state_input))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+
+        # action policy layers
+        x_act = F.relu(self.act_conv1(x))
+        x_act = x_act.view(-1, 2 * self.board_width * self.board_height)
+        x_act = F.relu(self.act_fc1(x_act))
+        x_act = self.act_fc2(x_act)
+
+        x_act = F.log_softmax(x_act, dim=1)
+
+        # masking action
+        mask = torch.ones((1, 36), dtype=torch.float32)
+        all_indices = set(range(mask.size(1)))
+        sensible_moves_set = set(sensible_moves)
+        non_sensible_moves = list(all_indices - sensible_moves_set)
+        mask[:, non_sensible_moves] = -torch.inf
+        x_act = torch.where(x_act == float('inf'), -torch.inf, x_act)  # [TODO] DQN에서 이렇게 해도 될지 모르겠음
+
+        return x_act
+
+
 class AC(nn.Module):
     """policy-value network module"""
 
@@ -65,7 +109,7 @@ class AC(nn.Module):
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        # action value layers
+        # action policy layers
         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
         self.act_fc1 = nn.Linear(4 * board_width * board_height,
                                  board_width * board_height)
@@ -80,7 +124,7 @@ class AC(nn.Module):
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
 
-        # action value layers
+        # action policy layers
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
         x_act = F.log_softmax(self.act_fc1(x_act), dim=1) # output about log probability of each action
@@ -93,7 +137,7 @@ class AC(nn.Module):
         return x_act, x_val
 
 
-class AAC(nn.Module): # action value actor critic
+class AAC(nn.Module):  # action value actor critic
     """policy-value network module"""
 
     def __init__(self, board_width, board_height):
@@ -109,7 +153,7 @@ class AAC(nn.Module): # action value actor critic
         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
         self.act_fc1 = nn.Linear(4 * board_width * board_height,
                                  board_width * board_height)
-        # action value layers
+        # action policy layers
         self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.val_fc2 = nn.Linear(64, board_width * board_height)
@@ -128,7 +172,7 @@ class AAC(nn.Module): # action value actor critic
         x_act = self.act_fc1(x_act)
         x_act = F.log_softmax(x_act, dim=1) # output about log probability of each action
 
-        # action value layers
+        # action policy layers
         x_val = F.relu(self.val_conv1(x))
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
@@ -136,64 +180,55 @@ class AAC(nn.Module): # action value actor critic
         x_val = F.tanh(self.val_fc2(x_val))
 
         # # # sensible_moves 인덱스에 포함되지 않은 인덱스를 찾아 -torch.inf로 설정
-        # all_indices = set(range(mask.size(1)))
-        # sensible_moves_set = set(sensible_moves)
-        # non_sensible_moves = list(all_indices - sensible_moves_set)
-        #
-        # # non_sensible_moves 인덱스에 해당하는 값을 -torch.inf로 설정
-        # mask[:, non_sensible_moves] = -torch.inf
-        # # # mask[sensible_moves] = -torch.inf
-
         # x_val *= mask
-        # x_val가 minus 값이 었다면 강제로 -inf로
         x_val = torch.where(x_val == float('inf'), -torch.inf, x_val)
 
         return x_act, x_val
 
 
-#
-# class QRAC(nn.Module):
-#     """policy-value network module"""
-#
-#     def __init__(self, board_width, board_height, N):
-#         super(QRAC, self).__init__()
-#
-#         self.board_width = board_width
-#         self.board_height = board_height
-#         self.N = N
-#
-#         # common layers
-#         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
-#         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-#         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-#
-#         # action value layers
-#         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
-#         self.act_fc1 = nn.Linear(4 * board_width * board_height,
-#                                  board_width * board_height)
-#         # state value layers
-#         self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
-#         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
-#         self.val_fc2 = nn.Linear(64, N)
-#
-#     def forward(self, state_input):
-#         # common layers
-#         x = F.relu(self.conv1(state_input))
-#         x = F.relu(self.conv2(x))
-#         x = F.relu(self.conv3(x))
-#
-#         # action value layers
-#         x_act = F.relu(self.act_conv1(x))
-#         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
-#         x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
-#
-#         # state value layers
-#         x_val = F.relu(self.val_conv1(x))
-#         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
-#         x_val = F.relu(self.val_fc1(x_val))
-#         x_val = F.tanh(self.val_fc2(x_val))
-#         x_val = torch.mean(x_val, dim=1, keepdim=True)
-#         return x_act, x_val
+
+class QRAC(nn.Module):
+    """policy-value network module"""
+
+    def __init__(self, board_width, board_height, N):
+        super(QRAC, self).__init__()
+
+        self.board_width = board_width
+        self.board_height = board_height
+        self.N = N
+
+        # common layers
+        self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+
+        # action policy layers
+        self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
+        self.act_fc1 = nn.Linear(4 * board_width * board_height,
+                                 board_width * board_height)
+        # state value layers
+        self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
+        self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
+        self.val_fc2 = nn.Linear(64, N)
+
+    def forward(self, state_input):
+        # common layers
+        x = F.relu(self.conv1(state_input))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+
+        # action policy layers
+        x_act = F.relu(self.act_conv1(x))
+        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
+        x_act = F.log_softmax(self.act_fc1(x_act), dim=1)
+
+        # state value layers
+        x_val = F.relu(self.val_conv1(x))
+        x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
+        x_val = F.relu(self.val_fc1(x_val))
+        x_val = F.tanh(self.val_fc2(x_val))
+        x_val = torch.mean(x_val, dim=1, keepdim=True)
+        return x_act, x_val
 
 
 class EQRAC(nn.Module):
@@ -212,7 +247,7 @@ class EQRAC(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
 
-        # action value layers
+        # action policy layers
         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
         self.act_fc1 = nn.Linear(4 * board_width * board_height,
                                  board_width * board_height)
@@ -297,7 +332,11 @@ class PolicyValueNet:
         self.use_gpu = device
 
         # the policy value net module
-        if rl_model == "AC":
+        if rl_model == "DQN": # [TODO]
+            self.policy_value_net = DQN(board_width, board_height).to(device)
+        elif rl_model == "QRDQN": # [TODO]
+            self.policy_value_net = QRDQN(board_width, board_height).to(device)
+        elif rl_model == "AC":
             self.policy_value_net = AC(board_width, board_height).to(device)
         elif rl_model == "AAC":
             self.policy_value_net = AAC(board_width, board_height).to(device)
@@ -321,28 +360,33 @@ class PolicyValueNet:
         state_batch = np.array(state_batch)
         state_batch = torch.from_numpy(state_batch).float().to(device)
         log_act_probs, value = self.policy_value_net(state_batch)
-        act_probs = np.exp(log_act_probs.cpu().detach().numpy())  # convert to numpy array (cpu
+        act_probs = np.exp(log_act_probs.cpu().detach().numpy())
         return act_probs, value.cpu().detach().numpy()
 
-    def policy_value_fn(self, board, sensible_move):
+    def policy_value_fn(self, board, sensible_move, k, value=None):
         """
         input: board
         output: a list of (action, probability) tuples for each available
         action and the score of the board state
         """
-        # [TODO] 여기
-        # available = np.where(board[3].flatten() == 0)[0]
         available = sensible_move
+        k = k   # [Todo] 여기 K는 나중에 AAC였나 EQRAC였나 거기서 비교해서 Quantiole k값을 늘려준다 그거임
         current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
         device = self.use_gpu
 
         current_state = torch.from_numpy(current_state).float().to(device)
-        log_act_probs, value = self.policy_value_net(current_state, sensible_move)
+        if self.rl_model == "DQN" or self.rl_model == "QRDQN":
+            # [TODO] 여기도 DQN만 만져놓은거라 더 수정되어야할것 DQN이니까 action probability만 필요해서 value뺌  QRDQN도 여기 들어가야하지 않을까
+            log_act_probs = self.policy_value_net(current_state, sensible_move)
+        else:
+            log_act_probs, value = self.policy_value_net(current_state, sensible_move)
         act_probs = np.exp(log_act_probs.cpu().detach().numpy().flatten())
-
         act_probs = zip(available, act_probs[available])
         # value = value.data[0][0]
-        return act_probs, value
+        if self.rl_model == "DQN" or self.rl_model == "QRDQN":
+            return act_probs
+        else:
+            return act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""

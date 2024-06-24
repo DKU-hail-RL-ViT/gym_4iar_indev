@@ -90,7 +90,7 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -104,13 +104,13 @@ class MCTS(object):
         self._policy = policy_value_fn
         self._c_puct = c_puct
         self._n_playout = n_playout
+        self.rl_model = rl_model
 
     def _playout(self, env, sensible_moves):  # obs.shape = (5,9,4)
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
-        # print('\t init playout')
         node = self._root
 
         while (1):
@@ -118,49 +118,54 @@ class MCTS(object):
                 break
             if len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) != len(node._children):
                 print('wt')
-
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
+
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
 
         threshold = 0.1
-        k=1
-        # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k)
-        while True:
-            action_probs, leaf_action_value = self._policy(env.state_,k)
-            # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
-            # get values of sensible_moves
-            leaf_action_value = leaf_action_value.flatten()
-            leaf_action_value = leaf_action_value[sensible_moves]
-            # compare max and second max of leaf_action_value
-            leaf_action_value.sorted()
-            if torch.abs(leaf_action_value[-1] - leaf_action_value[-2]) > threshold:
-                break
-            else:
-                k += 1
+        k = 1
+        # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분
 
-        # max leaf_action_value as leaf_value
-        leaf_action_value = leaf_action_value.max().item()  # [TODO] 이게 아마도 torch 로부터 나온 값이기 때문에 단순한 float 로 바꿔주는 코드가 한줄 더 있어야할거임
-        leaf_value = leaf_action_value
+        if self.rl_model == "DQN" or self.rl_model == "QRDQN":
+            action_probs = self._policy(env.state_, sensible_moves, k)
+            print(action_probs)
+        else:
+            while True:  # [TODO]  원래 여기 while 아니긴 함
+                action_probs, leaf_action_value = self._policy(env.state_, sensible_moves, k)
+                # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
+
+                # get values of sensible_moves
+                leaf_action_value = leaf_action_value.flatten()
+                leaf_action_value = leaf_action_value[sensible_moves]
+                # compare max and second max of leaf_action_value
+                leaf_action_value.sorted()
+                if torch.abs(leaf_action_value[-1] - leaf_action_value[-2]) > threshold:
+                    break
+                else:
+                    k += 1
+
+                # max leaf_action_value as leaf_value
+                leaf_action_value = leaf_action_value.max().item()
+                leaf_value = leaf_action_value
 
         # Check for end of game
         end, winners = env.winner()
 
         if not end:
-            # print("\t node expand")
             node.expand(action_probs)
         else:
-            # for end state，return the "true" leaf_value
             if winners == -1:  # tie
                 leaf_value = 0.0
             elif winners == env.turn():
                 leaf_value = 1.0
             else:
                 leaf_value = -1.0
-
             obs, _ = env.reset()
-        node.update_recursive(-leaf_value)
+
+        if not self.rl_model == "DQN" or self.rl_model == "QRDQN":
+            node.update_recursive(-leaf_value) # [TODO] DQN의 경우 leaf_value를 계산하지 않기 때문에 끝났을때만 leaf value 계산하는데
 
     def get_move_probs(self, env, temp, sensible_moves=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -197,12 +202,14 @@ class MCTS(object):
 class MCTSPlayer(object):
     """AI player based on MCTS"""
 
-    def __init__(self, policy_value_function, c_puct=5, n_playout=2000, is_selfplay=0, name=None, elo=None):
-        self.mcts = MCTS(policy_value_function, c_puct, n_playout)
+    def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
+                 is_selfplay=0, name=None, elo=None, rl_model=None):
+        self.mcts = MCTS(policy_value_function, c_puct, n_playout, rl_model=rl_model)
         self._is_selfplay = is_selfplay
         init_elo = 1500
         self.elo = elo if elo is not None else init_elo
         self.name = name
+        self.rl_model = rl_model
 
     def set_player_ind(self, p):
         self.player = p

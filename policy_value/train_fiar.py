@@ -21,9 +21,11 @@ parser.add_argument("--n_playout", type=int, default=100)  # compare with 2, 10,
 parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
+parser.add_argument("--rl_model", type=str, default="DQN")
+# parser.add_argument("--rl_model", type=str, default="QRDQN")
 # parser.add_argument("--rl_model", type=str, default="AC")
 # parser.add_argument("--rl_model", type=str, default="QRAC")
-parser.add_argument("--rl_model", type=str, default="AAC")
+# parser.add_argument("--rl_model", type=str, default="AAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
 
 """ MCTS parameter """
@@ -100,7 +102,6 @@ def get_equi_data(env, play_data):
         extend_data.append((equi_state_ver, equi_mcts_prob_ver.flatten(), winner))
 
     return extend_data
-
 
 
 def collect_selfplay_data(mcts_player, game_iter, n_games=100):
@@ -279,7 +280,6 @@ def start_play(env, player1, player2):
             current_player = 1 - current_player
             player_in_turn = players[current_player]
             player_in_turn.oppo_node_update(move)
-
         else:
             wandb.log({"Reward": reward[1]})
             obs, _ = env.reset()
@@ -288,15 +288,16 @@ def start_play(env, player1, player2):
 
 if __name__ == '__main__':
     # wandb intialize
-    if rl_model == "AC":
-        wandb.init(mode="online",
+    if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
                         "-Date" + str(datetime.datetime.now()),
                    config=args.__dict__
                    )
-    elif rl_model == "AAC":
+
+    elif rl_model == "QRAC" or rl_model == "QRDQN":
         wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
@@ -305,14 +306,6 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
 
-    elif rl_model == "QRAC":
-        wandb.init(mode="online",
-                   entity="hails",
-                   project="gym_4iar",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
-                        "-Date" + str(datetime.datetime.now()),
-                   config=args.__dict__
-                   )
     elif rl_model == "EQRAC":
         assert False, "Not implemented yet"
     else:
@@ -347,11 +340,8 @@ if __name__ == '__main__':
                                           quantiles, rl_model=rl_model)
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
-    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn,
-                                  c_puct,
-                                  n_playout,
-                                  is_selfplay=1)
-
+    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
+                                  is_selfplay=1, rl_model=rl_model)
     data_buffer_training_iters = deque(maxlen=20)
 
     try:
@@ -369,37 +359,36 @@ if __name__ == '__main__':
                 """make mcts agent training, eval version"""
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
 
-                if rl_model == "AC":
+                if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
                     model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(model_file)
-
                     eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(eval_model_file)
-                elif rl_model == "QRAC":
-                    model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"  # training version train_001
-                    policy_value_net.save_model(model_file)
 
-                    eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"  # eval version train_001
+                elif rl_model == "QRDQN" or rl_model == "QRAC":
+                    model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
+                    policy_value_net.save_model(model_file)
+                    eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(eval_model_file)
 
                 elif rl_model == "EQRAC":
                     assert False, "Not implemented yet"
 
             else:
-                if rl_model == "AC":
+                if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
 
-                elif rl_model == "QRAC":
+                elif rl_model == "QRDQN" or rl_model == "QRAC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in
-                                      os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
+                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
-                    best_old_model = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{old_i:03d}.pth"
+                    best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
+
                 elif rl_model == "EQRAC":
                     assert False, "Not implemented yet"
                 else:
@@ -407,15 +396,17 @@ if __name__ == '__main__':
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantiles,
                                                       best_old_model, rl_model=rl_model)
 
-                curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, is_selfplay=0)
-                old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, is_selfplay=0)
+                curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
+                                              is_selfplay=0, rl_model=rl_model)
+                old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout,
+                                             is_selfplay=0, rl_model=rl_model)
                 win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
                 if (i + 1) % 10 == 0:  # save model 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 (1+10 : total 11)
-                    if rl_model == "AC":
+                    if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
                         eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                         policy_value_net.save_model(eval_model_file)
-                    elif rl_model == "QRAC":
+                    elif rl_model == "QRDQN" or rl_model == "QRAC":
                         eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                         policy_value_net.save_model(eval_model_file)
                     elif rl_model == "EQRAC":
@@ -426,9 +417,9 @@ if __name__ == '__main__':
 
                 if win_ratio > 0.5:
                     old_mcts_player = curr_mcts_player
-                    if rl_model == "AC":
+                    if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
                         model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-                    elif rl_model == "QRAC":
+                    elif rl_model == "QRDQN" or rl_model == "QRAC":
                         model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                     elif rl_model == "EQRAC":
                         assert False, "Not implemented yet"
