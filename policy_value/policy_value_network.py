@@ -332,9 +332,7 @@ class PolicyValueNet:
 
         current_state = torch.from_numpy(current_state).float().to(device)
         log_act_probs, value = self.policy_value_net(current_state, sensible_move)
-        # log_act_probs = log_act_probs.cpu()
         act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
-        # act_probs = np.exp(log_act_probs.cpu().detach().numpy().flatten())
         act_probs = zip(available, act_probs[available])
 
         if self.rl_model == "DQN" or "QRDQN": # [TODO] 이 2개만 이렇게 받아야하는지 잘 모르겠음. 더 추가해야할 수
