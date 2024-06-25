@@ -2,7 +2,7 @@ import numpy as np
 import copy
 import torch
 import random
-
+from fiar_env import Fiar, action2d_ize
 # from policy_value.policy_value_network import AC, DQN, QRDQN, Net
 
 
@@ -105,32 +105,45 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
         self.rl_model = rl_model
+        self.env = Fiar()
 
-    def _playout(self, env, sensible_moves):  # obs.shape = (5,9,4)
+    def _playout(self, env, state, sensible_moves):  # obs.shape = (5,9,4)
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
         leaf_value = None
-
+        original_children = node._children.copy()
         while (1):
             if node.is_leaf():
                 break
             if len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) != len(node._children):
-                print('wt')
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
+                AssertionError("wt")
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            del node._children[action]
+            # if node._children.items() == None:
+            #     print("hello")
+            # else:
+            #     print("wtf")
+            if node._children is not None and action in node._children: # [TODO] 그냥 node select하면서 싹다 node.children이 없어져서 이 줄이 필요없겠는둪ㅍ
+                del node._children[action]  # [TODO] 일단 mcts에서 node._children이 없어지는건 제대로 작동됨. 문제가 어디냐 env.stepdㅣ 안되고 있었음.
+                #[Todo] env가 들어올자리에 state가 들어오고 그랬던거 같음
+
+            move = action2d_ize(action)
             obs, reward, terminated, info = env.step(action)
 
+            print(obs)
+
+
+        # [TODO] 만약 leaf 상태까지 가면 다시 children들이 필요하니까 이렇게 만들어줬는데 이게 맞는지는 잘 모르겠ㅔ
+        # node._children = original_children.copy()
         threshold = 0.1
         k = 1
         # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
 
-        if self.rl_model == "DQN" or self.rl_model == "QRDQN":
+        if self.rl_model == "DQN" or "QRDQN": # [TODO] 여기도 수정되어야할거
             action_probs, leaf_value = self._policy(env.state_, sensible_moves)
         elif self.rl_model == "AC" or self.rl_model == "QRAC":
             action_probs, leaf_value = self._policy(env.state_, sensible_moves)
@@ -176,7 +189,7 @@ class MCTS(object):
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):  # for 400 times
-            self._playout(copy.deepcopy(env), sensible_moves)  # state_copy.shape = (5,9,4)
+            self._playout(env, copy.deepcopy(env.state_), sensible_moves)  # state_copy.shape = (5,9,4)
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)

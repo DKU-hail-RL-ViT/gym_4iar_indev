@@ -288,7 +288,7 @@ def start_play(env, player1, player2):
 
 if __name__ == '__main__':
     # wandb intialize
-    if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
+    if rl_model == "DQN" or "AC" or "AAC":
         wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
