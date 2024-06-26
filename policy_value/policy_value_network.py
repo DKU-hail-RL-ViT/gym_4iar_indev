@@ -82,7 +82,7 @@ class AC(nn.Module):
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.val_fc2 = nn.Linear(64, 1)
 
-    def forward(self, state_input):
+    def forward(self, state_input, sensible_move=None):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -331,10 +331,9 @@ class PolicyValueNet:
         device = self.use_gpu
 
         current_state = torch.from_numpy(current_state).float().to(device)
-        log_act_probs, value = self.policy_value_net(current_state, sensible_move)
+        log_act_probs, value = self.policy_value_net(current_state, sensible_move) # [TODO] AC에서 sensible_move
         act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
         act_probs = zip(available, act_probs[available])
-
         if self.rl_model == "DQN" or "QRDQN": # [TODO] 이 2개만 이렇게 받아야하는지 잘 모르겠음. 더 추가해야할 수
             value = value.data[0][0]
 

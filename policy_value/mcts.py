@@ -40,10 +40,14 @@ class TreeNode(object):
         plus bonus u(P).
         Return: A tuple of (action, next_node)
         """
+        print("*",len(self._children.items()))
         action, i_node = max(self._children.items(),
                              key=lambda act_node: act_node[1].get_value(c_puct))
-        if self._children == {}:
-            print('empty')
+        # [TODO] 여기에 만약에 children이 비어있지 않다면 children의 action을 지워버리는건?
+        # [TODO] 어차피 node.select이후에 children개수가 없어지는건 맞는거 같은데
+        # [TODO ] 엄
+        print(len(self._children.items()), "*")
+
         return action, i_node
 
     def update(self, leaf_value):
@@ -107,38 +111,32 @@ class MCTS(object):
         self.rl_model = rl_model
         self.env = Fiar()
 
-    def _playout(self, env, state, sensible_moves):  # obs.shape = (5,9,4)
+    def _playout(self, env, sensible_moves, state=None):  # obs.shape = (5,9,4)
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
+        obs, _ = env.reset() # each playout apply init
         node = self._root
         leaf_value = None
-        original_children = node._children.copy()
+        # copy.deepcopy(node._children.items())
         while (1):
             if node.is_leaf():
                 break
-            if len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) != len(node._children):
-                AssertionError("wt")
+            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
+            print(len(node._children))
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            # if node._children.items() == None:
-            #     print("hello")
-            # else:
-            #     print("wtf")
-            if node._children is not None and action in node._children: # [TODO] 그냥 node select하면서 싹다 node.children이 없어져서 이 줄이 필요없겠는둪ㅍ
-                del node._children[action]  # [TODO] 일단 mcts에서 node._children이 없어지는건 제대로 작동됨. 문제가 어디냐 env.stepdㅣ 안되고 있었음.
-                #[Todo] env가 들어올자리에 state가 들어오고 그랬던거 같음
+            if node._children is not None and action in node._children:
+                del node._children[action]
+            # [TODO] 여기에서 만약에 node children이 비어있지 않다면 해당 action을 지우도록 만들어야겠는 걸
+            print(len(node._children))
 
-            move = action2d_ize(action)
             obs, reward, terminated, info = env.step(action)
-
-            print(obs)
-
+            # print(action)
 
         # [TODO] 만약 leaf 상태까지 가면 다시 children들이 필요하니까 이렇게 만들어줬는데 이게 맞는지는 잘 모르겠ㅔ
-        # node._children = original_children.copy()
         threshold = 0.1
         k = 1
         # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
@@ -189,12 +187,13 @@ class MCTS(object):
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):  # for 400 times
-            self._playout(env, copy.deepcopy(env.state_), sensible_moves)  # state_copy.shape = (5,9,4)
+            # state_copy = copy.deepcopy(env.init_state)  # [TODO] 매번 initialize된 state로 들어감
+            # self._playout(env, state_copy, sensible_moves)  # state_copy.shape = (5,9,4)
+            self._playout(env, sensible_moves)
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
                       for act, node in self._root._children.items()]
-
         acts, visits = zip(*act_visits)
         act_probs = softmax(1.0 / temp * np.log(np.array(visits) + 1e-10))
 
