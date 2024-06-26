@@ -21,9 +21,9 @@ parser.add_argument("--n_playout", type=int, default=100)  # compare with 2, 10,
 parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
-parser.add_argument("--rl_model", type=str, default="DQN")
+# parser.add_argument("--rl_model", type=str, default="DQN")
 # parser.add_argument("--rl_model", type=str, default="QRDQN")
-# parser.add_argument("--rl_model", type=str, default="AC")
+parser.add_argument("--rl_model", type=str, default="AC")
 # parser.add_argument("--rl_model", type=str, default="QRAC")
 # parser.add_argument("--rl_model", type=str, default="AAC")
 # parser.add_argument("--rl_model", type=str, default="EQRAC")
