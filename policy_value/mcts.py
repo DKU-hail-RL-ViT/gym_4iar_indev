@@ -111,7 +111,7 @@ class MCTS(object):
         self.rl_model = rl_model
         self.env = Fiar()
 
-    def _playout(self, env, sensible_moves, state=None):  # obs.shape = (5,9,4)
+    def _playout(self, env, state=None):  # obs.shape = (5,9,4)
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
@@ -130,6 +130,8 @@ class MCTS(object):
             action, node = node.select(self._c_puct)
             if node._children is not None and action in node._children:
                 del node._children[action]
+
+
             # [TODO] 여기에서 만약에 node children이 비어있지 않다면 해당 action을 지우도록 만들어야겠는 걸
             print(len(node._children))
 
@@ -139,6 +141,7 @@ class MCTS(object):
         # [TODO] 만약 leaf 상태까지 가면 다시 children들이 필요하니까 이렇게 만들어줬는데 이게 맞는지는 잘 모르겠ㅔ
         threshold = 0.1
         k = 1
+        sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
         # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
 
         if self.rl_model == "DQN" or "QRDQN": # [TODO] 여기도 수정되어야할거
@@ -189,7 +192,7 @@ class MCTS(object):
         for n in range(self._n_playout):  # for 400 times
             # state_copy = copy.deepcopy(env.init_state)  # [TODO] 매번 initialize된 state로 들어감
             # self._playout(env, state_copy, sensible_moves)  # state_copy.shape = (5,9,4)
-            self._playout(env, sensible_moves)
+            self._playout(env)
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
