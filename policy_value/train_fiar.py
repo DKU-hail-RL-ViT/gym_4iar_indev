@@ -130,7 +130,7 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
     return data_buffer
 
 
-def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
+def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None, move_probs=None):
 
     obs, _ = env.reset()
     states, mcts_probs, current_player = [], [], []
@@ -142,9 +142,6 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     obs_post[1] = obs[player_1]
     obs_post[2] = np.zeros_like(obs[0])
     obs_post[3] = obs[player_0] + obs[player_1]
-
-    move = None
-    move_probs = None
 
     while True:
         while True:

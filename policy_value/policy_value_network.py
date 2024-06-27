@@ -319,24 +319,23 @@ class PolicyValueNet:
         act_probs = np.exp(log_act_probs.cpu().detach().numpy())
         return act_probs, value.cpu().detach().numpy()
 
-    def policy_value_fn(self, board, sensible_move, k=None, value=None):
+    def policy_value_fn(self, env, k=None):
         """
         input: board
         output: a list of (action, probability) tuples for each available
         action and the score of the board state
         """
-        available = sensible_move
+        available = np.where(env.state_[3].flatten() == 0)[0] # [TODO] 여기 제대로 찍히는 지 확인할 필요가 있을듯
         k = k   # [Todo] 여기 K는 나중에 AAC였나 EQRAC였나 거기서 비교해서 Quantiole k값을 늘려준다 그거임
-        current_state = np.ascontiguousarray(board.reshape(-1, 5, board.shape[1], board.shape[2]))
+        current_state = np.ascontiguousarray(env.state_.reshape(-1, 5, env.state_.shape[1], env.state_.shape[2]))
         device = self.use_gpu
 
         current_state = torch.from_numpy(current_state).float().to(device)
-        log_act_probs, value = self.policy_value_net(current_state, sensible_move) # [TODO] AC에서 sensible_move
+        log_act_probs, value = self.policy_value_net(current_state, available) # [TODO] available이 필요없을 수도 있는데 일단 줘봄
         act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
         act_probs = zip(available, act_probs[available])
-        if self.rl_model == "DQN" or "QRDQN": # [TODO] 이 2개만 이렇게 받아야하는지 잘 모르겠음. 더 추가해야할 수
+        if self.rl_model == "DQN" or "QRDQN": # [TODO] 이 2개만 value.data[0][0]이렇게 받아야하는지 잘 모르겠음.
             value = value.data[0][0]
-
         return act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
