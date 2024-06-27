@@ -123,14 +123,16 @@ class MCTS(object):
         while (1):
             if node.is_leaf():
                 break
+            if len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) != len(node._children):
+                print("hell")
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
+
             print(len(node._children))
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            if node._children is not None and action in node._children:
-                del node._children[action]
-
+            # if node._children is not None and action in node._children:
+            #     del node._children[action]
 
             # [TODO] 여기에서 만약에 node children이 비어있지 않다면 해당 action을 지우도록 만들어야겠는 걸
             print(len(node._children))
@@ -144,10 +146,9 @@ class MCTS(object):
         sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
         # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
 
-        if self.rl_model == "DQN" or "QRDQN": # [TODO] 여기도 수정되어야할거
+        if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC": # [TODO] 여기도 수정되어야할거
             action_probs, leaf_value = self._policy(env.state_, sensible_moves)
-        elif self.rl_model == "AC" or self.rl_model == "QRAC":
-            action_probs, leaf_value = self._policy(env.state_, sensible_moves)
+
         else:
             while True: # [TODO] 여기도 나눠져야 할 것
                 action_probs, leaf_action_value = self._policy(env.state_, sensible_moves, k)
@@ -193,6 +194,13 @@ class MCTS(object):
             # state_copy = copy.deepcopy(env.init_state)  # [TODO] 매번 initialize된 state로 들어감
             # self._playout(env, state_copy, sensible_moves)  # state_copy.shape = (5,9,4)
             self._playout(env)
+            # [TODO] 매번 initialize된 state로 들어가는게 아니라 처음엔 initialize된 state로 playout 100번하고.
+            # [TODO] 그 다음엔 그걸 env.step 한걸 state로 받아서 playout 100번하고 저장하고,
+            # [TODO] 당장 보기엔 이 밑의 코드는 수정할 필요 없을 거 같음.
+            # [TODO] 위에서 env.state를 받아서 copy.deepcopy를 쓰든 해서 playout에 env만 주면 안될거 같음.
+            # [TODO] 보기엔 copy해서 안주니까 env의 state가 그대로 저장되어서 self_play할때도 그 state가 유지되는거 같음
+            # [TODO] 그래서 아마 playout내에서 env말고 env_ 이런걸로 변형해서 만들어야 충돌 문제가 생기지 않을까 하는 생각임
+
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
