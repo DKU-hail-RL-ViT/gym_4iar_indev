@@ -121,6 +121,7 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
             rewards = 0
         win_cnt[rewards] += 1
 
+    # [TODO] self_play 내에서 얼마나 승리하는 지
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("\n ---------- Self-Play win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     print("Win rate : ", round(win_ratio * 100, 3), "%")
@@ -161,7 +162,6 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
 
         player_0 = turn(env.state_)
         player_1 = 1 - player_0
-
 
         obs_post[0] = obs[player_0]
         obs_post[1] = obs[player_1]
@@ -348,7 +348,7 @@ if __name__ == '__main__':
         for i in range(training_iterations):
             # collect self-play data each iteration 100 games
             best_old_model = None
-            data_buffer_each = collect_selfplay_data(curr_mcts_player, i, self_play_sizes)
+            data_buffer_each = collect_selfplay_data(curr_mcts_player, i, self_play_sizes) # 100 times
             data_buffer_training_iters.append(data_buffer_each)
             loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
                                                                            policy_value_net=policy_value_net,
