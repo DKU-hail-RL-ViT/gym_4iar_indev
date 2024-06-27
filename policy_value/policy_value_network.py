@@ -295,7 +295,7 @@ class PolicyValueNet:
         elif rl_model == "AC":
             self.policy_value_net = AC(board_width, board_height).to(device)
         elif rl_model == "AAC":
-            self.policy_value_net = AAC(board_width, board_height).to(device)
+            self.policy_value_net = QRAC(board_width, board_height).to(device)
         elif rl_model == "QRAC":
             self.policy_value_net = AAC(board_width, board_height, quantiles).to(device)
         elif rl_model == "EQRAC":
@@ -325,16 +325,17 @@ class PolicyValueNet:
         output: a list of (action, probability) tuples for each available
         action and the score of the board state
         """
-        available = np.where(env.state_[3].flatten() == 0)[0] # [TODO] 여기 제대로 찍히는 지 확인할 필요가 있을듯
+        available = np.where(env.state_[3].flatten() == 0)[0]
         k = k   # [Todo] 여기 K는 나중에 AAC였나 EQRAC였나 거기서 비교해서 Quantiole k값을 늘려준다 그거임
         current_state = np.ascontiguousarray(env.state_.reshape(-1, 5, env.state_.shape[1], env.state_.shape[2]))
         device = self.use_gpu
 
         current_state = torch.from_numpy(current_state).float().to(device)
-        log_act_probs, value = self.policy_value_net(current_state, available) # [TODO] available이 필요없을 수도 있는데 일단 줘봄
+        # [TODO] policy_value_net에다가 available이 필요없을 수도 있는데 일단 줘봄
+        log_act_probs, value = self.policy_value_net(current_state, available)
         act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
         act_probs = zip(available, act_probs[available])
-        if self.rl_model == "DQN" or "QRDQN": # [TODO] 이 2개만 value.data[0][0]이렇게 받아야하는지 잘 모르겠음.
+        if self.rl_model == "DQN" or "QRDQN": # [TODO] 이 2개만 value.data[0][0]이렇게 받아야하는지 잘 모르겠음. 확인할 필요
             value = value.data[0][0]
         return act_probs, value
 

@@ -219,7 +219,7 @@ class MCTSPlayer(object):
         if self.mcts._root.children == {}:
             return False
 
-    def get_action(self, env, temp=0.1, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
         # the pi vector returned by MCTS as in the alphaGo Zero paper
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])

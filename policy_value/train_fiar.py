@@ -39,7 +39,7 @@ parser.add_argument("--temp", type=float, default=1.0)
 
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)  # previous 64
-parser.add_argument("--learn_rate", type=float, default=5e-4)
+parser.add_argument("--learn_rate", type=float, default=5e-4) # [FIXME] defalut 2e-3, learning rate가 계속 상승하고 있음
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
@@ -121,7 +121,6 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
             rewards = 0
         win_cnt[rewards] += 1
 
-    # [TODO] self_play 내에서 얼마나 승리하는 지
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("\n ---------- Self-Play win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     print("Win rate : ", round(win_ratio * 100, 3), "%")
@@ -131,11 +130,10 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
 
 
 def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None, move_probs=None):
-
     obs, _ = env.reset()
     states, mcts_probs, current_player = [], [], []
 
-    player_0 = 0  # previous : turn(obs)
+    player_0 = 0
     player_1 = 1 - player_0
 
     obs_post[0] = obs[player_0]
@@ -144,11 +142,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None
     obs_post[3] = obs[player_0] + obs[player_1]
 
     while True:
-        while True:
-            move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
-            action2d = action2d_ize(move)
-            if env.state_[3, action2d[0], action2d[1]] == 0.0:
-                break
+        move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
 
         # store the data
         states.append(obs_post.copy())
@@ -159,7 +153,6 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None
 
         player_0 = turn(env.state_)
         player_1 = 1 - player_0
-
         obs_post[0] = obs[player_0]
         obs_post[1] = obs[player_1]
         obs_post[2] = np.zeros_like(obs[0])
@@ -181,7 +174,6 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None
             if winners != -1:  # non draw
                 if winners == -0.5:  # when win white player adjust to 0
                     winners = 0
-
                 # if winner is current player, winner_z = 1
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
@@ -253,7 +245,7 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     return win_ratio, training_mcts_player
 
 
-def start_play(env, player1, player2):
+def start_play(env, player1, player2, move=None): # [TODO] 여기도 고쳐야할 부분 있을것
     """start a game between two players"""
     obs, _ = env.reset()
     players = [0, 1]
@@ -262,13 +254,11 @@ def start_play(env, player1, player2):
     player2.set_player_ind(p2)
     players = {p1: player1, p2: player2}
     current_player = 0
-    move = None
     player_in_turn = players[current_player]
 
     while True:
         # synchronize the MCTS tree with the current state of the game
-        # self-play temp=1.0, eval temp=1e-3
-        move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)
+        move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)  # self-play temp=1.0, eval temp=1e-3
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
@@ -276,7 +266,7 @@ def start_play(env, player1, player2):
         if not end:
             current_player = 1 - current_player
             player_in_turn = players[current_player]
-            player_in_turn.oppo_node_update(move)
+            # player_in_turn.oppo_node_update(move)
         else:
             wandb.log({"Reward": reward[1]})
             obs, _ = env.reset()
@@ -294,7 +284,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
 
-    elif rl_model == "QRAC" or rl_model == "QRDQN":
+    elif rl_model == "QRAC" or "QRDQN" or "EQRAC":
         wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
@@ -302,9 +292,6 @@ if __name__ == '__main__':
                         "-Date" + str(datetime.datetime.now()),
                    config=args.__dict__
                    )
-
-    elif rl_model == "EQRAC":
-        assert False, "Not implemented yet"
     else:
         assert False, "don't have model"
 
