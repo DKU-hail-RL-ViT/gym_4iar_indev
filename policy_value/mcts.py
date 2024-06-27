@@ -40,15 +40,8 @@ class TreeNode(object):
         plus bonus u(P).
         Return: A tuple of (action, next_node)
         """
-        print("*",len(self._children.items()))
-        action, i_node = max(self._children.items(),
-                             key=lambda act_node: act_node[1].get_value(c_puct))
-        # [TODO] 여기에 만약에 children이 비어있지 않다면 children의 action을 지워버리는건?
-        # [TODO] 어차피 node.select이후에 children개수가 없어지는건 맞는거 같은데
-        # [TODO ] 엄
-        print(len(self._children.items()), "*")
-
-        return action, i_node
+        return max(self._children.items(),
+                   key=lambda act_node: act_node[1].get_value(c_puct))
 
     def update(self, leaf_value):
         """Update node values from leaf evaluation.
@@ -111,32 +104,21 @@ class MCTS(object):
         self.rl_model = rl_model
         self.env = Fiar()
 
-    def _playout(self, env, state=None):  # obs.shape = (5,9,4)
+    def _playout(self, env, leaf_value=None):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
-        obs, _ = env.reset() # each playout apply init
         node = self._root
-        leaf_value = None
-        # copy.deepcopy(node._children.items())
-        while (1):
+        while(1):
             if node.is_leaf():
                 break
             if len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) != len(node._children):
                 print("hell")
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
-
-            print(len(node._children))
+            # assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
-            # if node._children is not None and action in node._children:
-            #     del node._children[action]
-
-            # [TODO] 여기에서 만약에 node children이 비어있지 않다면 해당 action을 지우도록 만들어야겠는 걸
-            print(len(node._children))
-
             obs, reward, terminated, info = env.step(action)
             # print(action)
 
@@ -146,9 +128,8 @@ class MCTS(object):
         sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
         # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
 
-        if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC": # [TODO] 여기도 수정되어야할거
-            action_probs, leaf_value = self._policy(env.state_, sensible_moves)
-
+        if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC":
+            action_probs, leaf_value = self._policy(env)  # [TODO] 여기 그냥 env만 주면 되는거 아닌가
         else:
             while True: # [TODO] 여기도 나눠져야 할 것
                 action_probs, leaf_action_value = self._policy(env.state_, sensible_moves, k)
@@ -184,23 +165,15 @@ class MCTS(object):
 
         node.update_recursive(-leaf_value)
 
-    def get_move_probs(self, env, temp, sensible_moves=None):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):  # for 400 times
-            # state_copy = copy.deepcopy(env.init_state)  # [TODO] 매번 initialize된 state로 들어감
-            # self._playout(env, state_copy, sensible_moves)  # state_copy.shape = (5,9,4)
-            self._playout(env)
-            # [TODO] 매번 initialize된 state로 들어가는게 아니라 처음엔 initialize된 state로 playout 100번하고.
-            # [TODO] 그 다음엔 그걸 env.step 한걸 state로 받아서 playout 100번하고 저장하고,
-            # [TODO] 당장 보기엔 이 밑의 코드는 수정할 필요 없을 거 같음.
-            # [TODO] 위에서 env.state를 받아서 copy.deepcopy를 쓰든 해서 playout에 env만 주면 안될거 같음.
-            # [TODO] 보기엔 copy해서 안주니까 env의 state가 그대로 저장되어서 self_play할때도 그 state가 유지되는거 같음
-            # [TODO] 그래서 아마 playout내에서 env말고 env_ 이런걸로 변형해서 만들어야 충돌 문제가 생기지 않을까 하는 생각임
-
+            env_copy = copy.deepcopy(env)  # [TODO] 이 줄에서 복사 잘못하고
+            self._playout(env_copy)  # [TODO] playout에 들어가는 재료가 잘못되어서 node의 children에서 에러가 발생했던 것
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -247,13 +220,12 @@ class MCTSPlayer(object):
             return False
 
     def get_action(self, env, temp=0.1, return_prob=0):  # env.state_.shape = (5,9,4)
-        available = np.where(env.state_[3].flatten() == 0)[0]
-        sensible_moves = available
+        sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
         # the pi vector returned by MCTS as in the alphaGo Zero paper
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, temp, sensible_moves)  # board.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
 
             if self._is_selfplay:
@@ -262,12 +234,11 @@ class MCTSPlayer(object):
                     acts,
                     p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
                 )
-                # # update the root node and reuse the search tree
+                # update the root node and reuse the search tree
                 self.mcts.update_with_move(move)
             else:
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
-                assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(self.mcts._root.children)
                 self.mcts.update_with_move(-1)
 
             if return_prob:
