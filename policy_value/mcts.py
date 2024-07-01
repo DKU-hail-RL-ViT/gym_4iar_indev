@@ -113,26 +113,24 @@ class MCTS(object):
         while(1):
             if node.is_leaf():
                 break
-            if len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) != len(node._children):
-                print("hell")
-            # assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
-
+            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
-            # print(action)
 
-        # [TODO] 만약 leaf 상태까지 가면 다시 children들이 필요하니까 이렇게 만들어줬는데 이게 맞는지는 잘 모르겠ㅔ
         threshold = 0.1
         k = 1
         sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
         # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
 
-        if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC":
-            action_probs, leaf_value = self._policy(env)  # [TODO] 여기 그냥 env만 주면 되는거 아닌가
-        else:
-            while True: # [TODO] 여기도 나눠져야 할 것
-                action_probs, leaf_action_value = self._policy(env.state_, sensible_moves, k)
+        if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC": # leaf value가 scalar로 들어가는 얘들은 여기로
+            action_probs, leaf_value = self._policy(env)
+        elif self.rl_model == "AAC" or "QRAAC": # leaf value가 action value 로 나오는 얘들은 여기로
+            action_probs, leaf_value = self._policy(env)
+            # [TODO]
+        else:  # "EQRDQN", "EQRAAC"
+            while True:
+                action_probs, leaf_action_value = self._policy(env, sensible_moves, k)
                 # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
 
                 # get values of sensible_moves
@@ -172,8 +170,8 @@ class MCTS(object):
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
         for n in range(self._n_playout):  # for 400 times
-            env_copy = copy.deepcopy(env)  # [TODO] 이 줄에서 복사 잘못하고
-            self._playout(env_copy)  # [TODO] playout에 들어가는 재료가 잘못되어서 node의 children에서 에러가 발생했던 것
+            env_copy = copy.deepcopy(env)
+            self._playout(env_copy)
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -227,7 +225,6 @@ class MCTSPlayer(object):
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
-
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)
                 move = np.random.choice(
@@ -240,85 +237,81 @@ class MCTSPlayer(object):
                 move = np.random.choice(acts, p=probs)
                 # reset the root node
                 self.mcts.update_with_move(-1)
-
             if return_prob:
                 return move, move_probs
             else:
                 return move
         else:
             print("WARNING: the board is full")
-
-    def oppo_node_update(self, move):
-        self.mcts.update_with_move(move)
 
     def __str__(self):
         return "training MCTS {}".format(self.player)
 
 
-class MCTSPlayer_leaf(object):
-    """Force the transition to the tree node even during self-play."""
-    """AI player based on MCTS"""
+# class MCTSPlayer_leaf(object):
+#     """Force the transition to the tree node even during self-play."""
+#     """AI player based on MCTS"""
+#
+#     def __init__(self, policy_value_fn, c_puct=5, n_playout=2000, is_selfplay=0):
+#         self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
+#         self._is_selfplay = is_selfplay
+#
+#     def set_player_ind(self, p):
+#         self.player = p
+#
+#     def reset_player(self):
+#         self.mcts.update_with_move(-1)
+#
+#     def get_action(self, env, temp=0.1, return_prob=0):  # env.state_.shape = (5,9,4)
+#         available = np.where(env.state_[3].flatten() == 0)[0]
+#         sensible_moves = available
+#         # the pi vector returned by MCTS as in the alphaGo Zero paper
+#         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
+#
+#         if len(sensible_moves) > 0:
+#             acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
+#             move_probs[list(acts)] = probs
+#
+#             if self._is_selfplay:
+#                 # add Dirichlet Noise for exploration (needed for self-play training)
+#                 move = np.random.choice(
+#                     acts,
+#                     p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
+#                 )
+#                 # update the root node and reuse the search tree
+#                 self.mcts.update_with_move(-1)
+#             else:
+#                 move = np.random.choice(acts, p=probs)
+#                 # reset the root node
+#                 assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(self.mcts._root.children)
+#                 self.mcts.update_with_move(-1)
+#
+#             if return_prob:
+#                 return move, move_probs
+#             else:
+#                 return move
+#         else:
+#             print("WARNING: the board is full")
+#
+#     def oppo_node_update(self, move):
+#         # 원래는 없없던 코드
+#         self.mcts.update_with_move(move)
+#
+#     def __str__(self):
+#         return "forcing leaf node MCTS {}".format(self.player)
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=2000, is_selfplay=0):
-        self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
-        self._is_selfplay = is_selfplay
 
-    def set_player_ind(self, p):
-        self.player = p
-
-    def reset_player(self):
-        self.mcts.update_with_move(-1)
-
-    def get_action(self, env, temp=0.1, return_prob=0):  # env.state_.shape = (5,9,4)
-        available = np.where(env.state_[3].flatten() == 0)[0]
-        sensible_moves = available
-        # the pi vector returned by MCTS as in the alphaGo Zero paper
-        move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
-
-        if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
-            move_probs[list(acts)] = probs
-
-            if self._is_selfplay:
-                # add Dirichlet Noise for exploration (needed for self-play training)
-                move = np.random.choice(
-                    acts,
-                    p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
-                )
-                # update the root node and reuse the search tree
-                self.mcts.update_with_move(-1)
-            else:
-                move = np.random.choice(acts, p=probs)
-                # reset the root node
-                assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(self.mcts._root.children)
-                self.mcts.update_with_move(-1)
-
-            if return_prob:
-                return move, move_probs
-            else:
-                return move
-        else:
-            print("WARNING: the board is full")
-
-    def oppo_node_update(self, move):
-        # 원래는 없없던 코드
-        self.mcts.update_with_move(move)
-
-    def __str__(self):
-        return "forcing leaf node MCTS {}".format(self.player)
-
-
-class RandomAction(object):
-
-    def set_player_ind(self, p):
-        self.player = p
-
-    def get_action(self, env):
-        available = [i for i in range(36) if env.state_[3][i // 4][i % 4] != 1]
-        sensible_moves = available
-
-        if len(sensible_moves) > 0:
-            move = random.choice(sensible_moves)
-            return move
-        else:
-            print("WARNING: the board is full")
+# class RandomAction(object):
+#
+#     def set_player_ind(self, p):
+#         self.player = p
+#
+#     def get_action(self, env):
+#         available = [i for i in range(36) if env.state_[3][i // 4][i % 4] != 1]
+#         sensible_moves = available
+#
+#         if len(sensible_moves) > 0:
+#             move = random.choice(sensible_moves)
+#             return move
+#         else:
+#             print("WARNING: the board is full")

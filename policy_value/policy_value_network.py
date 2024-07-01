@@ -31,7 +31,7 @@ class DQN(nn.Module):
         self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions)
-        #
+        # action value
         self.val_fc2 = nn.Linear(64, 1)
 
     def forward(self, state_input, sensible_moves):  # [TODO] 여기 action masking 한거 input으로 넣어줘야함
@@ -55,7 +55,7 @@ class DQN(nn.Module):
         x_acts = torch.where(x_acts == float('inf'), -torch.inf, x_acts)  # [TODO] DQN에서 이렇게 해도 될지 모르겠음
         x_acts = F.log_softmax(x_acts, dim=1)
 
-        # action value
+        # return action value
         x_val = F.tanh(self.val_fc2(x_act))
 
         return x_acts, x_val
@@ -162,7 +162,7 @@ class AAC(nn.Module):  # action value actor critic
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.val_fc2 = nn.Linear(64, board_width * board_height)
 
-    def forward(self, state_input, k):
+    def forward(self, state_input):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -184,7 +184,6 @@ class AAC(nn.Module):  # action value actor critic
         x_val = torch.where(x_val == float('inf'), -torch.inf, x_val)
 
         return x_act, x_val
-
 
 
 class EQRAC(nn.Module):
@@ -287,19 +286,26 @@ class PolicyValueNet:
             device = torch.device("cpu")
         self.use_gpu = device
 
+        # DQN, QRDQN, AC, AAC, QRAC, QRAAC, EQRDQN, DQRAAC
         # the policy value net module
         if rl_model == "DQN": # [TODO]
             self.policy_value_net = DQN(board_width, board_height).to(device)
-        elif rl_model == "QRDQN": # [TODO]
+        elif rl_model == "QRDQN":  # [TODO]
             self.policy_value_net = QRDQN(board_width, board_height).to(device)
         elif rl_model == "AC":
             self.policy_value_net = AC(board_width, board_height).to(device)
         elif rl_model == "AAC":
-            self.policy_value_net = QRAC(board_width, board_height).to(device)
+            self.policy_value_net = AAC(board_width, board_height).to(device)
         elif rl_model == "QRAC":
-            self.policy_value_net = AAC(board_width, board_height, quantiles).to(device)
-        elif rl_model == "EQRAC":
-            self.policy_value_net = EQRAC(board_width, board_height, quantiles).to(device)
+            self.policy_value_net = QRAC(board_width, board_height).to(device)
+        elif rl_model == "QRAAC":
+            self.policy_value_net = QRAAC(board_width, board_height).to(device)
+        elif rl_model == "EQRAAC":
+            self.policy_value_net = EQRAAC(board_width, board_height, quantiles).to(device)
+        elif rl_model == "DQRAAC":
+            self.policy_value_net = DQRAAC(board_width, board_height, quantiles).to(device)
+        else:
+            assert print("error")
 
         self.optimizer = optim.Adam(self.policy_value_net.parameters(),
                                     weight_decay=self.l2_const)
@@ -335,8 +341,8 @@ class PolicyValueNet:
         log_act_probs, value = self.policy_value_net(current_state, available)
         act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
         act_probs = zip(available, act_probs[available])
-        if self.rl_model == "DQN" or "QRDQN": # [TODO] 이 2개만 value.data[0][0]이렇게 받아야하는지 잘 모르겠음. 확인할 필요
-            value = value.data[0][0]
+        # if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC":
+        #     value = value.data[0][0]
         return act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
