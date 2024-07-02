@@ -162,7 +162,7 @@ class AAC(nn.Module):  # action value actor critic
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.val_fc2 = nn.Linear(64, board_width * board_height)
 
-    def forward(self, state_input):
+    def forward(self, state_input, sensible_moves):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -177,11 +177,19 @@ class AAC(nn.Module):  # action value actor critic
         x_val = F.relu(self.val_conv1(x))
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
-        x_val = F.log_softmax(self.val_fc2(x_val))
+        x_val = F.log_softmax(self.val_fc2(x_val), dim=1)
 
-        # # # sensible_moves 인덱스에 포함되지 않은 인덱스를 찾아 -torch.inf로 설정
-        # x_val *= mask
+        mask = torch.ones((1, 36), dtype=torch.float32)
+        all_indices = set(range(mask.size(1)))
+        sensible_moves_set = set(sensible_moves)
+        non_sensible_moves = list(all_indices - sensible_moves_set)
+        mask[:, non_sensible_moves] = -torch.inf
         x_val = torch.where(x_val == float('inf'), -torch.inf, x_val)
+        x_val = F.log_softmax(x_val, dim=1)
+
+        # mask = torch.full((1, self.board_width * self.board_height), -torch.inf)
+        # mask[0, sensible_moves] = 0
+        # x_val = x_val + mask
 
         return x_act, x_val
 
@@ -332,12 +340,10 @@ class PolicyValueNet:
         action and the score of the board state
         """
         available = np.where(env.state_[3].flatten() == 0)[0]
-        k = k   # [Todo] 여기 K는 나중에 AAC였나 EQRAC였나 거기서 비교해서 Quantiole k값을 늘려준다 그거임
+        k = k   # [Todo] 여기 K는 나중에 EQRAC였나 거기서 비교해서 Quantiole k값을 늘려준다 그거임
         current_state = np.ascontiguousarray(env.state_.reshape(-1, 5, env.state_.shape[1], env.state_.shape[2]))
         device = self.use_gpu
-
         current_state = torch.from_numpy(current_state).float().to(device)
-        # [TODO] policy_value_net에다가 available이 필요없을 수도 있는데 일단 줘봄
         log_act_probs, value = self.policy_value_net(current_state, available)
         act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
         act_probs = zip(available, act_probs[available])
