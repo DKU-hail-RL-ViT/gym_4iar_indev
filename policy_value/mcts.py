@@ -87,7 +87,7 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, rl_model=None):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, rl_model=None, quantiles=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -102,13 +102,15 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
         self.rl_model = rl_model
+        self.N = quantiles
         self.env = Fiar()
 
-    def _playout(self, env, leaf_value=None):
+    def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
+        leaf_value = None
         node = self._root
         while(1):
             if node.is_leaf():
@@ -123,16 +125,15 @@ class MCTS(object):
         sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
         # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
 
-        if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC": # leaf value가 scalar로 들어가는 얘들은 여기로
+        if self.rl_model == "DQN" or self.rl_model == "QRDQN" or self.rl_model == "AC" or self.rl_model == "QRAC": # leaf value가 scalar로 들어가는 얘들은 여기로
             action_probs, leaf_value = self._policy(env)
-        elif self.rl_model == "AAC" or "QRAAC": # leaf value가 board(action value) 형태 로 나오는 얘들은 여기로
+        elif self.rl_model == "AAC" or self.rl_model == "QRAAC": # leaf value가 board(action value) 형태 로 나오는 얘들은 여기로
             action_probs, leaf_value = self._policy(env)
-            leaf_value = leaf_value.flatten()
-            leaf_value = leaf_value.max().item()
-            # [TODO]
-        elif self.rl_model == "EQRDQN" or "EQRAAC":
+            leaf_value = leaf_value.max().item()  # [TODO]
+
+        elif self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
             while True:
-                action_probs, leaf_action_value = self._policy(env, sensible_moves, k)
+                action_probs, leaf_action_value = self._policy(env, sensible_moves, k) # TODO 여기서 K는 quantile 지수
                 # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
 
                 # get values of sensible_moves
@@ -144,10 +145,11 @@ class MCTS(object):
                     break
                 else:
                     k += 1
-
                 # max leaf_action_value as leaf_value
                 leaf_action_value = leaf_action_value.max().item()
                 leaf_value = leaf_action_value
+        else:
+            print("wtff")
 
         # Check for end of game
         end, winners = env.winner()
@@ -201,8 +203,8 @@ class MCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
-                 is_selfplay=0, name=None, elo=None, rl_model=None):
-        self.mcts = MCTS(policy_value_function, c_puct, n_playout, rl_model=rl_model)
+                 is_selfplay=0, name=None, elo=None, rl_model=None, quantiles=None):
+        self.mcts = MCTS(policy_value_function, c_puct, n_playout, rl_model=rl_model, quantiles=quantiles)
         self._is_selfplay = is_selfplay
         init_elo = 1500
         self.elo = elo if elo is not None else init_elo
