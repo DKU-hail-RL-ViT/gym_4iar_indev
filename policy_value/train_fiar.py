@@ -14,7 +14,7 @@ from policy_value.mcts import MCTSPlayer
 
 # from policy_value.policy_value_mcts_pure import RandomAction
 
-# DQN, QRDQN, AC, AAC, QRAC, QRAAC, EQRDQN, DQRAAC
+# DQN, QRDQN, AC, AAC, QRAC, QRAAC, EQRDQN, EQRAAC
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
@@ -24,8 +24,8 @@ parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")    # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
-parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver
+parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
+# parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
@@ -42,7 +42,7 @@ parser.add_argument("--temp", type=float, default=1.0)
 
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)  # previous 64
-parser.add_argument("--learn_rate", type=float, default=2e-3) # [FIXME] defalut 5e-4
+parser.add_argument("--learn_rate", type=float, default=1e-3) # [FIXME] defalut 5e-4
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
@@ -245,10 +245,11 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
 
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("---------- win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
+    wandb.log({"Evaluate Win Ratio": round(win_ratio * 100, 3)})
     return win_ratio, training_mcts_player
 
 
-def start_play(env, player1, player2, move=None): # [TODO] 여기도 고쳐야할 부분 있을것
+def start_play(env, player1, player2, move=None):
     """start a game between two players"""
     obs, _ = env.reset()
     players = [0, 1]
@@ -278,17 +279,18 @@ def start_play(env, player1, player2, move=None): # [TODO] 여기도 고쳐야�
 
 if __name__ == '__main__':
     # wandb intialize
-    if rl_model == "DQN" or "AC" or "AAC":
-        wandb.init(mode="offline",
+    # DQN, QRDQN, AC, AAC, QRAC, QRAAC, EQRDQN, EQRAAC
+    if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
                         "-Date" + str(datetime.datetime.now()),
                    config=args.__dict__
                    )
-
-    elif rl_model == "QRAC" or "QRDQN" or "EQRAC":
-        wandb.init(mode="offline",
+    elif (rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "QRAAC"
+          or rl_model == "EQRDQN" or rl_model == "EQRAC"):
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
@@ -317,18 +319,17 @@ if __name__ == '__main__':
     obs_post[2] = np.zeros_like(obs[0])
     obs_post[3] = obs[turn_A] + obs[turn_B]
 
+    # initialize Network
     if init_model:
-        # start training from an initial policy-value net
         policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2], quantiles,
                                           model_file=init_model, rl_model=rl_model)
     else:
-        # start training from a new policy-value net
         policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
                                           quantiles, rl_model=rl_model)
 
     # policy_value_net_old = copy.deepcopy(policy_value_net)
     curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-                                  is_selfplay=1, rl_model=rl_model)
+                                  is_selfplay=1, rl_model=rl_model, quantiles=quantiles)
     data_buffer_training_iters = deque(maxlen=20)
 
     try:
@@ -346,51 +347,51 @@ if __name__ == '__main__':
                 """make mcts agent training, eval version"""
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
 
-                if rl_model == "DQN" or "AC" or "AAC":
+                if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
                     model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(model_file)
                     eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(eval_model_file)
 
-                elif rl_model == "QRDQN" or "QRAC" or "EQRAC":
-                    model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
+                elif rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "EQRAC":
+                    model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(model_file)
-                    eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
+                    eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(eval_model_file)
 
                 else:
                     assert False, "don't have model"
 
             else:
-                if rl_model == "DQN" or "AC" or "AAC":
+                if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
 
-                elif rl_model == "QRDQN" or "QRAC" or "EQRAC":
+                elif rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "EQRAC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
+                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
-                    best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
+                    best_old_model = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{old_i:03d}.pth"
                 else:
                     assert False, "don't have model"
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantiles,
                                                       best_old_model, rl_model=rl_model)
 
                 curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-                                              is_selfplay=0, rl_model=rl_model)
+                                              is_selfplay=0, rl_model=rl_model, quantiles=quantiles)
                 old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout,
-                                             is_selfplay=0, rl_model=rl_model)
+                                             is_selfplay=0, rl_model=rl_model, quantiles=quantiles)
                 win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
                 if (i + 1) % 10 == 0:  # save model 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 (1+10 : total 11)
-                    if rl_model == "DQN" or "AC" or "AAC":
+                    if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
                         eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                         policy_value_net.save_model(eval_model_file)
-                    elif rl_model == "QRDQN" or "QRAC" or "EQRAC":
+                    elif rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "EQRAC":
                         eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                         policy_value_net.save_model(eval_model_file)
                     else:
@@ -401,9 +402,9 @@ if __name__ == '__main__':
 
                 if win_ratio > 0.5:
                     old_mcts_player = curr_mcts_player
-                    if rl_model == "DQN" or "AC" or "AAC":
+                    if rl_model == "DQN" or rl_model == "AC" or rl_model == "AAC":
                         model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-                    elif rl_model == "QRDQN" or "QRAC" or "EQRAC":
+                    elif rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "EQRAC":
                         model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                     else:
                         assert False, "don't have model"

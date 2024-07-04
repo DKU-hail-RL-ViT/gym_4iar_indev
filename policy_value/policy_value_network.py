@@ -34,6 +34,54 @@ class DQN(nn.Module):
         # action value
         self.val_fc2 = nn.Linear(64, 1)
 
+    def forward(self, state_input, sensible_moves):
+        # common layers
+        x = F.relu(self.conv1(state_input))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+
+        # action policy layers
+        x_act = F.relu(self.act_conv1(x))
+        x_act = x_act.view(-1, 2 * self.board_width * self.board_height)
+        x_act = F.relu(self.act_fc1(x_act))
+        x_acts = self.act_fc2(x_act)
+
+        # masking action (action policy layers)
+        mask = torch.ones((1, 36), dtype=torch.float32)
+        all_indices = set(range(mask.size(1)))
+        sensible_moves_set = set(sensible_moves)
+        non_sensible_moves = list(all_indices - sensible_moves_set)
+        mask[:, non_sensible_moves] = -torch.inf
+        x_acts = torch.where(x_acts == float('inf'), -torch.inf, x_acts)
+        x_acts = F.log_softmax(x_acts, dim=1)
+
+        # return action value
+        x_val = F.tanh(self.val_fc2(x_act))
+
+        return x_acts, x_val
+
+
+class QRDQN(nn.Module):
+    """policy-value network module"""
+
+    def __init__(self, board_width, board_height):
+        super(QRDQN, self).__init__()
+
+        self.board_width = board_width
+        self.board_height = board_height
+        self.num_actions = board_width * board_height
+
+        # common layers
+        self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        # action policy layers (previous state value)
+        self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
+        self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
+        self.act_fc2 = nn.Linear(64, self.num_actions)
+        # action value
+        self.val_fc2 = nn.Linear(64, 1)
+
     def forward(self, state_input, sensible_moves):  # [TODO] 여기 action masking 한거 input으로 넣어줘야함
         # common layers
         x = F.relu(self.conv1(state_input))
@@ -52,7 +100,7 @@ class DQN(nn.Module):
         sensible_moves_set = set(sensible_moves)
         non_sensible_moves = list(all_indices - sensible_moves_set)
         mask[:, non_sensible_moves] = -torch.inf
-        x_acts = torch.where(x_acts == float('inf'), -torch.inf, x_acts)  # [TODO] DQN에서 이렇게 해도 될지 모르겠음
+        x_acts = torch.where(x_acts == float('inf'), -torch.inf, x_acts)
         x_acts = F.log_softmax(x_acts, dim=1)
 
         # return action value
@@ -121,9 +169,9 @@ class QRAC(nn.Module):
         # state value layers
         self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
-        self.val_fc2 = nn.Linear(64, N)
+        self.val_fc2 = nn.Linear(64, self.N)
 
-    def forward(self, state_input):
+    def forward(self, state_input, sensible_move=None):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -179,17 +227,15 @@ class AAC(nn.Module):  # action value actor critic
         x_val = F.relu(self.val_fc1(x_val))
         x_val = F.log_softmax(self.val_fc2(x_val), dim=1)
 
+        # masking
         mask = torch.ones((1, 36), dtype=torch.float32)
         all_indices = set(range(mask.size(1)))
         sensible_moves_set = set(sensible_moves)
         non_sensible_moves = list(all_indices - sensible_moves_set)
         mask[:, non_sensible_moves] = -torch.inf
         x_val = torch.where(x_val == float('inf'), -torch.inf, x_val)
-        x_val = F.log_softmax(x_val, dim=1)
-
-        # mask = torch.full((1, self.board_width * self.board_height), -torch.inf)
-        # mask[0, sensible_moves] = 0
-        # x_val = x_val + mask
+        x_val = F.log_softmax(x_val, dim=1) # [TODO] 이대로 주면 log softmax 적용되어서 주니까 action value의 값은 -3.xx 이런 값들을 가짐.
+        # x_val = np.exp(x_val.data.cpu().detach().numpy().flatten())
 
         return x_act, x_val
 
@@ -277,7 +323,7 @@ class PolicyValueNet:
     """policy-value network """
 
     def __init__(self, board_width, board_height, quantiles=None,
-                 model_file=None, rl_model="AC"):
+                 model_file=None, rl_model=None):
 
         self.board_width = board_width  # 9
         self.board_height = board_height  # 4
@@ -305,13 +351,13 @@ class PolicyValueNet:
         elif rl_model == "AAC":
             self.policy_value_net = AAC(board_width, board_height).to(device)
         elif rl_model == "QRAC":
-            self.policy_value_net = QRAC(board_width, board_height).to(device)
+            self.policy_value_net = QRAC(board_width, board_height, quantiles).to(device)
         elif rl_model == "QRAAC":
-            self.policy_value_net = QRAAC(board_width, board_height).to(device)
+            self.policy_value_net = QRAAC(board_width, board_height, quantiles).to(device)
         elif rl_model == "EQRAAC":
             self.policy_value_net = EQRAAC(board_width, board_height, quantiles).to(device)
-        elif rl_model == "DQRAAC":
-            self.policy_value_net = DQRAAC(board_width, board_height, quantiles).to(device)
+        elif rl_model == "EQRAAC":
+            self.policy_value_net = EQRAAC(board_width, board_height, quantiles).to(device)
         else:
             assert print("error")
 
@@ -340,11 +386,11 @@ class PolicyValueNet:
         action and the score of the board state
         """
         available = np.where(env.state_[3].flatten() == 0)[0]
-        k = k   # [Todo] 여기 K는 나중에 EQRAC였나 거기서 비교해서 Quantiole k값을 늘려준다 그거임
+        k = k   # [Todo] 여기 K는 나중에 EQRAC였나 거기서 비교해서 Quantile k값을 늘려준다 그거임
         current_state = np.ascontiguousarray(env.state_.reshape(-1, 5, env.state_.shape[1], env.state_.shape[2]))
         device = self.use_gpu
         current_state = torch.from_numpy(current_state).float().to(device)
-        log_act_probs, value = self.policy_value_net(current_state, available)
+        log_act_probs, value = self.policy_value_net(current_state, available)  # TODO
         act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
         act_probs = zip(available, act_probs[available])
         # if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC":
