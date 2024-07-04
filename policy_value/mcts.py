@@ -125,10 +125,12 @@ class MCTS(object):
 
         if self.rl_model == "DQN" or "QRDQN" or "AC" or "QRAC": # leaf value가 scalar로 들어가는 얘들은 여기로
             action_probs, leaf_value = self._policy(env)
-        elif self.rl_model == "AAC" or "QRAAC": # leaf value가 action value 로 나오는 얘들은 여기로
+        elif self.rl_model == "AAC" or "QRAAC": # leaf value가 board(action value) 형태 로 나오는 얘들은 여기로
             action_probs, leaf_value = self._policy(env)
+            leaf_value = leaf_value.flatten()
+            leaf_value = leaf_value.max().item()
             # [TODO]
-        else:  # "EQRDQN", "EQRAAC"
+        elif self.rl_model == "EQRDQN" or "EQRAAC":
             while True:
                 action_probs, leaf_action_value = self._policy(env, sensible_moves, k)
                 # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
