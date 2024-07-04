@@ -171,7 +171,7 @@ class AAC(nn.Module):  # action value actor critic
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
         x_act = self.act_fc1(x_act)
-        x_act = F.log_softmax(x_act, dim=1) # output about log probability of each action
+        x_act = F.log_softmax(x_act, dim=1)  # output about log probability of each action
 
         # action policy layers
         x_val = F.relu(self.val_conv1(x))
