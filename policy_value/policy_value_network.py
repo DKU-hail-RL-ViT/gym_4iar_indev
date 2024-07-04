@@ -79,6 +79,7 @@ class QRDQN(nn.Module):
         self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions)
+        # self.act_fc2 = nn.Linear(64, self.num_actions * self.num_quantiles) # [TODO] sh edit
         # action value
         self.val_fc2 = nn.Linear(64, 1)
 
@@ -93,6 +94,11 @@ class QRDQN(nn.Module):
         x_act = x_act.view(-1, 2 * self.board_width * self.board_height)
         x_act = F.relu(self.act_fc1(x_act))
         x_acts = self.act_fc2(x_act)
+        # quantiles = self.act_fc2(x_act)  # shape: (batch_size, num_actions * num_quantiles) # [TODO] sh edit
+        # reshape quantiles to (batch_size, num_actions, num_quantiles)
+        # quantiles = quantiles.view(-1, self.num_actions, self.num_quantiles) # [TODO] sh edit
+        # compute the mean across quantiles to get the expected action values
+        # x_acts = quantiles.mean(dim=2)  # shape: (batch_size, num_actions)  # [TODO] sh edit
 
         # masking action (action policy layers)
         mask = torch.ones((1, 36), dtype=torch.float32)
@@ -101,13 +107,65 @@ class QRDQN(nn.Module):
         non_sensible_moves = list(all_indices - sensible_moves_set)
         mask[:, non_sensible_moves] = -torch.inf
         x_acts = torch.where(x_acts == float('inf'), -torch.inf, x_acts)
-        x_acts = F.log_softmax(x_acts, dim=1)
+        x_acts = F.softmax(x_acts, dim=1) # [TODO] Here not log softmax
 
         # return action value
         x_val = F.tanh(self.val_fc2(x_act))
 
         return x_acts, x_val
-
+# class QRDQN(nn.Module):
+#     """Quantile Regression Deep Q-Network"""
+#
+#     def __init__(self, board_width, board_height, num_quantiles=200):
+#         super(QRDQN, self).__init__()
+#
+#         self.board_width = board_width
+#         self.board_height = board_height
+#         self.num_actions = board_width * board_height
+#         self.num_quantiles = num_quantiles
+#
+#         # common layers
+#         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
+#         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+#         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+#         # action policy layers (previous state value)
+#         self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
+#         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
+#         self.act_fc2 = nn.Linear(64, self.num_actions * self.num_quantiles)
+#         # action value
+#         self.val_fc2 = nn.Linear(64, 1)
+#
+#     def forward(self, state_input, sensible_moves):
+#         # common layers
+#         x = F.relu(self.conv1(state_input))
+#         x = F.relu(self.conv2(x))
+#         x = F.relu(self.conv3(x))
+#
+#         # action policy layers
+#         x_act = F.relu(self.act_conv1(x))
+#         x_act = x_act.view(-1, 2 * self.board_width * self.board_height)
+#         x_act = F.relu(self.act_fc1(x_act))
+#         quantiles = self.act_fc2(x_act)  # shape: (batch_size, num_actions * num_quantiles)
+#
+#         # reshape quantiles to (batch_size, num_actions, num_quantiles)
+#         quantiles = quantiles.view(-1, self.num_actions, self.num_quantiles)
+#
+#         # compute the mean across quantiles to get the expected action values
+#         expected_values = quantiles.mean(dim=2)  # shape: (batch_size, num_actions)
+#
+#         # masking action (action policy layers)
+#         mask = torch.ones((1, self.num_actions), dtype=torch.float32)
+#         all_indices = set(range(mask.size(1)))
+#         sensible_moves_set = set(sensible_moves)
+#         non_sensible_moves = list(all_indices - sensible_moves_set)
+#         mask[:, non_sensible_moves] = -torch.inf
+#         expected_values = torch.where(expected_values == float('inf'), -torch.inf, expected_values)
+#         action_probs = F.softmax(expected_values, dim=1)  # shape: (batch_size, num_actions)
+#
+#         # return action probabilities and value
+#         x_val = F.tanh(self.val_fc2(x_act))  # shape: (batch_size, 1)
+#
+#         return action_probs, x_val
 
 class AC(nn.Module):
     """policy-value network module"""
