@@ -124,18 +124,10 @@ class MCTS(object):
         k = 1
         sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
         # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
-
-        if self.rl_model == "DQN" or self.rl_model == "QRDQN" or self.rl_model == "AC" or self.rl_model == "QRAC": # leaf value가 scalar로 들어가는 얘들은 여기로
-            action_probs, leaf_value = self._policy(env)
-        elif self.rl_model == "AAC" or self.rl_model == "QRAAC": # leaf value가 board(action value) 형태 로 나오는 얘들은 여기로
-            action_probs, leaf_value = self._policy(env)
-            leaf_value = leaf_value.max().item()  # [TODO]
-
-        elif self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
+        if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
             while True:
                 action_probs, leaf_action_value = self._policy(env, sensible_moves, k) # TODO 여기서 K는 quantile 지수
                 # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
-
                 # get values of sensible_moves
                 leaf_action_value = leaf_action_value.flatten()
                 leaf_action_value = leaf_action_value[sensible_moves]
@@ -149,7 +141,7 @@ class MCTS(object):
                 leaf_action_value = leaf_action_value.max().item()
                 leaf_value = leaf_action_value
         else:
-            print("wtff")
+            action_probs, leaf_value = self._policy(env)
 
         # Check for end of game
         end, winners = env.winner()
