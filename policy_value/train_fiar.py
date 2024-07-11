@@ -22,9 +22,9 @@ parser.add_argument("--n_playout", type=int, default=100)  # compare with 2, 10,
 parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
-# parser.add_argument("--rl_model", type=str, default="DQN")    # action value ver                  # Done
+parser.add_argument("--rl_model", type=str, default="DQN")    # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
+# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
 # parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAAC")  # Actor critic action value ver
@@ -48,7 +48,6 @@ parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
-""" Quantile Regression parameter """
 
 args = parser.parse_args()
 
@@ -182,6 +181,49 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
 
             return winners, zip(states, mcts_probs, winners_z)
+
+
+# def dqn_update(dqn, target_dqn, replay_buffer, batch_size, gamma, optimizer, data_buffers=None):
+#     if len(replay_buffer) < batch_size:
+#         return None, None
+#
+#     # batch = random.sample(replay_buffer, batch_size)
+#
+#     update_data_buffer = [data for buffer in data_buffers for data in buffer]
+#
+#     mini_batch = random.sample(update_data_buffer, batch_size)
+#     state_batch = [data[0] for data in mini_batch]
+#     mcts_probs_batch = [data[1] for data in mini_batch]
+#     winner_batch = [data[2] for data in mini_batch]
+#
+#     # state_batch = torch.tensor(state_batch, dtype=torch.float32)
+#     # action_batch = torch.tensor(action_batch, dtype=torch.int64)
+#     # reward_batch = torch.tensor(reward_batch, dtype=torch.float32)
+#     # next_state_batch = torch.tensor(next_state_batch, dtype=torch.float32)
+#     # done_batch = torch.tensor(done_batch, dtype=torch.float32)
+#
+#     # Q-values for the current states
+#     q_values = dqn(state_batch)
+#     q_values = q_values.gather(1, action_batch.unsqueeze(1)).squeeze(1)
+#
+#     # Q-values for the next states from target network
+#     with torch.no_grad():
+#         next_q_values = target_dqn(next_state_batch).max(1)[0]
+#
+#     # Target Q-values
+#     target_q_values = reward_batch + gamma * next_q_values * (1 - done_batch)
+#
+#     # Loss calculation
+#     loss = torch.nn.MSELoss()(q_values, target_q_values)
+#
+#     # Backpropagation
+#     optimizer.zero_grad()
+#     loss.backward()
+#     optimizer.step()
+#
+#     return loss.item()
+
+
 
 
 def policy_update(lr_mul, policy_value_net, data_buffers=None):
@@ -338,9 +380,14 @@ if __name__ == '__main__':
             best_old_model = None
             data_buffer_each = collect_selfplay_data(curr_mcts_player, i, self_play_sizes)  # 100 times
             data_buffer_training_iters.append(data_buffer_each)
-            loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
-                                                                           policy_value_net=policy_value_net,
-                                                                           data_buffers=data_buffer_training_iters)
+            if rl_model == "DQN":
+                loss = dqn_update()
+            elif rl_model == "QRDQN":
+                pass
+            else:
+                loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
+                                                                                policy_value_net=policy_value_net,
+                                                                                data_buffers=data_buffer_training_iters)
             wandb.log({"loss": loss, "entropy": entropy})
 
             if i == 0:
