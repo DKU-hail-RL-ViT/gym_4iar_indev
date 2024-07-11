@@ -13,9 +13,9 @@ def set_learning_rate(optimizer, lr):
         param_group['lr'] = lr
 
 eps = 1e-2
+
 class DQN(nn.Module):
     """policy-value network module"""
-
     def __init__(self, board_width, board_height):
         super(DQN, self).__init__()
 
@@ -46,9 +46,8 @@ class DQN(nn.Module):
         x_act = F.relu(self.act_fc1(x_act))
         x_act = self.act_fc2(x_act)
         x_acts = self.val_fc2(x_act)
-
-        # [TODO]:왜 policy에다가 masking 하고 있지
         x_acts = F.log_softmax(x_acts, dim=1)
+
         # epsilon greedy
         x_acts = torch.ones_like(x_acts) * eps
         x_acts[x_acts.argmax(dim=1)] = 1 - eps*x_acts.shape[1]
@@ -81,7 +80,7 @@ class QRDQN(nn.Module): #TODO: 전체적으로 다 잘못된거같음 네트워�
         # action value
         self.val_fc2 = nn.Linear(64, 1)
 
-    def forward(self, state_input, sensible_moves):  # [TODO] 여기 action masking 한거 input으로 넣어줘야함
+    def forward(self, state_input, sensible_moves):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
