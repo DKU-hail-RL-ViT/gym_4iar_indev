@@ -18,14 +18,14 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=100)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=10)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
-parser.add_argument("--rl_model", type=str, default="DQN")    # action value ver                  # Done
-# parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
+# parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
+#  parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
-# parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver
+parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
@@ -42,7 +42,7 @@ parser.add_argument("--temp", type=float, default=1.0)
 
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)  # previous 64
-parser.add_argument("--learn_rate", type=float, default=1e-3) # [FIXME] defalut 5e-4
+parser.add_argument("--learn_rate", type=float, default=1e-3)  # [FIXME] defalut 5e-4
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
@@ -109,7 +109,7 @@ def get_equi_data(env, play_data):
 def collect_selfplay_data(mcts_player, game_iter, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
     # in data_buffer store all steps of self-play so, it should be large enough
-    data_buffer = deque(maxlen=36 * n_games * 4) # board size * n_games * augmentation times
+    data_buffer = deque(maxlen=36 * n_games * 4)  # board size * n_games * augmentation times
     win_cnt = defaultdict(int)
 
     for self_play_i in range(n_games):
@@ -166,7 +166,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None
             if len(current_player) == 36 and winners == -1:  # draw
                 print('self_play_draw')
 
-            obs, _ = env.reset()    # reset env
+            obs, _ = env.reset()  # reset env
             mcts_player.reset_player()  # reset MCTS root node
 
             print("game: {}, self_play:{}, episode_len:{}".format(
@@ -183,50 +183,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None
             return winners, zip(states, mcts_probs, winners_z)
 
 
-# def dqn_update(dqn, target_dqn, replay_buffer, batch_size, gamma, optimizer, data_buffers=None):
-#     if len(replay_buffer) < batch_size:
-#         return None, None
-#
-#     # batch = random.sample(replay_buffer, batch_size)
-#
-#     update_data_buffer = [data for buffer in data_buffers for data in buffer]
-#
-#     mini_batch = random.sample(update_data_buffer, batch_size)
-#     state_batch = [data[0] for data in mini_batch]
-#     mcts_probs_batch = [data[1] for data in mini_batch]
-#     winner_batch = [data[2] for data in mini_batch]
-#
-#     # state_batch = torch.tensor(state_batch, dtype=torch.float32)
-#     # action_batch = torch.tensor(action_batch, dtype=torch.int64)
-#     # reward_batch = torch.tensor(reward_batch, dtype=torch.float32)
-#     # next_state_batch = torch.tensor(next_state_batch, dtype=torch.float32)
-#     # done_batch = torch.tensor(done_batch, dtype=torch.float32)
-#
-#     # Q-values for the current states
-#     q_values = dqn(state_batch)
-#     q_values = q_values.gather(1, action_batch.unsqueeze(1)).squeeze(1)
-#
-#     # Q-values for the next states from target network
-#     with torch.no_grad():
-#         next_q_values = target_dqn(next_state_batch).max(1)[0]
-#
-#     # Target Q-values
-#     target_q_values = reward_batch + gamma * next_q_values * (1 - done_batch)
-#
-#     # Loss calculation
-#     loss = torch.nn.MSELoss()(q_values, target_q_values)
-#
-#     # Backpropagation
-#     optimizer.zero_grad()
-#     loss.backward()
-#     optimizer.step()
-#
-#     return loss.item()
-
-
-
-
-def policy_update(lr_mul, policy_value_net, data_buffers=None):
+def policy_update(lr_mul, policy_value_net, rl_model, data_buffers=None):
     k, kl, loss, entropy = 0, 0, 0, 0
     lr_multiplier = lr_mul
     update_data_buffer = [data for buffer in data_buffers for data in buffer]
@@ -236,34 +193,46 @@ def policy_update(lr_mul, policy_value_net, data_buffers=None):
     state_batch = [data[0] for data in mini_batch]
     mcts_probs_batch = [data[1] for data in mini_batch]
     winner_batch = [data[2] for data in mini_batch]
-    old_probs, old_v = policy_value_net.policy_value(state_batch)
+    old_probs, old_v = policy_value_net.policy_value(state_batch, rl_model)
 
-    for k in range(epochs):
-        loss, entropy = policy_value_net.train_step(
-            state_batch,
-            mcts_probs_batch,
-            winner_batch,
-            learn_rate * lr_multiplier)
-        new_probs, new_v = policy_value_net.policy_value(state_batch)
-        kl = np.mean(np.sum(old_probs * (
-                np.log(old_probs + 1e-10) - np.log(new_probs + 1e-10)),
-                            axis=1)
-                     )
-        if kl > kl_targ * 4:  # early stopping if D_KL diverges badly
-            break
+    if not rl_model == "DQN" or rl_model == "QRDQN":
+        for k in range(epochs):
+            loss, entropy = policy_value_net.train_step(state_batch,
+                                                        mcts_probs_batch,
+                                                        winner_batch,
+                                                        learn_rate * lr_multiplier,
+                                                        rl_model)
 
-    # adaptively adjust the learning rate
-    if kl > kl_targ * 2 and lr_multiplier > 0.1:
-        lr_multiplier /= 1.5
-    elif kl < kl_targ / 2 and lr_multiplier < 10:
-        lr_multiplier *= 1.5
+            new_probs, new_v = policy_value_net.policy_value(state_batch)
+            kl = np.mean(np.sum(old_probs * (
+                    np.log(old_probs + 1e-10) - np.log(new_probs + 1e-10)),
+                                axis=1))
+            if kl > kl_targ * 4:  # early stopping if D_KL diverges badly
+                break
 
-    print(("kl:{:.5f},"
-           "lr_multiplier:{:.3f},"
-           "loss:{},"
-           "entropy:{}"
-           ).format(kl, lr_multiplier, loss, entropy))
-    return loss, entropy, lr_multiplier, policy_value_net
+        # adaptively adjust the learning rate
+        if kl > kl_targ * 2 and lr_multiplier > 0.1:
+            lr_multiplier /= 1.5
+        elif kl < kl_targ / 2 and lr_multiplier < 10:
+            lr_multiplier *= 1.5
+
+        print(("kl:{:.5f},"
+               "lr_multiplier:{:.3f},"
+               "loss:{},"
+               "entropy:{}"
+               ).format(kl, lr_multiplier, loss, entropy))
+        return loss, entropy, lr_multiplier, policy_value_net
+    else:
+        for k in range(epochs):
+            loss = policy_value_net.train_step(state_batch,
+                                               mcts_probs_batch,
+                                               winner_batch,
+                                               learn_rate * lr_multiplier,
+                                               rl_model)
+        print(("loss:{}"
+               ).format(loss))
+
+        return loss, policy_value_net
 
 
 def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # total 30 games
@@ -314,7 +283,6 @@ def start_play(env, player1, player2, move=None):
             player_in_turn = players[current_player]
 
         else:
-            wandb.log({"Reward": reward[1]})
             obs, _ = env.reset()
             return winner
 
@@ -345,11 +313,11 @@ if __name__ == '__main__':
     env = Fiar()
     obs, _ = env.reset()
 
-    if torch.cuda.is_available():           # Windows
+    if torch.cuda.is_available():  # Windows
         device = torch.device("cuda")
     elif torch.backends.mps.is_available():  # Mac OS
         device = torch.device("mps")
-    else:                                   # CPU
+    else:  # CPU
         device = torch.device("cpu")
 
     turn_A = turn(obs)
@@ -380,15 +348,15 @@ if __name__ == '__main__':
             best_old_model = None
             data_buffer_each = collect_selfplay_data(curr_mcts_player, i, self_play_sizes)  # 100 times
             data_buffer_training_iters.append(data_buffer_each)
-            if rl_model == "DQN":
-                loss = dqn_update()
-            elif rl_model == "QRDQN":
-                pass
+            loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
+                                                                           policy_value_net=policy_value_net,
+                                                                           rl_model=rl_model,
+                                                                           data_buffers=data_buffer_training_iters)
+            if not rl_model == "DQN" or rl_model == "QRDQN":
+                wandb.log({"loss": loss, "entropy": entropy})
             else:
-                loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
-                                                                                policy_value_net=policy_value_net,
-                                                                                data_buffers=data_buffer_training_iters)
-            wandb.log({"loss": loss, "entropy": entropy})
+                wandb.log({"loss": loss})
+
 
             if i == 0:
                 """make mcts agent training, eval version"""
@@ -419,7 +387,8 @@ if __name__ == '__main__':
 
                 elif rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "EQRAC":
                     existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
+                                      for file in
+                                      os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
                                       if file.startswith('train_')]
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{old_i:03d}.pth"
