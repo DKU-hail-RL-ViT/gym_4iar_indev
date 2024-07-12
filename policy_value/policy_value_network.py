@@ -12,29 +12,49 @@ def set_learning_rate(optimizer, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-eps = 1e-2
+
+def quantile_huber_loss(value, winner_batch, taus, kappa=1.0):
+    assert value.shape == winner_batch.shape
+
+    diff = value.view(-1) - winner_batch
+
+    # Calculate Huber loss
+    huber_loss = torch.where(
+        torch.abs(diff) <= kappa,
+        0.5 * diff ** 2,
+        kappa * (torch.abs(diff) - 0.5 * kappa)
+    )
+    # Expand taus to match the shape of huber_loss
+    taus = taus.view(1, -1, 1)
+    huber_loss = huber_loss.unsqueeze(1)
+
+    # Calculate quantile loss
+    quantile_loss = torch.abs(taus - (diff < 0).float()) * huber_loss
+    loss = quantile_loss.mean()
+
+    return loss
+
 
 class DQN(nn.Module):
     """policy-value network module"""
-    def __init__(self, board_width, board_height):
+    def __init__(self, board_width, board_height, eps=1e-2):
         super(DQN, self).__init__()
 
         self.board_width = board_width
         self.board_height = board_height
         self.num_actions = board_width * board_height
+        self.eps = eps
 
         # common layers
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        # action policy layers (previous state value)
+        # action value layers (previous state value)
         self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions)
-        # action value
-        self.val_fc2 = nn.Linear(64, 1)
 
-    def forward(self, state_input, sensible_moves):
+    def forward(self, state_input, eps):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -45,17 +65,17 @@ class DQN(nn.Module):
         x_act = x_act.view(-1, 2 * self.board_width * self.board_height)
         x_act = F.relu(self.act_fc1(x_act))
         x_act = self.act_fc2(x_act)
-        x_acts = self.val_fc2(x_act)
-        x_acts = F.log_softmax(x_acts, dim=1)
+        x_act = F.log_softmax(x_act, dim=1)
 
         # epsilon greedy
-        x_acts = torch.ones_like(x_acts) * eps
-        x_acts[x_acts.argmax(dim=1)] = 1 - eps*x_acts.shape[1]
+        x_val = torch.ones_like(x_act).cpu() * self.eps
+        x_val[x_val.argmax(dim=1)] = 1 - eps*x_val.shape[1]
 
         # return action value
-        x_val = F.tanh(x_acts)
+        x_val = F.tanh(x_val)
 
-        return x_acts, x_val
+        return x_val
+        # return x_act, x_val
 
 
 class QRDQN(nn.Module): #TODO: 전체적으로 다 잘못된거같음 네트워크 구조부터 연산까지
@@ -76,11 +96,10 @@ class QRDQN(nn.Module): #TODO: 전체적으로 다 잘못된거같음 네트워�
         self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions)
-        # self.act_fc2 = nn.Linear(64, self.num_actions * self.num_quantiles) # [TODO] sh edit
         # action value
         self.val_fc2 = nn.Linear(64, 1)
 
-    def forward(self, state_input, sensible_moves):
+    def forward(self, state_input, eps):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -90,19 +109,16 @@ class QRDQN(nn.Module): #TODO: 전체적으로 다 잘못된거같음 네트워�
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 2 * self.board_width * self.board_height)
         x_act = F.relu(self.act_fc1(x_act))
-        x_acts = self.act_fc2(x_act)
+        x_act = self.act_fc2(x_act)
+        x_acts = self.val_fc2(x_act)
+        x_acts = F.log_softmax(x_acts, dim=1)
 
-        # masking action (action policy layers)
-        mask = torch.ones((1, 36), dtype=torch.float32)
-        all_indices = set(range(mask.size(1)))
-        sensible_moves_set = set(sensible_moves)
-        non_sensible_moves = list(all_indices - sensible_moves_set)
-        mask[:, non_sensible_moves] = -torch.inf
-        x_acts = torch.where(x_acts == float('inf'), -torch.inf, x_acts)
-        x_acts = F.softmax(x_acts, dim=1) # [TODO] Here not log softmax
+        # epsilon greedy
+        x_acts = torch.ones_like(x_acts) * eps
+        x_acts[x_acts.argmax(dim=1)] = 1 - eps * x_acts.shape[1]
 
         # return action value
-        x_val = F.tanh(self.val_fc2(x_act))
+        x_val = F.tanh(x_acts)
 
         return x_acts, x_val
 
@@ -194,6 +210,7 @@ class AAC(nn.Module):  # action value actor critic
         super(AAC, self).__init__()
         self.board_width = board_width
         self.board_height = board_height
+        self.num_actions = board_width * board_height
 
         # common layers
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
@@ -206,7 +223,10 @@ class AAC(nn.Module):  # action value actor critic
         # action value layers
         self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
-        self.val_fc2 = nn.Linear(64, board_width * board_height)
+        self.val_fc2 = nn.Linear(64, self.num_actions) # TODO 여기가 num action 개수만큼 리턴하기 떄문에 weighted sum으로
+
+        # Initialize weights
+        self.weights = nn.Parameter(torch.ones(board_width * board_height) / (board_width * board_height))
 
     def forward(self, state_input, sensible_moves):
         # common layers
@@ -224,6 +244,10 @@ class AAC(nn.Module):  # action value actor critic
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
         x_val = F.tanh(self.val_fc2(x_val))
+
+        # Ensure weights sum to 1
+        weights = F.softmax(self.weights, dim=0)
+        x_val = torch.sum(weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
@@ -262,9 +286,6 @@ class EQRAC(nn.Module):
         self.device = device
         self.init_state_value_layers()
 
-    def init_state_value_layers(self):
-        """ Initialize or update the state value output layer based on current self.N """
-        self.val_fc2 = nn.Linear(64, self.N).to(self.device)
 
     def forward(self, state_input):
         # Common layers processing
@@ -307,6 +328,9 @@ class EQRAC(nn.Module):
             return True
 
 
+
+
+
 class PolicyValueNet:
     """policy-value network """
 
@@ -319,6 +343,7 @@ class PolicyValueNet:
         self.quantiles = quantiles
         self.rl_model = rl_model
         self.gamma = 0.99
+        self.quantiles = quantiles
 
         if torch.cuda.is_available():            # Windows
             device = torch.device("cuda")
@@ -385,7 +410,7 @@ class PolicyValueNet:
         #     value = value.data[0][0]
         return act_probs, value
 
-    def train_step(self, state_batch, mcts_probs, winner_batch, lr):
+    def train_step(self, state_batch, mcts_probs, winner_batch, lr, rl_model, quantiles=None):
         """perform a training step"""
         device = self.use_gpu
         state_batch_np = np.array(state_batch)
@@ -402,23 +427,29 @@ class PolicyValueNet:
         # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
         # Note: the L2 penalty is incorporated in optimizer
 
-        # TODO: 모델별로 다른 방식의 학습을 해야한다
-        # DQN 같은 경우는 value loss 만 가지고 학습하는게 맞고
-        # QRDQN 같은 경우는 huber loss 가지고 학습하도록
-        # AC 같은 경우는 policy loss, value loss 둘다 가지고 학습하도록
-        value_loss = F.mse_loss(value.view(-1), winner_batch)
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
-        loss = value_loss + policy_loss
+        # TODO DQN 같은 경우는 value loss 만 가지고 학습하는게 맞고, QRDQN 같은 경우는 huber loss 가지고 학습하도록
+        if rl_model == "DQN":
+            loss = F.mse_loss(value.view(-1), winner_batch)
+        elif rl_model == "QRDQN":
+            taus = torch.linspace(0, 1, self.quantiles.size(2) + 1)[1:]  # TODO quantile 받아서 보내기
+            loss = quantile_huber_loss(value.view(-1), winner_batch, taus)
+        else:
+            value_loss = F.mse_loss(value.view(-1), winner_batch)
+            policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
+            loss = value_loss + policy_loss
 
         # when call backward, the grad will accumulate. so zero grad before backward
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        entropy = -torch.mean(
-            torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
-        )
-        return loss.item(), entropy.item()
+        if rl_model == "DQN" or rl_model == "QRDQN":
+            return loss.item()
+        else:
+            entropy = -torch.mean(
+                torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
+            )
+            return loss.item(), entropy.item()
 
     def get_policy_param(self):
         net_params = self.policy_value_net.state_dict()
