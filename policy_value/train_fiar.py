@@ -24,8 +24,8 @@ parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
 #  parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
-parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver
+parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
+# parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
