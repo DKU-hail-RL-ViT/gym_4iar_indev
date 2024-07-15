@@ -8,7 +8,7 @@ import torch
 import wandb
 
 from collections import defaultdict, deque
-from fiar_env import Fiar, turn, action2d_ize, carculate_area
+from fiar_env import Fiar, turn, action2d_ize
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
 
@@ -18,7 +18,7 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=10)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
