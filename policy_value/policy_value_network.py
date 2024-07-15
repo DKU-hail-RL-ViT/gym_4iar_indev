@@ -380,7 +380,7 @@ class PolicyValueNet:
             state_dict = torch.load(model_file, map_location=device)
             self.policy_value_net.load_state_dict(state_dict)
 
-    def policy_value(self, state_batch):
+    def policy_value(self, state_batch, rl_model=None):
         """
         input: a batch of states
         output: a batch of action probabilities and state values
