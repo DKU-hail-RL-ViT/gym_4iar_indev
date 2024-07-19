@@ -8,7 +8,7 @@ import torch
 import wandb
 
 from collections import defaultdict, deque
-from fiar_env import Fiar, turn, action2d_ize
+from fiar_env import Fiar, turn, action2d_ize, carculate_area
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
 
@@ -18,16 +18,16 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=10)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
-#  parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
+# parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
+# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
 # parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
-# parser.add_argument("--rl_model", type=str, default="QRAAC")  # Actor critic action value ver
+parser.add_argument("--rl_model", type=str, default="QRAAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRAAC")  # Efficient search + Actor critic action value ver
 
@@ -193,15 +193,14 @@ def policy_update(lr_mul, policy_value_net, rl_model, data_buffers=None):
     state_batch = [data[0] for data in mini_batch]
     mcts_probs_batch = [data[1] for data in mini_batch]
     winner_batch = [data[2] for data in mini_batch]
-    old_probs, old_v = policy_value_net.policy_value(state_batch, rl_model)
+    old_probs, old_v = policy_value_net.policy_value(state_batch)
 
     if not rl_model == "DQN" or rl_model == "QRDQN":
         for k in range(epochs):
             loss, entropy = policy_value_net.train_step(state_batch,
                                                         mcts_probs_batch,
                                                         winner_batch,
-                                                        learn_rate * lr_multiplier,
-                                                        rl_model)
+                                                        learn_rate * lr_multiplier)
 
             new_probs, new_v = policy_value_net.policy_value(state_batch)
             kl = np.mean(np.sum(old_probs * (
@@ -356,7 +355,6 @@ if __name__ == '__main__':
                 wandb.log({"loss": loss, "entropy": entropy})
             else:
                 wandb.log({"loss": loss})
-
 
             if i == 0:
                 """make mcts agent training, eval version"""
