@@ -180,7 +180,7 @@ def graphic(env, save_num, move=None, file_prefix='game_board'):
                 symbol = 'X'
             ax.text(j, height - 1 - i, symbol, fontsize=12, ha='center', va='center')
 
-    folder_path = './Png/'
+    folder_path = './gamefile/png/'
     os.makedirs(os.path.dirname(folder_path), exist_ok=True)
 
     file_path = os.path.join(folder_path, f'{file_prefix}_{save_num}.png')
