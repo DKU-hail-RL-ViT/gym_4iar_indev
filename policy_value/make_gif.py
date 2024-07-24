@@ -47,11 +47,7 @@ if __name__ == '__main__':
     # Show the animation
     plt.show()
 
-    folder_name = './Gif/'
+    folder_name = './gamefile/gif/'
     os.makedirs(os.path.dirname(folder_name), exist_ok=True)
     animation_fig.save("model_vs_human.gif")
-
-
-
-
 
