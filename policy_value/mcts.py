@@ -87,7 +87,7 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, rl_model=None, quantiles=None):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -102,7 +102,6 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
         self.rl_model = rl_model
-        self.N = quantiles
         self.env = Fiar()
 
     def _playout(self, env):
@@ -195,8 +194,8 @@ class MCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
-                 is_selfplay=0, name=None, elo=None, rl_model=None, quantiles=None):
-        self.mcts = MCTS(policy_value_function, c_puct, n_playout, rl_model=rl_model, quantiles=quantiles)
+                 is_selfplay=0, name=None, elo=None, rl_model=None):
+        self.mcts = MCTS(policy_value_function, c_puct, n_playout, rl_model=rl_model)
         self._is_selfplay = is_selfplay
         init_elo = 1500
         self.elo = elo if elo is not None else init_elo
