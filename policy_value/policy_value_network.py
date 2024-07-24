@@ -22,7 +22,7 @@ def quantile_huber_loss(loss, kappa=1.0):
 
 
 class DQN(nn.Module):
-    """policy-value network module"""
+    """value network module"""
     def __init__(self, board_width, board_height):
         super(DQN, self).__init__()
 
@@ -34,31 +34,36 @@ class DQN(nn.Module):
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+
+        # action policy layers
+        self.dqn_conv1 = nn.Conv2d(128, 4, kernel_size=1)
+        self.dqn_fc1 = nn.Linear(4 * board_width * board_height,
+                                 board_width * board_height)
+
         # action value layers (previous state value)
         self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions)
 
-    def forward(self, state_input, eps):
+        self.weights = nn.Parameter(torch.ones(self.num_actions))
+
+    def forward(self, state_input):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
 
         # action policy layers
-        x_act = F.relu(self.act_conv1(x))
-        x_act = x_act.view(-1, 2 * self.board_width * self.board_height)
-        x_act = F.relu(self.act_fc1(x_act))
+        x_act = F.relu(self.dqn_conv1(x))
+        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
+        x_act = F.log_softmax(self.dqn_fc1(x_act), dim=1)  # output about log probability of each action
 
-        x_val = self.act_fc2(x_act)
-        x_act = F.log_softmax(x_val, dim=1)
-
-        # epsilon greedy
-        # if torch.rand(1) < eps:
-        #     val_idx = random.randrange(x_val.numel())
-        # else:  # (1 - eps) probs
-        #     val_idx = x_val.argmax(dim=1)
-        # x_val = x_val.view(-1)[val_idx].view(1)
+        # action value layers
+        x_val = F.relu(self.act_conv1(x))
+        x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
+        x_val = F.relu(self.act_fc1(x_val))
+        x_val = self.act_fc2(x_val)
+        x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
@@ -225,7 +230,7 @@ class AAC(nn.Module):  # action value actor critic
         x_act = self.act_fc1(x_act)
         x_act = F.log_softmax(x_act, dim=1)  # output about log probability of each action
 
-        # action policy layers
+        # action value layers
         x_val = F.relu(self.val_conv1(x))
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
@@ -262,7 +267,7 @@ class QRAAC(nn.Module):  # Quantile Regression action value actor critic
         self.val_fc2 = nn.Linear(64, self.num_actions * self.N)
 
         # Initialize weights
-        self.weights = nn.Parameter(torch.ones(board_width * board_height) / (board_width * board_height))
+        self.weights = nn.Parameter(torch.ones(self.num_actions))
 
     def forward(self, state_input):
         # common layers
@@ -284,10 +289,7 @@ class QRAAC(nn.Module):  # Quantile Regression action value actor critic
 
         # Calculate the mean of the quantile values for each action.
         x_val = x_val.mean(dim=2)
-
-        # Ensure weights sum to 1
-        weights = F.softmax(self.weights, dim=0)
-        x_val = torch.sum(weights * x_val, dim=1, keepdim=True)
+        x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
@@ -434,10 +436,7 @@ class PolicyValueNet:
         device = self.use_gpu
         state_batch = np.array(state_batch)
         state_batch = torch.from_numpy(state_batch).float().to(device)
-        if self.rl_model == "DQN" or self.rl_model == "QRDQN":
-            log_act_probs, value = self.policy_value_net(state_batch, self.epsilon_min)
-        else:
-            log_act_probs, value = self.policy_value_net(state_batch)
+        log_act_probs, value = self.policy_value_net(state_batch)
         act_probs = np.exp(log_act_probs.cpu().detach().numpy())
         return act_probs, value.cpu().detach().numpy()
 
@@ -452,11 +451,6 @@ class PolicyValueNet:
         current_state = np.ascontiguousarray(env.state_.reshape(-1, 5, env.state_.shape[1], env.state_.shape[2]))
         device = self.use_gpu
         current_state = torch.from_numpy(current_state).float().to(device)
-        # if self.rl_model == "DQN" or self.rl_model == "QRDQN":
-        #     if self.epsilon > self.epsilon_min:
-        #         self.epsilon *= self.epsilon_decay
-        #     log_act_probs, value = self.policy_value_net(current_state, self.epsilon)
-        # else:
         log_act_probs, value = self.policy_value_net(current_state)
         act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
         act_probs = zip(available, act_probs[available])
@@ -482,38 +476,41 @@ class PolicyValueNet:
             loss = F.mse_loss(value.view(-1), winner_batch)
 
         elif self.rl_model == "QRDQN":
-            taus = torch.linspace(0, 1, self.quantiles.size(2) + 1)[1:]  # TODO quantile 받아서 보내기
-            loss = quantile_huber_loss(value.view(-1), winner_batch, taus)
+            loss = F.mse_loss(value.view(-1), winner_batch) # model based.
+            huber_loss = torch.where(loss.abs() <= self.kappa, 0.5 * loss.pow(2),
+                                     self.kappa * (loss.abs() - 0.5 * self.kappa))
+
+            quantile_loss = (abs(self.quantile_tau - (loss.detach() < 0).float()) * huber_loss / 1.0).unsqueeze(-1)
+            loss = quantile_loss.sum(dim=1).mean()
 
         elif self.rl_model == "QRAAC":
             loss = F.mse_loss(value.view(-1), winner_batch)
             huber_loss = torch.where(loss.abs() <= self.kappa, 0.5 * loss.pow(2),
                                      self.kappa * (loss.abs() - 0.5 * self.kappa))
 
-            # Quantile Loss: 각 quantile 위치에 따라 Huber Loss에 가중치를 적용하여 Quantile Loss를 계산
-            quantile_loss = abs(self.quantile_tau - (loss.detach() < 0).float()) * huber_loss / 1.0
-            quantile_loss = quantile_loss.sum(dim=1).mean(dim=1)
-
+            # Quantile loss: 각 quantile 위치에 따라 Huber Loss에 가중치를 적용하여 Quantile Loss를 계산
+            quantile_loss = (abs(self.quantile_tau - (loss.detach() < 0).float()) * huber_loss / 1.0).unsqueeze(-1)
+            # value loss : 각 quantile loss에 따른 값들을 평균
             value_loss = quantile_loss.mean()
+
             policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
             loss = value_loss + policy_loss
-        else:
+        elif self.rl_model == "AAC":
             value_loss = F.mse_loss(value.view(-1), winner_batch)
             policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
             loss = value_loss + policy_loss
+        else:
+            assert "no model"
 
         # when call backward, the grad will accumulate. so zero grad before backward
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        if self.rl_model == "DQN" or self.rl_model == "QRDQN":
-            return loss.item()
-        else:
-            entropy = -torch.mean(
-                torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
-            )
-            return loss.item(), entropy.item()
+        entropy = -torch.mean(
+            torch.sum(torch.exp(log_act_probs) * log_act_probs, 1)
+        )
+        return loss.item(), entropy.item()
 
     def get_policy_param(self):
         net_params = self.policy_value_net.state_dict()
