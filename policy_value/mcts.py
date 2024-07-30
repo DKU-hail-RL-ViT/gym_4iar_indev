@@ -1,9 +1,7 @@
 import numpy as np
 import copy
 import torch
-import random
-from fiar_env import Fiar, action2d_ize
-# from policy_value.policy_value_network import AC, DQN, QRDQN, Net
+from fiar_env import Fiar
 
 
 def softmax(x):
@@ -208,13 +206,8 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def available(self, env):
-        if self.mcts._root.children == {}:
-            return False
-
     def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
-        sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
-        # the pi vector returned by MCTS as in the alphaGo Zero paper
+        sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
@@ -288,25 +281,6 @@ class MCTSPlayer(object):
 #         else:
 #             print("WARNING: the board is full")
 #
-#     def oppo_node_update(self, move):
-#         # 원래는 없없던 코드
-#         self.mcts.update_with_move(move)
 #
 #     def __str__(self):
 #         return "forcing leaf node MCTS {}".format(self.player)
-
-
-# class RandomAction(object):
-#
-#     def set_player_ind(self, p):
-#         self.player = p
-#
-#     def get_action(self, env):
-#         available = [i for i in range(36) if env.state_[3][i // 4][i % 4] != 1]
-#         sensible_moves = available
-#
-#         if len(sensible_moves) > 0:
-#             move = random.choice(sensible_moves)
-#             return move
-#         else:
-#             print("WARNING: the board is full")

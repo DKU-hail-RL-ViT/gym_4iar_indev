@@ -18,8 +18,8 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=2)  # compare with 2, 16, 32, 64
+parser.add_argument("--n_playout", type=int, default=7)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
@@ -39,7 +39,6 @@ parser.add_argument("--lr_multiplier", type=float, default=1.0)
 parser.add_argument("--self_play_sizes", type=int, default=100)
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=1.0)
-
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)  # previous 64
 parser.add_argument("--learn_rate", type=float, default=5e-4)
@@ -68,13 +67,6 @@ win_ratio = args.win_ratio
 init_model = args.init_model
 rl_model = args.rl_model
 quantiles = args.quantiles
-
-
-def policy_value_fn(board):  # board.shape = (9,4)
-    # return uniform probabilities and 0 score for pure MCTS
-    availables = [i for i in range(36) if not np.any(board[3][i // 4][i % 4] == 1)]
-    action_probs = np.ones(len(availables)) / len(availables)
-    return zip(availables, action_probs), 0
 
 
 def get_equi_data(env, play_data):
@@ -131,7 +123,7 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
     return data_buffer
 
 
-def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0, move=None, move_probs=None):
+def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     obs, _ = env.reset()
     states, mcts_probs, current_player = [], [], []
 
@@ -300,11 +292,11 @@ if __name__ == '__main__':
     env = Fiar()
     obs, _ = env.reset()
 
-    if torch.cuda.is_available():  # Windows
+    if torch.cuda.is_available():           # Windows
         device = torch.device("cuda")
-    elif torch.backends.mps.is_available():  # Mac OS
+    elif torch.backends.mps.is_available(): # Mac OS
         device = torch.device("mps")
-    else:  # CPU
+    else:                                   # CPU
         device = torch.device("cpu")
 
     turn_A = turn(obs)
