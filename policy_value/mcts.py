@@ -119,24 +119,28 @@ class MCTS(object):
 
         threshold = 0.1
         k = 1
-        sensible_moves = np.where(env.state_[3].flatten() == 0)[0]
-        # x_act_intermed, x_val_intermed = self._policy._get_intermediate_values(env.state_,k) # [TODO] 여기는 EQRAC 부분 나중에
+
+        sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
+
         if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
-            while True:
-                action_probs, leaf_action_value = self._policy(env, sensible_moves, k) # TODO 여기서 K는 quantile 지수
-                # action_probs = F.log_softmax(self._policy.act_fc1(x_act_intermed), dim=1)
+            while k < 7:
+                action_probs, leaf_action_value = self._policy(env, k)  # TODO 여기 policy 안에서 interpolate 해야하는 거긴 할건데
                 # get values of sensible_moves
-                leaf_action_value = leaf_action_value.flatten()
                 leaf_action_value = leaf_action_value[sensible_moves]
+
                 # compare max and second max of leaf_action_value
-                leaf_action_value.sorted()
-                if torch.abs(leaf_action_value[-1] - leaf_action_value[-2]) > threshold:
+                leaf_action_value, _ = leaf_action_value.sort()
+                if torch.abs(leaf_action_value[-1] - leaf_action_value[-2]) > threshold: # [TODO] 일단 돌려보기로는 quantile 개수가 많아질 수록 당연하게 차이값은 점점 작아지는데
+                    print(k, "조건 만족되었을 때 k 값 ")
                     break
+
                 else:
                     k += 1
+                    print(k, "조건에 틀렸을 때 k 값 ")
+
                 # max leaf_action_value as leaf_value
-                leaf_action_value = leaf_action_value.max().item()
-                leaf_value = leaf_action_value
+                leaf_value = leaf_action_value.max().item()  # [todo] 여기가 max값으로 줘도 되는지
+
         else:
             action_probs, leaf_value = self._policy(env)
 
@@ -234,53 +238,3 @@ class MCTSPlayer(object):
 
     def __str__(self):
         return "training MCTS {}".format(self.player)
-
-
-# class MCTSPlayer_leaf(object):
-#     """Force the transition to the tree node even during self-play."""
-#     """AI player based on MCTS"""
-#
-#     def __init__(self, policy_value_fn, c_puct=5, n_playout=2000, is_selfplay=0):
-#         self.mcts = MCTS(policy_value_fn, c_puct, n_playout)
-#         self._is_selfplay = is_selfplay
-#
-#     def set_player_ind(self, p):
-#         self.player = p
-#
-#     def reset_player(self):
-#         self.mcts.update_with_move(-1)
-#
-#     def get_action(self, env, temp=0.1, return_prob=0):  # env.state_.shape = (5,9,4)
-#         available = np.where(env.state_[3].flatten() == 0)[0]
-#         sensible_moves = available
-#         # the pi vector returned by MCTS as in the alphaGo Zero paper
-#         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
-#
-#         if len(sensible_moves) > 0:
-#             acts, probs = self.mcts.get_move_probs(env, temp)  # board.shape = (5,9,4)
-#             move_probs[list(acts)] = probs
-#
-#             if self._is_selfplay:
-#                 # add Dirichlet Noise for exploration (needed for self-play training)
-#                 move = np.random.choice(
-#                     acts,
-#                     p=0.75 * probs + 0.25 * np.random.dirichlet(0.3 * np.ones(len(probs)))
-#                 )
-#                 # update the root node and reuse the search tree
-#                 self.mcts.update_with_move(-1)
-#             else:
-#                 move = np.random.choice(acts, p=probs)
-#                 # reset the root node
-#                 assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(self.mcts._root.children)
-#                 self.mcts.update_with_move(-1)
-#
-#             if return_prob:
-#                 return move, move_probs
-#             else:
-#                 return move
-#         else:
-#             print("WARNING: the board is full")
-#
-#
-#     def __str__(self):
-#         return "forcing leaf node MCTS {}".format(self.player)
