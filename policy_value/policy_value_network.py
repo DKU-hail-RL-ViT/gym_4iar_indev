@@ -18,6 +18,27 @@ def calculate_quantile_regression_loss(huber_loss, quantile_tau, value_loss):
                 dim=1).mean()
 
 
+def interpolate_quantiles(old_quantiles, new_quantile_count):
+    # 기존 quantile의 개수
+    old_quantile_count = len(old_quantiles)
+
+    # 새로운 quantile을 위한 위치 계산
+    new_quantile_positions = np.linspace(0, 1, new_quantile_count + 1)
+    old_quantile_positions = np.linspace(0, 1, old_quantile_count + 1)
+
+    # 새로운 quantile 값 계산 (보간 사용)
+    new_quantiles = np.interp(new_quantile_positions[1:-1], old_quantile_positions[1:-1], old_quantiles)
+
+    return new_quantiles
+
+
+# 예시: quantile 2개에서 4개로 확장
+# q4_values = interpolate_quantiles(q2_values, 4)
+
+
+
+
+
 class DQN(nn.Module):
     """value network module"""
 
@@ -358,15 +379,15 @@ class EQRDQN(nn.Module):
         return x_act, x_val
 
 
-class EQRAAC(nn.Module):  # Quantile Regression action value actor critic
+class EQRAAC(nn.Module):  # Efficient Quantile Regression action value actor critic
     """policy-value network module"""
 
-    def __init__(self, board_width, board_height, quantiles):
+    def __init__(self, board_width, board_height, device):
         super(EQRAAC, self).__init__()
         self.board_width = board_width
         self.board_height = board_height
         self.num_actions = board_width * board_height
-        self.N = quantiles
+        self.device = device
 
         # common layers
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
@@ -380,12 +401,15 @@ class EQRAAC(nn.Module):  # Quantile Regression action value actor critic
         # action value layers
         self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
-        self.val_fc2 = nn.Linear(64, self.num_actions * self.N)
+        # self.val_fc2 = nn.Linear(64, self.num_actions * self.N)
 
         # Initialize weights
         self.weights = nn.Parameter(torch.ones(self.num_actions))
 
-    def forward(self, state_input):
+    def update_val_fc_quantiles(self, quantiles):
+        self.val_fc2 = nn.Linear(64, self.num_actions * quantiles).to(self.device)
+
+    def forward(self, state_input, quantiles):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -401,12 +425,17 @@ class EQRAAC(nn.Module):  # Quantile Regression action value actor critic
         x_val = F.relu(self.val_conv1(x))
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
+
+        # Update and use dynamic val_fc based on quantiles
+        self.update_val_fc_quantiles(quantiles)
         x_val = self.val_fc2(x_val)
-        x_val = x_val.view(-1, self.num_actions, self.N)
+        x_val = x_val.view(-1, self.num_actions, quantiles)
+        print(quantiles, "network 안에서 찍은 quantile 개수")
 
         # Calculate the mean of the quantile values for each action.
-        x_val = x_val.mean(dim=2)
-        x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
+        x_val = x_val.mean(dim=2).flatten()
+        # x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
+        # [TODO] efficient search 에서는 action value 끼리 비교할건데 여기서 weighted sum해주는게 아닌걸로 보이는데
 
         return x_act, x_val
 
@@ -430,13 +459,13 @@ class PolicyValueNet:
         self.rl_model = rl_model
         self.gamma = 0.99
         self.kappa = 1.0
-        self.N = quantiles
+        self.N = quantiles   # [TODO] 여기서도 efficient search 때는 이렇게 initilize해주면 안될 거 같은데
         self.quantile_tau = torch.FloatTensor([i / self.N for i in range(1, self.N + 1)]).to(self.device)
 
         # DQN, QRDQN, AC, AAC, QRAC, QRAAC, EQRDQN, EQRAAC
-        if rl_model == "DQN":  # [TODO]
+        if rl_model == "DQN":
             self.policy_value_net = DQN(board_width, board_height).to(self.device)
-        elif rl_model == "QRDQN":  # [TODO]
+        elif rl_model == "QRDQN":
             self.policy_value_net = QRDQN(board_width, board_height, quantiles).to(self.device)
         elif rl_model == "AC":
             self.policy_value_net = AC(board_width, board_height).to(self.device)
@@ -447,9 +476,9 @@ class PolicyValueNet:
         elif rl_model == "QRAAC":
             self.policy_value_net = QRAAC(board_width, board_height, quantiles).to(self.device)
         elif rl_model == "EQRDQN":
-            self.policy_value_net = EQRDQN(board_width, board_height, quantiles).to(self.device)
+            self.policy_value_net = EQRDQN(board_width, board_height, self.device).to(self.device)
         elif rl_model == "EQRAAC":
-            self.policy_value_net = EQRAAC(board_width, board_height, quantiles).to(self.device)
+            self.policy_value_net = EQRAAC(board_width, board_height, self.device).to(self.device) # [TODO] Effficient search 부분에서는 quantile를 initialize하지 않는게 정답일 수도 있겠는ㄷ제
         else:
             assert print("error")
 
@@ -470,9 +499,11 @@ class PolicyValueNet:
         # return act_probs, value.cpu().detach().numpy()
         state_batch = np.array(state_batch)
         state_batch = torch.tensor(state_batch, dtype=torch.float32, device=self.device)
-        print(self.device)
         with torch.no_grad():
-            log_act_probs, value = self.policy_value_net(state_batch)
+            if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
+                log_act_probs, value = self.policy_value_net(state_batch, self.N)
+            else:
+                log_act_probs, value = self.policy_value_net(state_batch)
             act_probs = torch.exp(log_act_probs).cpu().numpy()
             value = value.cpu().numpy()
 
@@ -485,15 +516,25 @@ class PolicyValueNet:
         action and the score of the board state
         """
         available = np.nonzero(env.state_[3].flatten() == 0)[0]
-        k = k  # [Todo] 여기 K는 나중에 EQRAC였나 거기서 비교해서 Quantile k값을 늘려준다 그거임
         current_state = np.ascontiguousarray(env.state_.reshape(-1, 5, env.state_.shape[1], env.state_.shape[2]))
         current_state = torch.from_numpy(current_state).float().to(self.device)
-        # log_act_probs, value = self.policy_value_net(current_state)
-        # act_probs = np.exp(log_act_probs.data.cpu().detach().numpy().flatten())
+
         with torch.no_grad():
-            log_act_probs, value = self.policy_value_net(current_state)
+            if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
+                init_N = 2
+
+                # [Todo] 이게 함수라서 policy value가 들어올때마다 1로 초기화 되어서 항상 1로 될 수 있음 이거 디버깅 찍어 봐야할 수도
+                self.N = init_N ** k
+                print(self.N, "network 들어가기 전에 quantile 개수")
+                log_act_probs, value = self.policy_value_net(current_state, self.N)
+                print(value.shape)
+
+            else:
+                log_act_probs, value = self.policy_value_net(current_state)
+
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
-        act_probs = zip(available, act_probs[available])
+            act_probs = zip(available, act_probs[available])
+
         return act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
