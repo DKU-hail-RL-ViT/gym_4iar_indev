@@ -330,13 +330,14 @@ class QRAAC(nn.Module):  # Quantile Regression action value actor critic
 class EQRDQN(nn.Module):
     """policy-value network module"""
 
-    def __init__(self, board_width, board_height, quantiles):
+    def __init__(self, board_width, board_height, device):
         super(EQRDQN, self).__init__()
 
         self.board_width = board_width
         self.board_height = board_height
         self.num_actions = board_width * board_height
-        self.N = quantiles
+        self.device = device
+        # self.N = quantiles
 
         # common layers
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
@@ -406,7 +407,7 @@ class EQRAAC(nn.Module):  # Efficient Quantile Regression action value actor cri
         # Initialize weights
         self.weights = nn.Parameter(torch.ones(self.num_actions))
 
-    def update_val_fc_quantiles(self, quantiles):
+    def update_quantiles(self, quantiles):
         self.val_fc2 = nn.Linear(64, self.num_actions * quantiles).to(self.device)
 
     def forward(self, state_input, quantiles):
@@ -427,15 +428,17 @@ class EQRAAC(nn.Module):  # Efficient Quantile Regression action value actor cri
         x_val = F.relu(self.val_fc1(x_val))
 
         # Update and use dynamic val_fc based on quantiles
-        self.update_val_fc_quantiles(quantiles)
+        self.update_quantiles(quantiles)
         x_val = self.val_fc2(x_val)
         x_val = x_val.view(-1, self.num_actions, quantiles)
         print(quantiles, "network 안에서 찍은 quantile 개수")
 
+        # sh = x_val.mean(dim=1).flatten()
+        # print(sh)
+
         # Calculate the mean of the quantile values for each action.
         x_val = x_val.mean(dim=2).flatten()
         # x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
-        # [TODO] efficient search 에서는 action value 끼리 비교할건데 여기서 weighted sum해주는게 아닌걸로 보이는데
 
         return x_act, x_val
 
@@ -521,13 +524,9 @@ class PolicyValueNet:
 
         with torch.no_grad():
             if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
-                init_N = 2
-
-                # [Todo] 이게 함수라서 policy value가 들어올때마다 1로 초기화 되어서 항상 1로 될 수 있음 이거 디버깅 찍어 봐야할 수도
-                self.N = init_N ** k
+                self.N = 2 ** k
                 print(self.N, "network 들어가기 전에 quantile 개수")
                 log_act_probs, value = self.policy_value_net(current_state, self.N)
-                print(value.shape)
 
             else:
                 log_act_probs, value = self.policy_value_net(current_state)

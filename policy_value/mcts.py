@@ -10,6 +10,16 @@ def softmax(x):
     return probs
 
 
+def interpolate_quantiles(interpolate_pre, interpolate_aft):
+    quantiles_old = np.linspace(0, 1, interpolate_pre + 1)
+    quantiles_new = np.linspace(0, 1, interpolate_aft + 1)
+
+    new_quantiles = np.interp(quantiles_new[1:-1], quantiles_old[1:-1], interpolate_pre)
+
+    return new_quantiles
+
+
+
 class TreeNode(object):
     """A node in the MCTS tree. Each node keeps track of its own value Q,
     prior probability P, and its visit-count-adjusted prior score u.
@@ -102,6 +112,9 @@ class MCTS(object):
         self.rl_model = rl_model
         self.env = Fiar()
 
+        # Resource hyperparameter
+        self.R_rem = 100  # [TODO] Efficient search할 때 사용할 hyperparameter 로 일단 임시로 이렇게 해뒀음
+
     def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
@@ -119,26 +132,32 @@ class MCTS(object):
 
         threshold = 0.1
         k = 1
-
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
 
         if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
-            while k < 7:
+            while (k < 7) and (self.R_rem > 0):
                 action_probs, leaf_action_value = self._policy(env, k)  # TODO 여기 policy 안에서 interpolate 해야하는 거긴 할건데
+
                 # get values of sensible_moves
                 leaf_action_value = leaf_action_value[sensible_moves]
-
-                # compare max and second max of leaf_action_value
                 leaf_action_value, _ = leaf_action_value.sort()
-                if torch.abs(leaf_action_value[-1] - leaf_action_value[-2]) > threshold: # [TODO] 일단 돌려보기로는 quantile 개수가 많아질 수록 당연하게 차이값은 점점 작아지는데
+
+                # [TODO] 일단 돌려보기로는 quantile 개수가 많아질 수록 차이값은 점점 작아지는데,
+                if torch.abs(leaf_action_value[-1] - leaf_action_value[-2]) > threshold:
                     print(k, "조건 만족되었을 때 k 값 ")
                     break
 
                 else:
-                    k += 1
-                    print(k, "조건에 틀렸을 때 k 값 ")
+                    # init_N = 2
+                    # TODO 이 부분에서 저장하고 해야할거 같은데
 
-                # max leaf_action_value as leaf_value
+                    # q_values = interpolate_quantiles(init_N ** k, init_N ** (k + 1))
+                    # print(q_values)
+                    print(k, "조건에 틀렸을 때 k 값 ")
+                    k += 1
+                    self.R_rem -= 0.5  # hyperparameter
+
+                    # max leaf_action_value as leaf_value
                 leaf_value = leaf_action_value.max().item()  # [todo] 여기가 max값으로 줘도 되는지
 
         else:
