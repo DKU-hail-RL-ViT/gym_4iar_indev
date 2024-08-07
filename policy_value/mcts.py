@@ -3,6 +3,7 @@ import copy
 import torch
 from fiar_env import Fiar
 
+epsilon = 0.05
 
 def softmax(x):
     probs = np.exp(x - np.max(x))
@@ -161,13 +162,33 @@ class MCTS(object):
                 leaf_value = leaf_action_value.max().item()  # [todo] 여기가 max값으로 줘도 되는지
 
         else:
-            action_probs, leaf_value = self._policy(env)
+            action_probs_, leaf_value_ = self._policy(env)
+            # action prob 을 1 hot vector 로 만들어야함
+            action_probs = np.zeros_like(action_probs_)
+            idx_max = leaf_value_.argmax()
+            action_probs[idx_max] = 1
+
+            # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
+            action_probs[sensible_moves] += epsilon/np.sum(sensible_moves)
+            action_probs[idx_max] -= epsilon
+
+            # use oracle
+            # # calculate next node.select's node._Q
+            # leaf_temp = node._Q + (leaf_value - node._Q)/ (node._n_visits+1)
+            # # do we need to calculate next node._u?
+            # leaf_value = leaf_value_[leaf_temp.argmax()]
+
+            # use bellman expection to cal state value
+            leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
+
+            ## use bellman optimality to cal state value
+            # leaf_value = leaf_value_.max() # state value 를 구하는 방식
 
         # Check for end of game
         end, winners = env.winner()
 
         if not end:
-            node.expand(action_probs)
+            node.expand(action_probs) # DQN 버전 같은 경우는 어떤 action을 했는지에 대한 정보가 있어야 반영할 수 있으니 여기서 적절히 추출해야함.
         else:
             if winners == -1:  # tie
                 leaf_value = 0.0
