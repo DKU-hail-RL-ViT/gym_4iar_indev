@@ -179,10 +179,10 @@ class MCTS(object):
             # leaf_value = leaf_value_[leaf_temp.argmax()]
 
             # use bellman expection to cal state value
-            leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
+            # leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
 
             ## use bellman optimality to cal state value
-            # leaf_value = leaf_value_.max() # state value 를 구하는 방식
+            leaf_value = leaf_value_.max() # state value 를 구하는 방식
 
         # Check for end of game
         end, winners = env.winner()
