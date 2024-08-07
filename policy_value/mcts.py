@@ -177,6 +177,8 @@ class MCTS(object):
                 leaf_value = -1.0
             obs, _ = env.reset()
 
+            # R + \gamma Q - Q
+
         node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)

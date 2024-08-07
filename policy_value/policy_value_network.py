@@ -82,7 +82,7 @@ class DQN(nn.Module):
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.act_fc1(x_val))
         x_val = self.act_fc2(x_val)
-        x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
+        # x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
