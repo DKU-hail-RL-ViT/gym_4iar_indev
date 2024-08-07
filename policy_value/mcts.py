@@ -161,9 +161,9 @@ class MCTS(object):
                     # max leaf_action_value as leaf_value
                 leaf_value = leaf_action_value.max().item()  # [todo] 여기가 max값으로 줘도 되는지
 
-        else:
+        elif self.rl_model in ["DQN", "QRDQN", "AAC", "QRAAC"]:
             action_probs_, leaf_value_ = self._policy(env)
-            # action prob 을 1 hot vector 로 만들어야함
+            # action prob 을 one hot vector 로 만들어야함
             action_probs = np.zeros_like(action_probs_)
             idx_max = leaf_value_.argmax()
             action_probs[idx_max] = 1
@@ -183,6 +183,9 @@ class MCTS(object):
 
             ## use bellman optimality to cal state value
             leaf_value = leaf_value_.max() # state value 를 구하는 방식
+
+        else:
+            action_probs, leaf_value = self._policy(env)
 
         # Check for end of game
         end, winners = env.winner()

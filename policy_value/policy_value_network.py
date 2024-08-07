@@ -54,17 +54,10 @@ class DQN(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
 
-        # action policy layers
-        self.dqn_conv1 = nn.Conv2d(128, 4, kernel_size=1)
-        self.dqn_fc1 = nn.Linear(4 * board_width * board_height, board_width * board_height)
-
         # action value layers
         self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions)
-
-        # Initialize weights
-        self.weights = nn.Parameter(torch.ones(self.num_actions))
 
     def forward(self, state_input):
         # common layers
@@ -72,17 +65,14 @@ class DQN(nn.Module):
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
 
-        # action policy layers
-        x_act = F.relu(self.dqn_conv1(x))
-        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
-        x_act = F.log_softmax(self.dqn_fc1(x_act), dim=1)  # output about log probability of each action
-
         # action value layers
         x_val = F.relu(self.act_conv1(x))
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.act_fc1(x_val))
         x_val = self.act_fc2(x_val)
-        # x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
+
+        # action policy layers
+        x_act = F.log_softmax(x_val,dim=1)
 
         return x_act, x_val
 
@@ -103,17 +93,10 @@ class QRDQN(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
 
-        # action policy layers
-        self.dqn_conv1 = nn.Conv2d(128, 4, kernel_size=1)
-        self.dqn_fc1 = nn.Linear(4 * board_width * board_height, board_width * board_height)
-
         # action value layers (previous state value)
         self.act_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions * self.N)
-
-        # Initialize weights
-        self.weights = nn.Parameter(torch.ones(self.num_actions))
 
     def forward(self, state_input):
         # common layers
@@ -121,20 +104,17 @@ class QRDQN(nn.Module):
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
 
-        # action policy layers
-        x_act = F.relu(self.dqn_conv1(x))
-        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
-        x_act = F.log_softmax(self.dqn_fc1(x_act), dim=1)  # output about log probability of each action
-
         # action value layers
         x_val = F.relu(self.act_conv1(x))
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.act_fc1(x_val))
         x_val = self.act_fc2(x_val)
 
+        # action policy layers
+        x_act = F.log_softmax(x_val, dim=1)
+
         x_val = x_val.view(-1, self.num_actions, self.N)
         x_val = x_val.mean(dim=2)
-        x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
@@ -246,9 +226,6 @@ class AAC(nn.Module):  # action value actor critic
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.val_fc2 = nn.Linear(64, self.num_actions)
 
-        # Initialize weights
-        self.weights = nn.Parameter(torch.ones(board_width * board_height) / (board_width * board_height))
-
     def forward(self, state_input):
         # common layers
         x = F.relu(self.conv1(state_input))
@@ -266,10 +243,6 @@ class AAC(nn.Module):  # action value actor critic
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
         x_val = self.val_fc2(x_val)
-
-        # Ensure weights sum to 1
-        weights = F.softmax(self.weights, dim=0)
-        x_val = torch.sum(weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
@@ -298,9 +271,6 @@ class QRAAC(nn.Module):  # Quantile Regression action value actor critic
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.val_fc2 = nn.Linear(64, self.num_actions * self.N)
 
-        # Initialize weights
-        self.weights = nn.Parameter(torch.ones(self.num_actions))
-
     def forward(self, state_input):
         # common layers
         x = F.relu(self.conv1(state_input))
@@ -322,7 +292,6 @@ class QRAAC(nn.Module):  # Quantile Regression action value actor critic
 
         # Calculate the mean of the quantile values for each action.
         x_val = x_val.mean(dim=2)
-        x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
@@ -353,9 +322,6 @@ class EQRDQN(nn.Module):
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions * self.N)
 
-        # Initialize weights
-        self.weights = nn.Parameter(torch.ones(self.num_actions))
-
     def forward(self, state_input):
         # common layers
         x = F.relu(self.conv1(state_input))
@@ -375,7 +341,6 @@ class EQRDQN(nn.Module):
 
         x_val = x_val.view(-1, self.num_actions, self.N)
         x_val = x_val.mean(dim=2)
-        x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
@@ -403,9 +368,6 @@ class EQRAAC(nn.Module):  # Efficient Quantile Regression action value actor cri
         self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
         # self.val_fc2 = nn.Linear(64, self.num_actions * self.N)
-
-        # Initialize weights
-        self.weights = nn.Parameter(torch.ones(self.num_actions))
 
     def update_quantiles(self, quantiles):
         self.val_fc2 = nn.Linear(64, self.num_actions * quantiles).to(self.device)
@@ -438,7 +400,6 @@ class EQRAAC(nn.Module):  # Efficient Quantile Regression action value actor cri
 
         # Calculate the mean of the quantile values for each action.
         x_val = x_val.mean(dim=2).flatten()
-        # x_val = torch.sum(self.weights * x_val, dim=1, keepdim=True)
 
         return x_act, x_val
 
@@ -481,7 +442,7 @@ class PolicyValueNet:
         elif rl_model == "EQRDQN":
             self.policy_value_net = EQRDQN(board_width, board_height, self.device).to(self.device)
         elif rl_model == "EQRAAC":
-            self.policy_value_net = EQRAAC(board_width, board_height, self.device).to(self.device) # [TODO] Effficient search 부분에서는 quantile를 initialize하지 않는게 정답일 수도 있겠는ㄷ제
+            self.policy_value_net = EQRAAC(board_width, board_height, self.device).to(self.device)
         else:
             assert print("error")
 
