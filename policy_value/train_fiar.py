@@ -18,18 +18,18 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=100)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=2)  # compare with 2, 16, 32, 64
+parser.add_argument("--n_playout", type=int, default=10)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
-# parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
+parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
 # parser.add_argument("--rl_model", type=str, default="AAC")    # Actor critic action value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
-parser.add_argument("--rl_model", type=str, default="EQRAAC")  # Efficient search + Actor critic action value ver
+# parser.add_argument("--rl_model", type=str, default="EQRAAC")  # Efficient search + Actor critic action value ver
 
 """ MCTS parameter """
 parser.add_argument("--buffer_size", type=int, default=10000)
@@ -279,7 +279,7 @@ if __name__ == '__main__':
                    )
     elif (rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "QRAAC"
           or rl_model == "EQRDQN" or rl_model == "EQRAAC"):
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
