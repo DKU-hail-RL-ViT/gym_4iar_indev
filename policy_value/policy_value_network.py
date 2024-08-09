@@ -71,8 +71,8 @@ class DQN(nn.Module):
         x_val = F.relu(self.act_fc1(x_val))
         x_val = self.act_fc2(x_val)
 
-        # action policy layers
-        x_act = F.log_softmax(x_val,dim=1)
+        # action value to policy
+        x_act = F.log_softmax(x_val, dim=1)
 
         return x_act, x_val
 
@@ -449,7 +449,7 @@ class PolicyValueNet:
         self.optimizer = optim.Adam(self.policy_value_net.parameters(),
                                     weight_decay=self.l2_const)
         if model_file:
-            state_dict = torch.load(model_file, map_location=self.device)
+            state_dict = torch.load(model_file, map_location=self.device, weights_only=True)
             self.policy_value_net.load_state_dict(state_dict)
 
     def policy_value(self, state_batch):
@@ -493,9 +493,9 @@ class PolicyValueNet:
                 log_act_probs, value = self.policy_value_net(current_state)
 
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
-            act_probs = zip(available, act_probs[available])
+            # act_probs = zip(available, act_probs[available])
 
-        return act_probs, value
+        return available, act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""

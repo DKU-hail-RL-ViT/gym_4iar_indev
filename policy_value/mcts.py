@@ -3,7 +3,7 @@ import copy
 import torch
 from fiar_env import Fiar
 
-epsilon = 0.05
+epsilon = 0.1
 
 def softmax(x):
     probs = np.exp(x - np.max(x))
@@ -162,8 +162,11 @@ class MCTS(object):
                 leaf_value = leaf_action_value.max().item()  # [todo] 여기가 max값으로 줘도 되는지
 
         elif self.rl_model in ["DQN", "QRDQN", "AAC", "QRAAC"]:
-            action_probs_, leaf_value_ = self._policy(env)
+            # action_probs_, leaf_value_ = self._policy(env)
+            available, action_probs_, leaf_value_ = self._policy(env)
+
             # action prob 을 one hot vector 로 만들어야함
+            # action_probs_ = np.array(list(action_probs_))[:, 1]
             action_probs = np.zeros_like(action_probs_)
             idx_max = leaf_value_.argmax()
             action_probs[idx_max] = 1
@@ -172,19 +175,24 @@ class MCTS(object):
             action_probs[sensible_moves] += epsilon/np.sum(sensible_moves)
             action_probs[idx_max] -= epsilon
 
-            # use oracle
+            action_probs = zip(available, action_probs[available])
+            print("he")
+
+
+
+            ## use oracle
             # # calculate next node.select's node._Q
             # leaf_temp = node._Q + (leaf_value - node._Q)/ (node._n_visits+1)
             # # do we need to calculate next node._u?
             # leaf_value = leaf_value_[leaf_temp.argmax()]
 
-            # use bellman expection to cal state value
+            ## use bellman expection to cal state value
             # leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
 
             ## use bellman optimality to cal state value
             leaf_value = leaf_value_.max() # state value 를 구하는 방식
 
-        else:
+        else:  # state version AC, QRAC
             action_probs, leaf_value = self._policy(env)
 
         # Check for end of game
