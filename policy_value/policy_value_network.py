@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 import os
 
+epsilon = 0.1
 
 def set_learning_rate(optimizer, lr):
     """Sets the learning rate to the given value"""
@@ -203,11 +204,11 @@ class QRAC(nn.Module):
         return x_act, x_val
 
 
-class AAC(nn.Module):  # action value actor critic
+class QAC(nn.Module):  # action value actor critic
     """policy-value network module"""
 
     def __init__(self, board_width, board_height):
-        super(AAC, self).__init__()
+        super(QAC, self).__init__()
         self.board_width = board_width
         self.board_height = board_height
         self.num_actions = board_width * board_height
@@ -247,11 +248,11 @@ class AAC(nn.Module):  # action value actor critic
         return x_act, x_val
 
 
-class QRAAC(nn.Module):  # Quantile Regression action value actor critic
+class QRQAC(nn.Module):  # Quantile Regression action value actor critic
     """policy-value network module"""
 
     def __init__(self, board_width, board_height, quantiles):
-        super(QRAAC, self).__init__()
+        super(QRQAC, self).__init__()
         self.board_width = board_width
         self.board_height = board_height
         self.num_actions = board_width * board_height
@@ -345,11 +346,11 @@ class EQRDQN(nn.Module):
         return x_act, x_val
 
 
-class EQRAAC(nn.Module):  # Efficient Quantile Regression action value actor critic
+class EQRQAC(nn.Module):  # Efficient Quantile Regression action value actor critic
     """policy-value network module"""
 
     def __init__(self, board_width, board_height, device):
-        super(EQRAAC, self).__init__()
+        super(EQRQAC, self).__init__()
         self.board_width = board_width
         self.board_height = board_height
         self.num_actions = board_width * board_height
@@ -426,23 +427,23 @@ class PolicyValueNet:
         self.N = quantiles   # [TODO] 여기서도 efficient search 때는 이렇게 initilize해주면 안될 거 같은데
         self.quantile_tau = torch.FloatTensor([i / self.N for i in range(1, self.N + 1)]).to(self.device)
 
-        # DQN, QRDQN, AC, AAC, QRAC, QRAAC, EQRDQN, EQRAAC
+        # DQN, QRDQN, AC, QAC, QRAC, QRQAC, EQRDQN, EQRQAC
         if rl_model == "DQN":
             self.policy_value_net = DQN(board_width, board_height).to(self.device)
         elif rl_model == "QRDQN":
             self.policy_value_net = QRDQN(board_width, board_height, quantiles).to(self.device)
         elif rl_model == "AC":
             self.policy_value_net = AC(board_width, board_height).to(self.device)
-        elif rl_model == "AAC":
-            self.policy_value_net = AAC(board_width, board_height).to(self.device)
+        elif rl_model == "QAC":
+            self.policy_value_net = QAC(board_width, board_height).to(self.device)
         elif rl_model == "QRAC":
             self.policy_value_net = QRAC(board_width, board_height, quantiles).to(self.device)
-        elif rl_model == "QRAAC":
-            self.policy_value_net = QRAAC(board_width, board_height, quantiles).to(self.device)
+        elif rl_model == "QRQAC":
+            self.policy_value_net = QRQAC(board_width, board_height, quantiles).to(self.device)
         elif rl_model == "EQRDQN":
             self.policy_value_net = EQRDQN(board_width, board_height, self.device).to(self.device)
-        elif rl_model == "EQRAAC":
-            self.policy_value_net = EQRAAC(board_width, board_height, self.device).to(self.device)
+        elif rl_model == "EQRQAC":
+            self.policy_value_net = EQRQAC(board_width, board_height, self.device).to(self.device)
         else:
             assert print("error")
 
@@ -464,7 +465,7 @@ class PolicyValueNet:
         state_batch = np.array(state_batch)
         state_batch = torch.tensor(state_batch, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
+            if self.rl_model == "EQRDQN" or self.rl_model == "EQRQAC":
                 log_act_probs, value = self.policy_value_net(state_batch, self.N)
             else:
                 log_act_probs, value = self.policy_value_net(state_batch)
@@ -484,7 +485,7 @@ class PolicyValueNet:
         current_state = torch.from_numpy(current_state).float().to(self.device)
 
         with torch.no_grad():
-            if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
+            if self.rl_model == "EQRDQN" or self.rl_model == "EQRQAC":
                 self.N = 2 ** k
                 print(self.N, "network 들어가기 전에 quantile 개수")
                 log_act_probs, value = self.policy_value_net(current_state, self.N)
@@ -493,9 +494,26 @@ class PolicyValueNet:
                 log_act_probs, value = self.policy_value_net(current_state)
 
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
-            # act_probs = zip(available, act_probs[available])
 
-        return available, act_probs, value
+            if self.rl_model == "DQN" or self.rl_model == "QRDQN":
+                # action prob 을 one hot vector 로 만들어야함
+                # action_probs_ = np.array(list(act_probs))[:, 1]
+                action_probs_ = np.zeros_like(act_probs)
+                idx_max = value.argmax()
+                print(idx_max)
+                # 항상 똑같은 leaf_value 가 들어간다. masking 처리를 해줘야하나
+                action_probs_[idx_max] = 1
+
+                # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
+                # action_probs[sensible_moves] += epsilon/len(sensible_moves)
+                action_probs_[available] += epsilon / (len(available) + 1e-10)
+                action_probs_[idx_max] -= epsilon
+                act_probs = action_probs_
+
+            act_probs = zip(available, act_probs[available])
+
+        # return available, act_probs, value
+        return act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
@@ -516,7 +534,7 @@ class PolicyValueNet:
         if self.rl_model == "DQN":
             loss = F.mse_loss(value.view(-1), winner_batch)
 
-        elif self.rl_model in ["QRDQN", "QRAAC", "EQRDQN", "EQRAAC"]:
+        elif self.rl_model in ["QRDQN", "QRQAC", "EQRDQN", "EQRQAC"]:
             value_loss = F.mse_loss(value.view(-1), winner_batch)
             huber_loss = torch.where(value_loss.abs() <= self.kappa, 0.5 * value_loss.pow(2),
                                      self.kappa * (value_loss.abs() - 0.5 * self.kappa))
@@ -526,11 +544,11 @@ class PolicyValueNet:
             if self.rl_model == "QRDQN" or self.rl_model == "EQRDQN":
                 loss = quantile_regression_loss
 
-            elif self.rl_model == "QRAAC" or self.rl_model == "EQRAAC":  # QRAAC
+            elif self.rl_model == "QRQAC" or self.rl_model == "EQRQAC":  # QRQAC
                 policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
                 loss = quantile_regression_loss + policy_loss
 
-        elif self.rl_model in ["AC", "QRAC", "AAC"]:
+        elif self.rl_model in ["AC", "QRAC", "QAC"]:
             value_loss = F.mse_loss(value.view(-1), winner_batch)
             policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
             loss = value_loss + policy_loss

@@ -3,7 +3,6 @@ import copy
 import torch
 from fiar_env import Fiar
 
-epsilon = 0.1
 
 def softmax(x):
     probs = np.exp(x - np.max(x))
@@ -96,7 +95,8 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, rl_model=None):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000,
+                 epsilon=None, epsilon_decay=None, min_epsilon=None, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -111,6 +111,9 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
         self.rl_model = rl_model
+        self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.min_epsilon = min_epsilon
         self.env = Fiar()
 
         # Resource hyperparameter
@@ -121,7 +124,6 @@ class MCTS(object):
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
-        action_probs = None
         leaf_value = None
         node = self._root
         while(1):
@@ -151,7 +153,6 @@ class MCTS(object):
 
                 else:
                     # init_N = 2
-                    # TODO 이 부분에서 저장하고 해야할거 같은데
 
                     # q_values = interpolate_quantiles(init_N ** k, init_N ** (k + 1))
                     # print(q_values)
@@ -162,40 +163,35 @@ class MCTS(object):
                     # max leaf_action_value as leaf_value
                 leaf_value = leaf_action_value.max().item()  # [todo] 여기가 max값으로 줘도 되는지
 
-        elif self.rl_model in ["DQN", "QRDQN"]:
-            action_probs, leaf_value_ = self._policy(env)
-            # assert len(available) == len(action_probs_)
+        elif self.rl_model in ["DQN", "QRDQN", "AAC", "QRAAC"]:
+            # action_probs_, leaf_value_ = self._policy(env)
+            action_probs_, leaf_value_ = self._policy(env)
 
             # action prob 을 one hot vector 로 만들어야함
-            # action_probs_ = np.array(list(action_probs_))[:, 1]
-            # action_probs = np.zeros_like(action_probs_)
-            # idx_max = leaf_value_.argmax()
-            # print(idx_max)
-            # action_probs[idx_max] = 1
-            #
-            # # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-            # action_probs[sensible_moves] += epsilon / len(sensible_moves)
-            # action_probs[idx_max] -= epsilon
+            action_probs = np.zeros_like(action_probs_)
+            idx_max = leaf_value_.argmax()
+            action_probs[idx_max] = 1
 
-            # action_probs = zip(sensible_moves, action_probs[sensible_moves])
-            # TODO 그러니까 expand에서는 available한 위치랑 그에 대한 확률값을 같이 전달해줘야 함.
+            # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
+            # action_probs[sensible_moves] += epsilon/np.sum(sensible_moves)
+            action_probs[sensible_moves] += self.epsilon / len(sensible_moves)
+            action_probs[idx_max] -= self.epsilon
 
-            ## use oracle
+            action_probs = zip(sensible_moves, action_probs[sensible_moves])
+
+            """ use oracle """
             # # calculate next node.select's node._Q
             # leaf_temp = node._Q + (leaf_value - node._Q)/ (node._n_visits+1)
             # # do we need to calculate next node._u?
             # leaf_value = leaf_value_[leaf_temp.argmax()]
 
-            ## use bellman expection to cal state value
+            """ use bellman expection to cal state value """
             # leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
 
-            ## use bellman optimality to cal state value
-            leaf_value = leaf_value_.max()  # state value 를 구하는 방식
-            print(leaf_value)
+            """ use bellman optimality to cal state value """
+            leaf_value = leaf_value_.max() # state value 를 구하는 방식
 
-        elif self.rl_model in ["QAC", "QRQAC"]:
-            action_probs, leaf_value_ = self._policy(env)
-            leaf_value = leaf_value_.mean()
+            self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
 
         else:  # state version AC, QRAC
             action_probs, leaf_value = self._policy(env)
@@ -224,7 +220,7 @@ class MCTS(object):
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
-        for n in range(self._n_playout):  # for 400 times
+        for n in range(self._n_playout):
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
 
@@ -254,8 +250,10 @@ class MCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
+                 epsilon=None, epsilon_decay=None, min_epsilon=None,
                  is_selfplay=0, name=None, elo=None, rl_model=None):
-        self.mcts = MCTS(policy_value_function, c_puct, n_playout, rl_model=rl_model)
+        self.mcts = MCTS(policy_value_function, c_puct, n_playout,
+                         epsilon, epsilon_decay, min_epsilon, rl_model=rl_model)
         self._is_selfplay = is_selfplay
         init_elo = 1500
         self.elo = elo if elo is not None else init_elo
