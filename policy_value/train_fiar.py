@@ -107,7 +107,7 @@ def get_equi_data(env, play_data):
     return extend_data
 
 
-def collect_selfplay_data(mcts_player, game_iter, n_games=100):
+def collect_selfplay_data(env, mcts_player, game_iter, n_games=100):
     # self-play 100 games and save in data_buffer(queue)
     # in data_buffer store all steps of self-play so, it should be large enough
     data_buffer = deque(maxlen=36 * n_games * 4)  # board size * n_games * augmentation times
@@ -116,8 +116,6 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
     for self_play_i in range(n_games):
         rewards, play_data = self_play(env, mcts_player, temp, game_iter, self_play_i)
         play_data = list(play_data)[:]
-        if rewards == -1:
-            print("wtf")
         # augment the data
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
@@ -154,22 +152,15 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
         mcts_probs.append(move_probs)
         current_player.append(player_0)
 
-        if not np.array_equal(obs_post[3], env.state_[3]):
-            env.state_[3] = obs_post[3]
-
         obs, reward, terminated, info = env.step(move)
 
-        player_0 = turn(env.state_)
+        player_0 = 1 - player_0
         player_1 = 1 - player_0
         obs_post[0] = obs[player_0]
         obs_post[1] = obs[player_1]
         obs_post[2] = np.zeros_like(obs[0])
         obs_post[3] = obs[player_0] + obs[player_1]
 
-        if not np.array_equal(obs_post[3], env.state_[3]):
-            env.state_[3] = obs_post[3]
-
-        # end, winners = env.self_play_winner()
         end, winners = env.winner()
 
         if end:
@@ -278,9 +269,8 @@ def start_play(env, player1, player2, move=None):
         # synchronize the MCTS tree with the current state of the game
         move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)  # self-play temp=1.0, eval temp=1e-3
 
-        if not np.array_equal(obs_post[3], env.state_[3]):
-            env.state_[3] = obs_post[3]
-
+        # if not np.array_equal(obs_post[3], env.state_[3]):
+        #     env.state_[3] = obs_post[3]
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
@@ -354,7 +344,7 @@ if __name__ == '__main__':
     try:
         for i in range(training_iterations):
             """collect self-play data each iteration 100 games"""
-            data_buffer_each = collect_selfplay_data(curr_mcts_player, i, self_play_sizes)  # 100 times
+            data_buffer_each = collect_selfplay_data(env, curr_mcts_player, i, self_play_sizes)  # 100 times
             data_buffer_training_iters.append(data_buffer_each)
 
             """Policy update with data buffer"""
