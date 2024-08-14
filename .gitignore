@@ -12,6 +12,8 @@ policy_value/train_fiar_copy4.py
 policy_value/train_fiar_copy5.py
 policy_value/train_fiar_copy6.py
 policy_value/mcts_copy.py
+policy_value/policy_value_network_copy.py
+fiar_env_copy.py
 *.log
 *.out
 *.model

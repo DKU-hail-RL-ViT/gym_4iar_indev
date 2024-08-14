@@ -26,17 +26,13 @@ def action1d_ize(action):
     map = np.int16(np.linspace(0, 4 * 9 - 1, 4 * 9).reshape(9, 4))
     return map[action[0], action[1]]
 
-def carculate_area(state, current_player):
-    assert state[3].sum() <= 36.0
-    # assert state[3].sum() != len(current_player)
 
-def winning(state):
-    if state[3].sum() == 36.0:
-        return -1  # draw
-    elif state[3].sum() % 2 == 1.0:
-        return 1  # black win
-    else:
-        return -0.5  # white win
+# def carculate_area(state, current_player):
+#     assert state[3].sum() <= 36.0
+#     # assert state[3].sum() != len(current_player)
+
+def winning(state, player=0):  # black 0, white 1
+    return 1 if np.all(state[TURN_CHNL] == player) else 0  # winning of player
 
 
 def turn(state):
@@ -311,7 +307,8 @@ def action_size(state=None, board_size: int = None):
 
 
 class Fiar(gym.Env):
-    def __init__(self):
+    def __init__(self, player=0):
+        self.player = player
         self.state_ = self.init_state()
         self.observation_space = spaces.Box(np.float32(0), np.float32(NUM_CHNLS),
                                             shape=(NUM_CHNLS, 9, 4))
@@ -398,6 +395,8 @@ class Fiar(gym.Env):
     def winner(self):
         if not self.done:
             return False, -1
+        if not self.done and self.state_[0].sum() + self.state_[1].sum() == 36: # draw
+            return True, -1
         else:
             return True, winning(self.state_)
 
