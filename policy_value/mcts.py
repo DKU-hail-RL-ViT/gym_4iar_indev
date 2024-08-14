@@ -137,7 +137,7 @@ class MCTS(object):
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
 
         if self.rl_model == "EQRDQN" or self.rl_model == "EQRAAC":
-            while (k < 7) and (self.R_rem > 0):
+            while (k < 5) and (self.R_rem > 0):
                 action_probs, leaf_action_value = self._policy(env, k)  # TODO 여기 policy 안에서 interpolate 해야하는 거긴 할건데
 
                 # get values of sensible_moves
@@ -163,48 +163,54 @@ class MCTS(object):
                 leaf_value = leaf_action_value.max().item()  # [todo] 여기가 max값으로 줘도 되는지
 
         elif self.rl_model in ["DQN", "QRDQN"]:
-            action_probs, leaf_value_ = self._policy(env)
-            # assert len(available) == len(action_probs_)
+            available_, action_probs_, leaf_value_ = self._policy(env)
 
-            # action prob 을 one hot vector 로 만들어야함
-            # action_probs_ = np.array(list(action_probs_))[:, 1]
-            # action_probs = np.zeros_like(action_probs_)
-            # idx_max = leaf_value_.argmax()
-            # print(idx_max)
-            # action_probs[idx_max] = 1
-            #
-            # # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-            # action_probs[sensible_moves] += epsilon / len(sensible_moves)
-            # action_probs[idx_max] -= epsilon
+            if len(available_) > 0:
+                # Action probabilities need to be created as a one-hot vector
+                action_probs = np.zeros_like(action_probs_)
 
-            # action_probs = zip(sensible_moves, action_probs[sensible_moves])
-            # TODO 그러니까 expand에서는 available한 위치랑 그에 대한 확률값을 같이 전달해줘야 함.
+                # argmax only for the sensible moves
+                leaf_value_ = leaf_value_.cpu().flatten()
+                idx_max = available_[np.argmax(leaf_value_[available_])]
+                action_probs[idx_max] = 1
 
-            ## use oracle
-            # # calculate next node.select's node._Q
+                # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
+                action_probs[available_] += epsilon / (len(available_) + 1e-10)
+                action_probs[idx_max] -= epsilon
+
+            else:
+                action_probs = action_probs_
+
+
+            action_probs = zip(available_, action_probs[available_])
+
+            """ use oracle """
+            """ calculate next node.select's node._Q """
             # leaf_temp = node._Q + (leaf_value - node._Q)/ (node._n_visits+1)
             # # do we need to calculate next node._u?
             # leaf_value = leaf_value_[leaf_temp.argmax()]
 
-            ## use bellman expection to cal state value
+            """ use bellman expection to cal state value """
             # leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
 
-            ## use bellman optimality to cal state value
-            leaf_value = leaf_value_.max()  # state value 를 구하는 방식
-            print(leaf_value)
+            """ use bellman optimality to cal state value """
+            leaf_value = leaf_value_[available_].max()  # state value 를 구하는 방식
 
         elif self.rl_model in ["QAC", "QRQAC"]:
-            action_probs, leaf_value_ = self._policy(env)
-            leaf_value = leaf_value_.mean()
+            available, action_probs, leaf_value = self._policy(env)
+            action_probs = zip(available, action_probs[available])
+
+            leaf_value = leaf_value.mean()
 
         else:  # state version AC, QRAC
-            action_probs, leaf_value = self._policy(env)
+            available, action_probs, leaf_value = self._policy(env)
+            action_probs = zip(available, action_probs[available])
 
         # Check for end of game
         end, winners = env.winner()
 
         if not end:
-            node.expand(action_probs) # DQN 버전 같은 경우는 어떤 action을 했는지에 대한 정보가 있어야 반영할 수 있으니 여기서 적절히 추출해야함.
+            node.expand(action_probs)  # DQN 버전 같은 경우는 어떤 action을 했는지에 대한 정보가 있어야 반영할 수 있으니 여기서 적절히 추출해야함.
         else:
             if winners == -1:  # tie
                 leaf_value = 0.0
