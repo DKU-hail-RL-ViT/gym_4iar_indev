@@ -18,10 +18,11 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=3)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
 
 """ RL model """
+
 parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
@@ -41,7 +42,7 @@ parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=1.0)
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)  # previous 64
-parser.add_argument("--learn_rate", type=float, default=5e-4)
+parser.add_argument("--learn_rate", type=float, default=5e-4) # Others
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
@@ -115,6 +116,8 @@ def collect_selfplay_data(mcts_player, game_iter, n_games=100):
     for self_play_i in range(n_games):
         rewards, play_data = self_play(env, mcts_player, temp, game_iter, self_play_i)
         play_data = list(play_data)[:]
+        if rewards == -1:
+            print("wtf")
         # augment the data
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
@@ -149,7 +152,10 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
         # store the data
         states.append(obs_post.copy())
         mcts_probs.append(move_probs)
-        current_player.append(turn(env.state_))
+        current_player.append(player_0)
+
+        if not np.array_equal(obs_post[3], env.state_[3]):
+            env.state_[3] = obs_post[3]
 
         obs, reward, terminated, info = env.step(move)
 
@@ -160,13 +166,17 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
         obs_post[2] = np.zeros_like(obs[0])
         obs_post[3] = obs[player_0] + obs[player_1]
 
-        end, winners = env.self_play_winner()
+        if not np.array_equal(obs_post[3], env.state_[3]):
+            env.state_[3] = obs_post[3]
+
+        # end, winners = env.self_play_winner()
+        end, winners = env.winner()
 
         if end:
             if len(current_player) == 36 and winners == -1:  # draw
                 print('self_play_draw')
 
-            obs, _ = env.reset()  # reset env
+            # obs, _ = env.reset()  # reset env
             mcts_player.reset_player()  # reset MCTS root node
 
             print("game: {}, self_play:{}, episode_len:{}".format(
@@ -179,6 +189,11 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
                 # if winner is current player, winner_z = 1
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
+
+            if len(current_player) != len(states):
+                print("wtf")
+
+            print(winners)
 
             return winners, zip(states, mcts_probs, winners_z)
 
@@ -200,6 +215,7 @@ def policy_update(lr_mul, policy_value_net, data_buffers=None):
                                                     mcts_probs_batch,
                                                     winner_batch,
                                                     learn_rate * lr_multiplier)
+
 
         new_probs, new_v = policy_value_net.policy_value(state_batch)
         kl = np.mean(np.sum(old_probs * (
@@ -261,6 +277,10 @@ def start_play(env, player1, player2, move=None):
     while True:
         # synchronize the MCTS tree with the current state of the game
         move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)  # self-play temp=1.0, eval temp=1e-3
+
+        if not np.array_equal(obs_post[3], env.state_[3]):
+            env.state_[3] = obs_post[3]
+
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()

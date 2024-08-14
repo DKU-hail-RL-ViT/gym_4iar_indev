@@ -472,6 +472,11 @@ class PolicyValueNet:
             act_probs = torch.exp(log_act_probs).cpu().numpy()
             value = value.cpu().numpy()
 
+            if self.rl_model == "DQN": # TODO QRDQN도 해야할 수도
+                value_ = torch.tensor(value)
+                value_, _ = torch.max(value_, dim=1)
+                value = value_.unsqueeze(1)
+
         return act_probs, value
 
     def policy_value_fn(self, env, k=None):
@@ -492,28 +497,9 @@ class PolicyValueNet:
 
             else:
                 log_act_probs, value = self.policy_value_net(current_state)
-
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
 
-            if self.rl_model == "DQN" or self.rl_model == "QRDQN":
-                # action prob 을 one hot vector 로 만들어야함
-                # action_probs_ = np.array(list(act_probs))[:, 1]
-                action_probs_ = np.zeros_like(act_probs)
-                idx_max = value.argmax()
-                print(idx_max)
-                # 항상 똑같은 leaf_value 가 들어간다. masking 처리를 해줘야하나
-                action_probs_[idx_max] = 1
-
-                # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-                # action_probs[sensible_moves] += epsilon/len(sensible_moves)
-                action_probs_[available] += epsilon / (len(available) + 1e-10)
-                action_probs_[idx_max] -= epsilon
-                act_probs = action_probs_
-
-            act_probs = zip(available, act_probs[available])
-
-        # return available, act_probs, value
-        return act_probs, value
+        return available, act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
@@ -532,6 +518,11 @@ class PolicyValueNet:
         # Note: the L2 penalty is incorporated in optimizer
 
         if self.rl_model == "DQN":
+            value_ = value.clone().to(self.device).requires_grad_(True)
+            # value_ = value.clone().detach().to(self.device).requires_grad_(True)
+            value_, _ = torch.max(value_, dim=1)
+            value = value_.unsqueeze(1)
+
             loss = F.mse_loss(value.view(-1), winner_batch)
 
         elif self.rl_model in ["QRDQN", "QRQAC", "EQRDQN", "EQRQAC"]:
