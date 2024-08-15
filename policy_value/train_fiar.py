@@ -22,10 +22,10 @@ parser.add_argument("--n_playout", type=int, default=10)  # compare with 2, 10, 
 parser.add_argument("--quantiles", type=int, default=3)  # compare with 3, 9, 27, 81
 
 """ RL model """
-parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
+# parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
-# parser.add_argument("--rl_model", type=str, default="QAC")    # Actor critic action value ver      # Done
+parser.add_argument("--rl_model", type=str, default="QAC")    # Actor critic action value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
@@ -137,7 +137,6 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
 
     player_0 = 0
     player_1 = 1 - player_0
-
     obs_post[0] = obs[player_0]
     obs_post[1] = obs[player_1]
     obs_post[2] = np.zeros_like(obs[0])
@@ -261,9 +260,6 @@ def start_play(env, player1, player2, move=None):
     while True:
         # synchronize the MCTS tree with the current state of the game
         move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)  # self-play temp=1.0, eval temp=1e-3
-
-        # if not np.array_equal(obs_post[3], env.state_[3]):
-        #     env.state_[3] = obs_post[3]
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
@@ -336,8 +332,6 @@ if __name__ == '__main__':
     eval_epsilon = 0.01
     eval_epsilon_decay = 0.999
     eval_min_epsilon = 0.01
-
-
 
     try:
         for i in range(training_iterations):
