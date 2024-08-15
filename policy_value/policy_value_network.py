@@ -8,6 +8,7 @@ import os
 
 epsilon = 0.1
 
+
 def set_learning_rate(optimizer, lr):
     """Sets the learning rate to the given value"""
     for param_group in optimizer.param_groups:
@@ -19,24 +20,22 @@ def calculate_quantile_regression_loss(huber_loss, quantile_tau, value_loss):
                 dim=1).mean()
 
 
-def interpolate_quantiles(old_quantiles, new_quantile_count):
-    # 기존 quantile의 개수
-    old_quantile_count = len(old_quantiles)
-
-    # 새로운 quantile을 위한 위치 계산
-    new_quantile_positions = np.linspace(0, 1, new_quantile_count + 1)
-    old_quantile_positions = np.linspace(0, 1, old_quantile_count + 1)
-
-    # 새로운 quantile 값 계산 (보간 사용)
-    new_quantiles = np.interp(new_quantile_positions[1:-1], old_quantile_positions[1:-1], old_quantiles)
-
-    return new_quantiles
+# def interpolate_quantiles(old_quantiles, new_quantile_count):
+#     # 기존 quantile의 개수
+#     old_quantile_count = len(old_quantiles)
+#
+#     # 새로운 quantile을 위한 위치 계산
+#     new_quantile_positions = np.linspace(0, 1, new_quantile_count + 1)
+#     old_quantile_positions = np.linspace(0, 1, old_quantile_count + 1)
+#
+#     # 새로운 quantile 값 계산 (보간 사용)
+#     new_quantiles = np.interp(new_quantile_positions[1:-1], old_quantile_positions[1:-1], old_quantiles)
+#
+#     return new_quantiles
 
 
 # 예시: quantile 2개에서 4개로 확장
 # q4_values = interpolate_quantiles(q2_values, 4)
-
-
 
 
 
@@ -518,11 +517,9 @@ class PolicyValueNet:
         # Note: the L2 penalty is incorporated in optimizer
 
         if self.rl_model == "DQN":
-            value_ = value.clone().to(self.device).requires_grad_(True)
-            # value_ = value.clone().detach().to(self.device).requires_grad_(True)
+            value_ = value.clone().detach().to(self.device).requires_grad_(True)
             value_, _ = torch.max(value_, dim=1)
             value = value_.unsqueeze(1)
-
             loss = F.mse_loss(value.view(-1), winner_batch)
 
         elif self.rl_model in ["QRDQN", "QRQAC", "EQRDQN", "EQRQAC"]:
@@ -540,6 +537,11 @@ class PolicyValueNet:
                 loss = quantile_regression_loss + policy_loss
 
         elif self.rl_model in ["AC", "QRAC", "QAC"]:
+            if self.rl_model == "QAC":
+                value_ = value.clone().detach().to(self.device).requires_grad_(True)
+                value_, _ = torch.max(value_, dim=1)
+                value = value_.unsqueeze(1)
+
             value_loss = F.mse_loss(value.view(-1), winner_batch)
             policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
             loss = value_loss + policy_loss

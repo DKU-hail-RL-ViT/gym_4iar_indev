@@ -18,11 +18,10 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=3)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=16)  # compare with 2, 16, 32, 64
+parser.add_argument("--n_playout", type=int, default=10)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=3)  # compare with 3, 9, 27, 81
 
 """ RL model """
-
 parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
@@ -42,7 +41,7 @@ parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=1.0)
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)  # previous 64
-parser.add_argument("--learn_rate", type=float, default=5e-4) # Others
+parser.add_argument("--learn_rate", type=float, default=5e-4)
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
@@ -51,7 +50,7 @@ parser.add_argument("--init_model", type=str, default=None)
 
 """DQN epsilon parameter """
 parser.add_argument('--epsilon', type=float, default=0.1, help='Initial epsilon value for exploration')
-parser.add_argument('--epsilon_decay', type=float, default=0.99, help='Decay rate for epsilon')
+parser.add_argument('--epsilon_decay', type=float, default=0.999, help='Decay rate for epsilon')
 parser.add_argument('--min_epsilon', type=float, default=0.01, help='Minimum value for epsilon after decay')
 
 args = parser.parse_args()
@@ -181,11 +180,6 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
 
-            if len(current_player) != len(states):
-                print("wtf")
-
-            print(winners)
-
             return winners, zip(states, mcts_probs, winners_z)
 
 
@@ -206,7 +200,6 @@ def policy_update(lr_mul, policy_value_net, data_buffers=None):
                                                     mcts_probs_batch,
                                                     winner_batch,
                                                     learn_rate * lr_multiplier)
-
 
         new_probs, new_v = policy_value_net.policy_value(state_batch)
         kl = np.mean(np.sum(old_probs * (
@@ -334,12 +327,17 @@ if __name__ == '__main__':
         policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
                                           quantiles, rl_model=rl_model)
 
-    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-                                                               is_selfplay=1,  rl_model=rl_model)
     # curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-    #                               epsilon, epsilon_decay, min_epsilon, is_selfplay=1,  rl_model=rl_model)
+    #                                                             is_selfplay=1,  rl_model=rl_model)
+    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
+                                  epsilon, epsilon_decay, min_epsilon, is_selfplay=1, rl_model=rl_model)
     data_buffer_training_iters = deque(maxlen=20)
     best_old_model = None
+    eval_epsilon = 0.01
+    eval_epsilon_decay = 0.999
+    eval_min_epsilon = 0.01
+
+
 
     try:
         for i in range(training_iterations):
@@ -397,10 +395,12 @@ if __name__ == '__main__':
 
                 """The most recent model with the highest win rate among the trained models"""
                 old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout,
+                                             eval_epsilon, eval_epsilon_decay, eval_min_epsilon,
                                              is_selfplay=0, rl_model=rl_model)
 
                 """Training model"""
                 curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
+                                              eval_epsilon, eval_epsilon_decay, eval_min_epsilon,
                                               is_selfplay=0, rl_model=rl_model)
 
                 win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
