@@ -32,7 +32,7 @@ def action1d_ize(action):
 #     # assert state[3].sum() != len(current_player)
 
 def winning(state, player=0):  # black 0, white 1
-    return 1 if np.all(state[TURN_CHNL] == player) else 0  # winning of player
+    return 1 if np.all(state[TURN_CHNL] == player) else -0.5  # winning of player
 
 
 def turn(state):
@@ -397,12 +397,6 @@ class Fiar(gym.Env):
             return False, -1
         if not self.done and self.state_[0].sum() + self.state_[1].sum() == 36: # draw
             return True, -1
-        else:
-            return True, winning(self.state_)
-
-    def self_play_winner(self):
-        if not self.done:
-            return False, -1
         else:
             return True, winning(self.state_)
 

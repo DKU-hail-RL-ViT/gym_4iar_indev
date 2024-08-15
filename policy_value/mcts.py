@@ -3,7 +3,8 @@ import copy
 import torch
 from fiar_env import Fiar
 
-epsilon = 0.1
+# epsilon = 0.1
+
 
 def softmax(x):
     probs = np.exp(x - np.max(x))
@@ -18,7 +19,6 @@ def interpolate_quantiles(interpolate_pre, interpolate_aft):
     new_quantiles = np.interp(quantiles_new[1:-1], quantiles_old[1:-1], interpolate_pre)
 
     return new_quantiles
-
 
 
 class TreeNode(object):
@@ -96,7 +96,8 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, rl_model=None):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000,
+                 epsilon=None, epsilon_decay=None, min_epsilon=None, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -112,6 +113,9 @@ class MCTS(object):
         self._n_playout = n_playout
         self.rl_model = rl_model
         self.env = Fiar()
+        self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.min_epsilon = min_epsilon
 
         # Resource hyperparameter
         self.R_rem = 100  # [TODO] Efficient search할 때 사용할 hyperparameter 로 일단 임시로 이렇게 해뒀음
@@ -175,26 +179,25 @@ class MCTS(object):
                 action_probs[idx_max] = 1
 
                 # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-                action_probs[available_] += epsilon / (len(available_) + 1e-10)
-                action_probs[idx_max] -= epsilon
+                action_probs[available_] += self.epsilon / (len(available_) + 1e-10)
+                action_probs[idx_max] -= self.epsilon
 
+                """ use oracle """
+                """ calculate next node.select's node._Q """
+                # leaf_temp = node._Q + (leaf_value - node._Q)/ (node._n_visits+1)
+                # # do we need to calculate next node._u?
+                # leaf_value = leaf_value_[leaf_temp.argmax()]
+
+                """ use bellman expection to cal state value """
+                # leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
+
+                """ use bellman optimality to cal state value """
+                leaf_value = leaf_value_[available_].max()  # state value 를 구하는 방식
             else:
                 action_probs = action_probs_
-
+                leaf_value = leaf_value_.max()
 
             action_probs = zip(available_, action_probs[available_])
-
-            """ use oracle """
-            """ calculate next node.select's node._Q """
-            # leaf_temp = node._Q + (leaf_value - node._Q)/ (node._n_visits+1)
-            # # do we need to calculate next node._u?
-            # leaf_value = leaf_value_[leaf_temp.argmax()]
-
-            """ use bellman expection to cal state value """
-            # leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
-
-            """ use bellman optimality to cal state value """
-            leaf_value = leaf_value_[available_].max()  # state value 를 구하는 방식
 
         elif self.rl_model in ["QAC", "QRQAC"]:
             available, action_probs, leaf_value = self._policy(env)
@@ -218,10 +221,6 @@ class MCTS(object):
                 leaf_value = 1.0
             else:
                 leaf_value = -1.0
-            obs, _ = env.reset()
-
-            # R + \gamma Q - Q
-
         node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
@@ -233,6 +232,8 @@ class MCTS(object):
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
+            if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
+                self.update_epsilon()
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -252,6 +253,10 @@ class MCTS(object):
         else:
             self._root = TreeNode(None, 1.0)
 
+    def update_epsilon(self):
+        self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
+        return self.epsilon
+
     def __str__(self):
         return "MCTS"
 
@@ -260,12 +265,12 @@ class MCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
-                 is_selfplay=0, name=None, elo=None, rl_model=None):
-        self.mcts = MCTS(policy_value_function, c_puct, n_playout, rl_model=rl_model)
+                 epsilon=None, epsilon_decay=None, min_epsilon=None, is_selfplay=0, elo=None, rl_model=None):
+        self.mcts = MCTS(policy_value_function, c_puct, n_playout,
+                         epsilon, epsilon_decay, min_epsilon,rl_model=rl_model)
         self._is_selfplay = is_selfplay
         init_elo = 1500
         self.elo = elo if elo is not None else init_elo
-        self.name = name
         self.rl_model = rl_model
 
     def set_player_ind(self, p):
