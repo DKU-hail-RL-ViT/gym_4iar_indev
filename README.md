@@ -1,14 +1,6 @@
 # SH
 python version 3.10
 
-### Windows
-torch version 2.2.2+cu118 
-
-### Mac OS
-M1: torch version 2.2.1
-if you open gif file, open gif file in the browser (not in the github) 
-ex : Chrome, Safari...  
-
 
 ## References
 ### AlphaZero_Gomoku
@@ -23,9 +15,24 @@ https://escholarship.org/uc/item/8wm748d8
 ### GIF
 https://ransakaravihara.medium.com/how-to-create-gifs-using-matplotlib-891989d0d5ea
 
+### Windows
+torch version 2.2.2+cu118 
+torch version 2.2.2+cu124
 
 ```bash
-pip install torch
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+```
+
+### Mac OS
+M1: torch version 2.2.1
+if you open gif file, open gif file in the browser (not in the github) 
+ex : Chrome, Safari...
+```bash
+pip install torch torchvision torchaudio
+```
+
+### Common
+```bash
 pip install gymnasium
 pip install pyglet
 pip install scipy==1.11.1
@@ -40,7 +47,7 @@ Task : four in a row (9 x 4)
 
 ### Thinking
 - How many quantiles should be used?
-2, 4, 8, 16, 32, 64  ...?  (for c51)
+3, 9, 27,81  ...?  (for c51)
 
 - Distribution RL Network output (64, quantile) -> ex(64, 32)
 so, loss and entropy are lager than AC model (complex calculation)
@@ -70,7 +77,7 @@ Draw -> Reward: -1
 # adjust hyperparameter
 ### tuning parameter 
 n_playout = 20  # = MCTS simulations(n_mcts) & training 2, 20, 50, 100, 400
-quantiles = 16  # training 2, 16, 32, 64
+quantiles = 9  # training 3, 9, 27, 81
 
 
 ### MCTS parameter

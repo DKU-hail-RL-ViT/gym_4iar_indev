@@ -15,9 +15,20 @@ def set_learning_rate(optimizer, lr):
         param_group['lr'] = lr
 
 
-def calculate_quantile_regression_loss(huber_loss, quantile_tau, value_loss):
-    return (abs(quantile_tau - (value_loss.detach() < 0).float()) * huber_loss / 1.0).unsqueeze(-1).sum(
-                dim=1).mean()
+def calculate_quantile_regression_loss(huber_loss, value_loss, quantile_tau, n_quantiles):
+
+    quantile_tau_new = (torch.arange(quantile_tau, dtype=torch.float32) + 0.5) / n_quantiles
+
+    quantile_value = quantile_tau_new - quantile_tau
+    print(quantile_value)
+    midpoint_adjustment = (value_loss.detach() < 0).float() * 0.5  # 이 부분은 조정이 가능함
+    adjusted_tau = quantile_tau + midpoint_adjustment  # 중간점을 조정한 tau
+    # TODO 일단
+    # return (abs(quantile_tau - ))
+    return (abs(adjusted_tau - (value_loss.detach() < 0).float()) * huber_loss).unsqueeze(-1).sum(dim=1).mean()
+
+    # return (abs(quantile_tau - (value_loss.detach() < 0).float()) * huber_loss / 1.0).unsqueeze(-1).sum(
+    #             dim=1).mean()
 
 
 # def interpolate_quantiles(old_quantiles, new_quantile_count):
@@ -108,11 +119,11 @@ class QRDQN(nn.Module):
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.act_fc1(x_val))
         x_val = self.act_fc2(x_val)
-        # action policy layers
-        x_act = F.log_softmax(x_val, dim=1)
+        x_val = x_val.view(-1, self.N, self.num_actions)  # batch / quantile / action_space
 
-        x_val = x_val.view(-1, self.num_actions, self.N)
-        x_val = x_val.mean(dim=2)
+        # action policy layers
+        x_act = x_val.mean(dim=1)
+        x_act = F.log_softmax(x_act, dim=1)
 
         return x_act, x_val
 
@@ -450,11 +461,12 @@ class PolicyValueNet:
             act_probs = torch.exp(log_act_probs).cpu().numpy()
             value = value.cpu().numpy()
 
-            if self.rl_model in ["DQN", "QRDQN"]:
+            if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
                 value_ = torch.tensor(value)
                 value_, _ = torch.max(value_, dim=1)
                 value = value_.unsqueeze(1)
-            elif self.rl_model in ["QAC", "QRQAC"]:
+
+            elif self.rl_model in ["QAC", "QRQAC", "QRQAC"]:
                 value_ = torch.tensor(value)
                 value_ = torch.mean(value_, dim=1)
                 value = value_.unsqueeze(1)
@@ -476,8 +488,11 @@ class PolicyValueNet:
                 self.N = 2 ** k
                 print(self.N, "network 들어가기 전에 quantile 개수")
                 log_act_probs, value = self.policy_value_net(current_state, self.N)
+            # elif self.rl_model == "QRDQN":
+            #     log_act_probs, value = self.policy_value_net(current_state)
             else:
                 log_act_probs, value = self.policy_value_net(current_state)
+
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
 
         return available, act_probs, value
@@ -505,12 +520,37 @@ class PolicyValueNet:
             loss = F.mse_loss(value.view(-1), winner_batch)
 
         elif self.rl_model in ["QRDQN", "QRQAC", "EQRDQN", "EQRQAC"]:
+            if self.rl_model in ["QRDQN", "EQRDQN"]:
+                value_ = value.clone().detach().to(self.device).requires_grad_(True)
+                value_, _ = torch.max(value_, dim=1)
+                value = value_.unsqueeze(1)
+
+            elif self.rl_model in ["QRQAC", "EQRQAC"]:
+                value_ = value.clone().detach().to(self.device).requires_grad_(True)
+                value_ = torch.mean(value_, dim=1)
+                value = value_.unsqueeze(1)
+
             value_loss = F.mse_loss(value.view(-1), winner_batch)
             huber_loss = torch.where(value_loss.abs() <= self.kappa, 0.5 * value_loss.pow(2),
-                                     self.kappa * (value_loss.abs() - 0.5 * self.kappa))
-            quantile_regression_loss = calculate_quantile_regression_loss(huber_loss,
-                                                                          self.quantile_tau,
-                                                                          value_loss)
+                                     (value_loss.abs() - 0.5))
+            loss = (abs(self.quantile_tau - (value_loss.detach() < 0).float()) * huber_loss / 1.0).unsqueeze(-1)\
+                .sum(dim=1).mean()
+
+            # quantile_regression_loss = calculate_quantile_regression_loss(value_loss,
+            #                                                               huber_loss,
+            #                                                               self.quantile_tau,
+            #                                                               self.N)
+            # TODO huber_loss는 CDF에서 target quantile value 값과 current quantile value 값의 차이를 가져가다가 써야하는데
+            # 우리는 target 대신 return을 가지고 있다..
+            # huber_loss 구할 때 value_loss를 써야할게 아닌거 같은데
+            """
+            cum_prob 는 midpoint quantile value 들
+            pairwise_delta = target_quantiles.unsqueeze(-2) - current_quantiles.unsqueeze(-1)
+            abs_pairwise_delta = th.abs(pairwise_delta)
+            huber_loss = th.where(abs_pairwise_delta > 1, abs_pairwise_delta - 0.5, pairwise_delta**2 * 0.5)
+            loss = th.abs(cum_prob - (pairwise_delta.detach() < 0).float()) * huber_loss
+            """
+
             if self.rl_model == "QRDQN" or self.rl_model == "EQRDQN":
                 loss = quantile_regression_loss
 
