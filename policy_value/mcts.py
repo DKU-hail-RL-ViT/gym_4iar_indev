@@ -166,7 +166,7 @@ class MCTS(object):
                     # max leaf_action_value as leaf_value
                 leaf_value = leaf_action_value.max().item()  # [todo] 여기가 max값으로 줘도 되는지
 
-        elif self.rl_model in ["DQN", "QRDQN"]:
+        elif self.rl_model in "DQN":
             available_, action_probs_, leaf_value_ = self._policy(env)
 
             if len(available_) > 0:
@@ -179,7 +179,7 @@ class MCTS(object):
                 action_probs[idx_max] = 1
 
                 # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-                action_probs[available_] += self.epsilon / (len(available_) + 1e-10)
+                action_probs[available_] += self.epsilon / len(available_)
                 action_probs[idx_max] -= self.epsilon
 
                 """ use oracle """
@@ -196,13 +196,35 @@ class MCTS(object):
             else:
                 action_probs = action_probs_
                 leaf_value = leaf_value_.max()
-
             action_probs = zip(available_, action_probs[available_])
+
+        elif self.rl_model == "QRDQN":
+            available_, action_probs_, leaf_value_ = self._policy(env)
+
+            if len(available_) > 0:
+                # Action probabilities need to be created as a one-hot vector
+                action_probs = np.zeros_like(action_probs_)
+
+                # argmax only for the sensible moves
+                # idx_max = available_[np.argmax(leaf_value_[available_])]
+                # leaf_value_.cpu().argmax(dim=1).mean(dim=2)]
+                # leaf_value_ = leaf_value_.cpu().flatten()
+                # idx_max = available_[leaf_value_.cpu().mean(dim=0).argmax(dim=1)]
+                action_probs[idx_max] = 1
+
+                # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
+                action_probs[available_] += self.epsilon / len(available_)
+                action_probs[idx_max] -= self.epsilon
+                leaf_value = leaf_value_.mean(dim=1)[available_].max()  # state value 를 구하는 방식
+                action_probs = zip(available_, action_probs[available_])
+            else:
+                action_probs = action_probs_
+                leaf_value = leaf_value_.max()
+                action_probs = zip(available_, action_probs[available_])
 
         elif self.rl_model in ["QAC", "QRQAC"]:
             available, action_probs, leaf_value = self._policy(env)
             action_probs = zip(available, action_probs[available])
-
             leaf_value = leaf_value.mean()
 
         else:  # state version AC, QRAC
@@ -232,8 +254,8 @@ class MCTS(object):
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
-            if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
-                self.update_epsilon()
+            # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
+            #     self.update_epsilon()
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -253,9 +275,9 @@ class MCTS(object):
         else:
             self._root = TreeNode(None, 1.0)
 
-    def update_epsilon(self):
-        self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
-        return self.epsilon
+    # def update_epsilon(self):
+    #     self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
+    #     return self.epsilon
 
     def __str__(self):
         return "MCTS"
@@ -267,7 +289,7 @@ class MCTSPlayer(object):
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
                  epsilon=None, epsilon_decay=None, min_epsilon=None, is_selfplay=0, elo=None, rl_model=None):
         self.mcts = MCTS(policy_value_function, c_puct, n_playout,
-                         epsilon, epsilon_decay, min_epsilon,rl_model=rl_model)
+                         epsilon, epsilon_decay, min_epsilon, rl_model=rl_model)
         self._is_selfplay = is_selfplay
         init_elo = 1500
         self.elo = elo if elo is not None else init_elo
