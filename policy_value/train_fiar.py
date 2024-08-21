@@ -23,11 +23,11 @@ parser.add_argument("--quantiles", type=int, default=9)  # compare with 3, 9, 27
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
-parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
+# parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
-# parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
+parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
 
@@ -183,7 +183,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
             return winners, zip(states, mcts_probs, winners_z)
 
 
-def policy_update(lr_mul, policy_value_net, data_buffers=None):
+def policy_update(lr_mul, policy_value_net, data_buffers=None, rl_model=None):
     k, kl, loss, entropy = 0, 0, 0, 0
     lr_multiplier = lr_mul
     update_data_buffer = [data for buffer in data_buffers for data in buffer]
@@ -195,24 +195,30 @@ def policy_update(lr_mul, policy_value_net, data_buffers=None):
     winner_batch = [data[2] for data in mini_batch]
     old_probs, old_v = policy_value_net.policy_value(state_batch)
 
-    for k in range(epochs):
+    if rl_model in ["DQN", "QRDQN", "EQRDQN"]:
         loss, entropy = policy_value_net.train_step(state_batch,
                                                     mcts_probs_batch,
                                                     winner_batch,
                                                     learn_rate * lr_multiplier)
+    else:
+        for k in range(epochs):
+            loss, entropy = policy_value_net.train_step(state_batch,
+                                                        mcts_probs_batch,
+                                                        winner_batch,
+                                                        learn_rate * lr_multiplier)
 
-        new_probs, new_v = policy_value_net.policy_value(state_batch)
-        kl = np.mean(np.sum(old_probs * (
-                np.log(old_probs + 1e-10) - np.log(new_probs + 1e-10)),
-                            axis=1))
-        if kl > kl_targ * 4:  # early stopping if D_KL diverges badly
-            break
+            new_probs, new_v = policy_value_net.policy_value(state_batch)
+            kl = np.mean(np.sum(old_probs * (
+                    np.log(old_probs + 1e-10) - np.log(new_probs + 1e-10)),
+                                axis=1))
+            if kl > kl_targ * 4:  # early stopping if D_KL diverges badly
+                break
 
-    # adaptively adjust the learning rate
-    if kl > kl_targ * 2 and lr_multiplier > 0.1:
-        lr_multiplier /= 1.5
-    elif kl < kl_targ / 2 and lr_multiplier < 10:
-        lr_multiplier *= 1.5
+        # adaptively adjust the learning rate
+        if kl > kl_targ * 2 and lr_multiplier > 0.1:
+            lr_multiplier /= 1.5
+        elif kl < kl_targ / 2 and lr_multiplier < 10:
+            lr_multiplier *= 1.5
 
     print(("kl:{:.5f},"
            "lr_multiplier:{:.3f},"
@@ -340,7 +346,8 @@ if __name__ == '__main__':
             """Policy update with data buffer"""
             loss, entropy, lr_multiplier, policy_value_net = policy_update(lr_mul=lr_multiplier,
                                                                            policy_value_net=policy_value_net,
-                                                                           data_buffers=data_buffer_training_iters)
+                                                                           data_buffers=data_buffer_training_iters,
+                                                                           rl_model=rl_model)
             wandb.log({"loss": loss, "entropy": entropy})
 
             if i == 0:
