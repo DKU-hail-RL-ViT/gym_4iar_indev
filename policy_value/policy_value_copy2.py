@@ -1,3 +1,5 @@
+# 21일 오후 4시 26분 버전 뭔가 안좋게 나오긴하는거 같은데 policy_value, 평균낸 버전 인걸로 알고 있음
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -475,16 +477,16 @@ class PolicyValueNet:
                 act_probs = torch.exp(log_act_probs).cpu().numpy()  # 얘의 act_probs shape이랑 한번 체크
 
             if self.rl_model in "DQN":
-                value_ = torch.tensor(value).detach()
+                value_ = torch.tensor(value)
                 value, _ = torch.max(value_, dim=1, keepdim=True)
-            elif self.rl_model in ["QRDQN", "EQRDQN"]:
-                value_ = torch.tensor(value).detach()
-                value, _ = torch.max(value_, dim=2, keepdim=True)  # shape = (batch, n_quantiles)
+            # elif self.rl_model in ["QRDQN", "EQRDQN"]:
+            #     value_ = torch.tensor(value)
+            #     value, _ = torch.max(value_, dim=2, keepdim=True)  # shape = (batch, n_quantiles)
             elif self.rl_model in "QAC":
-                value_ = torch.tensor(value).detach()
+                value_ = torch.tensor(value)
                 value = torch.mean(value_, dim=1,  keepdim=True)
             elif self.rl_model in ["QRQAC", "EQRQAC"]:
-                value_ = torch.tensor(value).detach()
+                value_ = torch.tensor(value)
                 value = torch.mean(value_, dim=2, keepdim=True)  # shape = (batch, n_quantiles)
 
             value = value.cpu().numpy()
@@ -549,15 +551,13 @@ class PolicyValueNet:
             winner_batch = winner_batch.unsqueeze(1)
             winner_batch = winner_batch.repeat(1, value.shape[1])
 
-            if self.rl_model in ["QRDQN", "EQRDQN"]:
-                value_loss = torch.mean(winner_batch - value) # TODO 여기 abs 해야할지 봐야할듯
-            else:  # "QRQAC", "EQRQAC"
-                value_loss = F.mse_loss(winner_batch, value)
+            differ_loss = torch.mean(winner_batch - value)
+            print(differ_loss)
+            huber_loss = torch.where(differ_loss.abs() <= self.kappa, 0.5 * differ_loss.pow(2),
+                                     (differ_loss.abs() - 0.5))
+            print(huber_loss)
 
-            huber_loss = torch.where(value_loss.abs() <= self.kappa, 0.5 * value_loss.pow(2),
-                                     (value_loss.abs() - 0.5))
-
-            quantile_regression_loss = calculate_quantile_regression_loss(value_loss, huber_loss,
+            quantile_regression_loss = calculate_quantile_regression_loss(differ_loss, huber_loss,
                                                                           self.quantile_mid_tau)
             # quantile_regression_loss = calculate_quantile_regression_loss(value_loss, huber_loss,
             #                                                               self.quantile_tau)
@@ -567,6 +567,8 @@ class PolicyValueNet:
 
             elif self.rl_model == "QRQAC" or self.rl_model == "EQRQAC":  # QRQAC
                 policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
+                print(quantile_regression_loss)
+                print(policy_loss)
                 loss = quantile_regression_loss + policy_loss
 
         elif self.rl_model in ["AC", "QRAC", "QAC"]:
