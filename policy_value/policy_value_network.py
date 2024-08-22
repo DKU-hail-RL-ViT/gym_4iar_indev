@@ -460,10 +460,6 @@ class PolicyValueNet:
 
             elif self.rl_model in ["QAC", "QRQAC"]:
                 log_act_probs, value = self.policy_value_net(state_batch)
-
-                # if self.rl_model == "QRQAC":
-                #     value = value.mean(axis=1)
-
                 act_probs = torch.exp(log_act_probs).cpu().numpy()
 
             elif self.rl_model == "EQRDQN" or self.rl_model == "EQRQAC":
@@ -475,16 +471,20 @@ class PolicyValueNet:
                 act_probs = torch.exp(log_act_probs).cpu().numpy()  # 얘의 act_probs shape이랑 한번 체크
 
             if self.rl_model in "DQN":
-                value_ = torch.tensor(value).detach()
+                value_ = value.clone().detach()
+                # value_ = torch.tensor(value).detach()
                 value, _ = torch.max(value_, dim=1, keepdim=True)
             elif self.rl_model in ["QRDQN", "EQRDQN"]:
-                value_ = torch.tensor(value).detach()
+                value_ = value.clone().detach()
+                # value_ = torch.tensor(value).detach()
                 value, _ = torch.max(value_, dim=2, keepdim=True)  # shape = (batch, n_quantiles)
             elif self.rl_model in "QAC":
-                value_ = torch.tensor(value).detach()
+                value_ = value.clone().detach()
+                # value_ = torch.tensor(value).detach()
                 value = torch.mean(value_, dim=1,  keepdim=True)
             elif self.rl_model in ["QRQAC", "EQRQAC"]:
-                value_ = torch.tensor(value).detach()
+                value_ = value.clone().detach()
+                # value_ = torch.tensor(value).detach()
                 value = torch.mean(value_, dim=2, keepdim=True)  # shape = (batch, n_quantiles)
 
             value = value.cpu().numpy()

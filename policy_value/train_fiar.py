@@ -22,12 +22,12 @@ parser.add_argument("--n_playout", type=int, default=5)  # compare with 2, 10, 5
 parser.add_argument("--quantiles", type=int, default=9)  # compare with 3, 9, 27, 81
 
 """ RL model """
-# parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
+parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
-parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
+# parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
 
