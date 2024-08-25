@@ -13,7 +13,7 @@ def set_learning_rate(optimizer, lr):
         param_group['lr'] = lr
 
 
-def calculate_quantile_regression_loss(value_loss, huber_loss, quantile_tau):
+def calculate_quantile_regression(value_loss, huber_loss, quantile_tau):
 
     return (abs(quantile_tau - (value_loss.detach() < 0).float()) * huber_loss / 1.0).unsqueeze(-1) \
         .sum(dim=1).mean()
@@ -444,19 +444,21 @@ class PolicyValueNet:
         with torch.no_grad():
             if self.rl_model in ["DQN", "QRDQN"]:
                 log_act_probs, value = self.policy_value_net(state_batch)
+                act_probs = torch.exp(log_act_probs).cpu().numpy()
                 value = value.cpu()
 
                 if self.rl_model == "QRDQN":
-                    value = value.mean(axis=1)
-                act_probs = torch.zeros_like(value)
+                    value = value.mean(axis=1)  # TODO 확인할 필요 mean을 해야하는지?
 
-                idx_batch = torch.arange(act_probs.size(0))
-                idx_max = value.argmax(dim=1)
-                act_probs[idx_batch, idx_max] = 1
-
-                # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-                act_probs += self.epsilon / act_probs.size(1)
-                act_probs[idx_batch, idx_max] -= self.epsilon  # act_probs.shape = (batch, n_action)
+                # act_probs = torch.zeros_like(value)
+                #
+                # idx_batch = torch.arange(act_probs.size(0))
+                # idx_max = value.argmax(dim=1)
+                # act_probs[idx_batch, idx_max] = 1
+                #
+                # # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
+                # act_probs += self.epsilon / act_probs.size(1)
+                # act_probs[idx_batch, idx_max] -= self.epsilon  # act_probs.shape = (batch, n_action)
 
             elif self.rl_model in ["QAC", "QRQAC"]:
                 log_act_probs, value = self.policy_value_net(state_batch)
@@ -470,22 +472,19 @@ class PolicyValueNet:
                 log_act_probs, value = self.policy_value_net(state_batch)
                 act_probs = torch.exp(log_act_probs).cpu().numpy()  # 얘의 act_probs shape이랑 한번 체크
 
+            value_ = value.clone().detach()
+
             if self.rl_model in "DQN":
-                value_ = value.clone().detach()
-                # value_ = torch.tensor(value).detach()
-                value, _ = torch.max(value_, dim=1, keepdim=True)
+                value, _ = torch.max(value_, dim=1, keepdim=True)   # value.shape = (batch, 1)
+
             elif self.rl_model in ["QRDQN", "EQRDQN"]:
-                value_ = value.clone().detach()
-                # value_ = torch.tensor(value).detach()
-                value, _ = torch.max(value_, dim=2, keepdim=True)  # shape = (batch, n_quantiles)
+                value, _ = torch.max(value_, dim=2, keepdim=True)   # value.shape = (batch, n_quantiles)
+
             elif self.rl_model in "QAC":
-                value_ = value.clone().detach()
-                # value_ = torch.tensor(value).detach()
-                value = torch.mean(value_, dim=1,  keepdim=True)
+                value = torch.mean(value_, dim=1,  keepdim=True)    # value.shape = (batch, 1)
+
             elif self.rl_model in ["QRQAC", "EQRQAC"]:
-                value_ = value.clone().detach()
-                # value_ = torch.tensor(value).detach()
-                value = torch.mean(value_, dim=2, keepdim=True)  # shape = (batch, n_quantiles)
+                value = torch.mean(value_, dim=2, keepdim=True)     # value.shape = (batch, n_quantiles)
 
             value = value.cpu().numpy()
 
@@ -529,38 +528,33 @@ class PolicyValueNet:
         # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
         # Note: the L2 penalty is incorporated in optimizer
 
-        if self.rl_model == "DQN":
-            value_ = value.clone().detach().to(self.device).requires_grad_(True)
-            value, _ = torch.max(value_, dim=1, keepdim=True)
+        value_ = value.clone().detach().to(self.device)
 
+        if self.rl_model == "DQN":
+            value, _ = torch.max(value_, dim=1, keepdim=True)
             loss = F.mse_loss(value.view(-1), winner_batch)
 
         elif self.rl_model in ["QRDQN", "QRQAC", "EQRDQN", "EQRQAC"]:
-            if self.rl_model in ["QRDQN", "EQRDQN"]:
-                value_ = value.clone().detach().to(self.device).requires_grad_(True)
-                value, _ = torch.max(value_, dim=2)
-
-            elif self.rl_model in ["QRQAC", "EQRQAC"]:
-                # TODO 여기에서 dim=2 가 맞는지 여러모로 확인해야할 거 있을거임 없을 수
-                value_ = value.clone().detach().to(self.device).requires_grad_(True)
-                value = torch.mean(value_, dim=2)
-
             # To calculate the loss, winner_batch is adjusted to match the same shape (batch, n_quantiles)
             winner_batch = winner_batch.unsqueeze(1)
             winner_batch = winner_batch.repeat(1, value.shape[1])
 
             if self.rl_model in ["QRDQN", "EQRDQN"]:
-                value_loss = torch.mean(winner_batch - value) # TODO 여기 abs 해야할지 봐야할듯
-            else:  # "QRQAC", "EQRQAC"
+                value, _ = torch.max(value_, dim=2)
+                value_loss = torch.mean(winner_batch - value)  # TODO 여기 abs 해야할지 봐야할듯
+
+            else:
+                value = torch.mean(value_, dim=2)
                 value_loss = F.mse_loss(winner_batch, value)
 
             huber_loss = torch.where(value_loss.abs() <= self.kappa, 0.5 * value_loss.pow(2),
                                      (value_loss.abs() - 0.5))
-
-            quantile_regression_loss = calculate_quantile_regression_loss(value_loss, huber_loss,
-                                                                          self.quantile_mid_tau)
-            # quantile_regression_loss = calculate_quantile_regression_loss(value_loss, huber_loss,
-            #                                                               self.quantile_tau)
+            quantile_regression_loss = calculate_quantile_regression(value_loss,
+                                                                     huber_loss,
+                                                                     self.quantile_mid_tau)
+            # quantile_regression_loss = calculate_quantile_regression(value_loss,
+            #                                                          huber_loss,
+            #                                                          self.quantile_tau)
 
             if self.rl_model == "QRDQN" or self.rl_model == "EQRDQN":
                 loss = quantile_regression_loss
@@ -571,7 +565,6 @@ class PolicyValueNet:
 
         elif self.rl_model in ["AC", "QRAC", "QAC"]:
             if self.rl_model == "QAC":
-                value_ = value.clone().detach().to(self.device).requires_grad_(True)
                 value = torch.mean(value_, dim=1, keepdim=True)
 
             value_loss = F.mse_loss(value.view(-1), winner_batch)

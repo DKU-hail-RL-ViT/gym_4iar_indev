@@ -284,16 +284,15 @@ if __name__ == '__main__':
     # wandb intialize
     # DQN, QRDQN, AC, QAC, QRAC, QRQAC, EQRDQN, EQRQAC
     if rl_model == "DQN" or rl_model == "AC" or rl_model == "QAC":
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
                         "-Date" + str(datetime.datetime.now()),
                    config=args.__dict__
                    )
-    elif (rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "QRQAC"
-          or rl_model == "EQRDQN" or rl_model == "EQRQAC"):
-        wandb.init(mode="offline",
+    elif rl_model in ["QRDQN", "QRAC", "QRQAC", "EQRDQN", "EQRQAC"]:
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
@@ -360,8 +359,7 @@ if __name__ == '__main__':
                     eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(eval_model_file)
 
-                elif (rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "QRQAC"
-                      or rl_model == "EQRDQN" or rl_model == "EQRQAC"):
+                elif rl_model in ["QRDQN", "QRAC", "QRQAC", "EQRDQN", "EQRQAC"]:
                     model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                     policy_value_net.save_model(model_file)
                     eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
@@ -378,8 +376,7 @@ if __name__ == '__main__':
                     old_i = max(existing_files)
                     best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
 
-                elif (rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "QRQAC"
-                      or rl_model == "EQRDQN" or rl_model == "EQRQAC"):
+                elif rl_model in ["QRDQN", "QRAC", "QRQAC", "EQRDQN", "EQRQAC"]:
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in
                                       os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
@@ -414,8 +411,7 @@ if __name__ == '__main__':
                         eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
                         policy_value_net.save_model(eval_model_file)
 
-                    elif (rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "QRQAC"
-                          or rl_model == "EQRDQN" or rl_model == "EQRQAC"):
+                    elif rl_model in ["QRDQN", "QRAC", "QRQAC", "EQRDQN", "EQRQAC"]:
                         eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                         policy_value_net.save_model(eval_model_file)
                     else:
@@ -428,8 +424,7 @@ if __name__ == '__main__':
                     old_mcts_player = curr_mcts_player
                     if rl_model == "DQN" or rl_model == "AC" or rl_model == "QAC":
                         model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-                    elif (rl_model == "QRDQN" or rl_model == "QRAC" or rl_model == "QRQAC"
-                          or rl_model == "EQRDQN" or rl_model == "EQRQAC"):
+                    elif rl_model in ["QRDQN", "QRAC", "QRQAC", "EQRDQN", "EQRQAC"]:
                         model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
                     else:
                         assert False, "don't have model"
