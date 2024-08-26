@@ -311,7 +311,7 @@ class EQRDQN(nn.Module):
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions * self.N)
 
-    def forward(self, state_input):
+    def forward(self, state_input, n_quantiles):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -322,7 +322,7 @@ class EQRDQN(nn.Module):
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.act_fc1(x_val))
         x_val = self.act_fc2(x_val)
-        x_val = x_val.view(-1, self.N, self.num_actions)  # batch / quantile / action_space
+        x_val = x_val.view(-1, n_quantiles, self.num_actions)  # batch / quantile / action_space
 
         # action value to policy layers
         x_act = x_val.mean(dim=1)
@@ -334,25 +334,28 @@ class EQRDQN(nn.Module):
 class EQRQAC(nn.Module):  # Efficient Quantile Regression action value actor critic
     """policy-value network module"""
 
-    def __init__(self, board_width, board_height, device):
+    def __init__(self, board_width, board_height, quantiles):
         super(EQRQAC, self).__init__()
         self.board_width = board_width
         self.board_height = board_height
         self.num_actions = board_width * board_height
-        self.device = device
+        self.N = quantiles
+
         # common layers
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+
         # policy gradient layers
         self.act_conv1 = nn.Conv2d(128, 4, kernel_size=1)
         self.act_fc1 = nn.Linear(4 * board_width * board_height, board_width * board_height)
+
         # action value layers
         self.val_conv1 = nn.Conv2d(128, 2, kernel_size=1)
         self.val_fc1 = nn.Linear(2 * board_width * board_height, 64)
-        # self.val_fc2 = nn.Linear(64, self.num_actions * self.N)
+        self.val_fc2 = nn.Linear(64, self.num_actions * self.N)
 
-    def forward(self, state_input, quantiles):
+    def forward(self, state_input):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -368,18 +371,8 @@ class EQRQAC(nn.Module):  # Efficient Quantile Regression action value actor cri
         x_val = F.relu(self.val_conv1(x))
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.val_fc1(x_val))
-
-        # Update and use dynamic val_fc based on quantiles
-        self.update_quantiles(quantiles)
         x_val = self.val_fc2(x_val)
-        x_val = x_val.view(-1, self.num_actions, quantiles)
-        print(quantiles, "network 안에서 찍은 quantile 개수")
-
-        # sh = x_val.mean(dim=1).flatten()
-        # print(sh)
-
-        # Calculate the mean of the quantile values for each action.
-        x_val = x_val.mean(dim=2).flatten()
+        x_val = x_val.view(-1, self.N, self.num_actions)
 
         return x_act, x_val
 
@@ -422,9 +415,9 @@ class PolicyValueNet:
         elif rl_model == "QRQAC":
             self.policy_value_net = QRQAC(board_width, board_height, quantiles).to(self.device)
         elif rl_model == "EQRDQN":
-            self.policy_value_net = EQRDQN(board_width, board_height, self.device).to(self.device)
+            self.policy_value_net = EQRDQN(board_width, board_height, quantiles).to(self.device)
         elif rl_model == "EQRQAC":
-            self.policy_value_net = EQRQAC(board_width, board_height, self.device).to(self.device)
+            self.policy_value_net = EQRQAC(board_width, board_height, quantiles).to(self.device)
         else:
             assert print("error")
 
@@ -442,27 +435,26 @@ class PolicyValueNet:
         state_batch = np.array(state_batch)
         state_batch = torch.tensor(state_batch, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            if self.rl_model in ["DQN", "QRDQN"]:
+            if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
                 log_act_probs, value = self.policy_value_net(state_batch)
                 act_probs = torch.exp(log_act_probs).cpu().numpy()
                 value = value.cpu()
 
-                if self.rl_model == "QRDQN":
+                if self.rl_model == "DQN":
+                    value, _ = torch.max(value, dim=1, keepdim=True)  # value.shape = (batch, 1)
+                else:
                     value = value.mean(axis=1)  # TODO 확인할 필요 mean을 해야하는지?
+                    value, _ = torch.max(value, dim=2, keepdim=True)  # value.shape = (batch, n_quantiles)
 
-                # act_probs = torch.zeros_like(value)
-                #
-                # idx_batch = torch.arange(act_probs.size(0))
-                # idx_max = value.argmax(dim=1)
-                # act_probs[idx_batch, idx_max] = 1
-                #
-                # # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-                # act_probs += self.epsilon / act_probs.size(1)
-                # act_probs[idx_batch, idx_max] -= self.epsilon  # act_probs.shape = (batch, n_action)
-
-            elif self.rl_model in ["QAC", "QRQAC"]:
+            elif self.rl_model in ["QAC", "QRQAC", "EQRQAC"]:
                 log_act_probs, value = self.policy_value_net(state_batch)
                 act_probs = torch.exp(log_act_probs).cpu().numpy()
+
+                if self.rl_model == "QAC":
+                    value = torch.mean(value, dim=1,  keepdim=True)    # value.shape = (batch, 1)
+
+                else:
+                    value = torch.mean(value, dim=2, keepdim=True)  # value.shape = (batch, n_quantiles)
 
             elif self.rl_model == "EQRDQN" or self.rl_model == "EQRQAC":
                 log_act_probs, value = self.policy_value_net(state_batch, self.N)
@@ -472,25 +464,11 @@ class PolicyValueNet:
                 log_act_probs, value = self.policy_value_net(state_batch)
                 act_probs = torch.exp(log_act_probs).cpu().numpy()  # 얘의 act_probs shape이랑 한번 체크
 
-            value_ = value.clone().detach()
-
-            if self.rl_model in "DQN":
-                value, _ = torch.max(value_, dim=1, keepdim=True)   # value.shape = (batch, 1)
-
-            elif self.rl_model in ["QRDQN", "EQRDQN"]:
-                value, _ = torch.max(value_, dim=2, keepdim=True)   # value.shape = (batch, n_quantiles)
-
-            elif self.rl_model in "QAC":
-                value = torch.mean(value_, dim=1,  keepdim=True)    # value.shape = (batch, 1)
-
-            elif self.rl_model in ["QRQAC", "EQRQAC"]:
-                value = torch.mean(value_, dim=2, keepdim=True)     # value.shape = (batch, n_quantiles)
-
             value = value.cpu().numpy()
 
         return act_probs, value
 
-    def policy_value_fn(self, env, k=None):
+    def policy_value_fn(self, env, p=None):
         """
         input: board
         output: a list of (action, probability) tuples for each available
@@ -501,13 +479,7 @@ class PolicyValueNet:
         current_state = torch.from_numpy(current_state).float().to(self.device)
 
         with torch.no_grad():
-            if self.rl_model == "EQRDQN" or self.rl_model == "EQRQAC":
-                self.N = 2 ** k
-                print(self.N, "network 들어가기 전에 quantile 개수")
-                log_act_probs, value = self.policy_value_net(current_state, self.N)
-            else:
-                log_act_probs, value = self.policy_value_net(current_state)
-
+            log_act_probs, value = self.policy_value_net(current_state)
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
 
         return available, act_probs, value
@@ -541,7 +513,7 @@ class PolicyValueNet:
 
             if self.rl_model in ["QRDQN", "EQRDQN"]:
                 value, _ = torch.max(value_, dim=2)
-                value_loss = torch.mean(winner_batch - value)  # TODO 여기 abs 해야할지 봐야할듯
+                value_loss = torch.mean(winner_batch - value)
 
             else:
                 value = torch.mean(value_, dim=2)
@@ -559,7 +531,7 @@ class PolicyValueNet:
             if self.rl_model == "QRDQN" or self.rl_model == "EQRDQN":
                 loss = quantile_regression_loss
 
-            elif self.rl_model == "QRQAC" or self.rl_model == "EQRQAC":  # QRQAC
+            elif self.rl_model == "QRQAC" or self.rl_model == "EQRQAC":
                 policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
                 loss = quantile_regression_loss + policy_loss
 
