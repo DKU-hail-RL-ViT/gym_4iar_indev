@@ -11,6 +11,7 @@ from collections import defaultdict, deque
 from fiar_env import Fiar, turn, action2d_ize
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
+from policy_value.efficient_mcts import EMCTSPlayer
 
 # from policy_value.policy_value_mcts_pure import RandomAction
 
@@ -18,18 +19,18 @@ from policy_value.mcts import MCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=5)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=9)  # compare with 3, 9, 27, 81
+parser.add_argument("--n_playout", type=int, default=10)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
 
 """ RL model """
-parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
+# parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
-# parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
+parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
 
 """ MCTS parameter """
 parser.add_argument("--buffer_size", type=int, default=10000)
@@ -39,11 +40,13 @@ parser.add_argument("--lr_multiplier", type=float, default=1.0)
 parser.add_argument("--self_play_sizes", type=int, default=100)
 parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=1.0)
+
 """ Policy update parameter """
 parser.add_argument("--batch_size", type=int, default=64)  # previous 64
 parser.add_argument("--learn_rate", type=float, default=5e-4)
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
+
 """ Policy evaluate parameter """
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
@@ -53,6 +56,10 @@ parser.add_argument('--epsilon', type=float, default=0.1, help='Initial epsilon 
 # parser.add_argument('--epsilon_', type=float, default=0.5, help='use Ablation study')
 # parser.add_argument('--epsilon_decay', type=float, default=0.999, help='Decay rate for epsilon')
 # parser.add_argument('--min_epsilon', type=float, default=0.1, help='Minimum value for epsilon after decay')
+
+"""Efficient Search Hyperparameter"""
+parser.add_argument('--search_resource', type=int, default=10000)
+parser.add_argument('--playout_resource', type=int, default=5000)
 
 args = parser.parse_args()
 
@@ -76,6 +83,8 @@ quantiles = args.quantiles
 epsilon = args.epsilon
 # epsilon_decay = args.epsilon_decay
 # min_epsilon = args.min_epsilon
+search_resource = args.search_resource
+playout_resource = args.playout_resource
 
 
 def get_equi_data(env, play_data):
@@ -166,7 +175,6 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
             if len(current_player) == 36 and winners == -1:  # draw
                 print('self_play_draw')
 
-            # obs, _ = env.reset()  # reset env
             mcts_player.reset_player()  # reset MCTS root node
 
             print("game: {}, self_play:{}, episode_len:{}".format(
@@ -292,7 +300,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["QRDQN", "QRAC", "QRQAC", "EQRDQN", "EQRQAC"]:
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
@@ -329,8 +337,12 @@ if __name__ == '__main__':
         policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
                                           quantiles, rl_model=rl_model)
 
-    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-                                  epsilon, is_selfplay=1, rl_model=rl_model)
+    if rl_model in ["EQRDQN", "EQRQAC"]:
+        curr_mcts_player = EMCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, epsilon,
+                                       playout_resource, search_resource, is_selfplay=1, rl_model=rl_model)
+    else:
+        curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, epsilon,
+                                      playout_resource, search_resource, is_selfplay=1, rl_model=rl_model)
     # curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
     #                               epsilon, epsilon_decay, min_epsilon, is_selfplay=1, rl_model=rl_model)
     data_buffer_training_iters = deque(maxlen=20)
@@ -390,15 +402,24 @@ if __name__ == '__main__':
                                                       best_old_model, rl_model=rl_model)
 
                 """The most recent model with the highest win rate among the trained models"""
-                old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout,
-                                             epsilon, is_selfplay=0, rl_model=rl_model)
+                if rl_model in ["EQRDQN", "EQRQAC"]:
+                    old_mcts_player = EMCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, epsilon,
+                                                  playout_resource, search_resource, is_selfplay=1, rl_model=rl_model)
+                else:
+                    old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout,
+                                                 epsilon, is_selfplay=0, rl_model=rl_model)
+
                 # old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout,
                 #                              epsilon, eval_epsilon_decay, eval_min_epsilon,
                 #                              is_selfplay=0, rl_model=rl_model)
 
                 """Training model"""
-                curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-                                              epsilon, is_selfplay=0, rl_model=rl_model)
+                if rl_model in ["EQRDQN", "EQRQAC"]:
+                    curr_mcts_player = EMCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, epsilon,
+                                                   playout_resource, search_resource, is_selfplay=1, rl_model=rl_model)
+                else:
+                    curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
+                                                  epsilon, is_selfplay=0, rl_model=rl_model)
                 # curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
                 #                               eval_epsilon, eval_epsilon_decay, eval_min_epsilon,
                 #                               is_selfplay=0, rl_model=rl_model)

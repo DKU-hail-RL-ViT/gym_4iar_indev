@@ -117,90 +117,92 @@ class MCTS(object):
         self.playout_resource = playout_resource
         self.search_resource = search_resource
 
-        # Resource hyperparameter
-        # self.R_rem = 100  # [TODO] Efficient search할 때 사용할 hyperparameter 로 일단 임시로 이렇게 해뒀음
-
-    def _playout(self, env):
+    def _playout(self, env, p=1):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
+        r = 1  # remain resource deduction params
+        threshold = 0.1
+        K = 3 ** p
 
-        while (1):
+        while self.search_resource >= r:
             if node.is_leaf():
                 break
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
 
-            # Greedily select next move. "depth search"
+            # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
+            self.search_resource -= r  # depth search는 r 한번만 빠지고,
+            print("depth search 이후 남은 search resource : ", self.search_resource)
 
-        if self.rl_model in "DQN":
-            available, action_probs, leaf_value = self._policy(env)
+        p = 1
 
-            if len(available) > 0:
-                # Action probabilities need to be created as a one-hot vector
-                action_probs = np.zeros_like(action_probs)
+        if self.rl_model == "EQRDQN":
+            while (k <= 4) and (self.search_resource > 0):
+                available, action_probs, leaf_value = self._policy(env, k)  # TODO 여기 policy 안에서 interpolate 해야하는 거긴 할건데
 
-                # argmax only for the sensible moves
-                leaf_value_ = leaf_value.cpu().flatten()
-                idx_max = available[np.argmax(leaf_value_[available])]
-                action_probs[idx_max] = 1
+                # get values of available
+                leaf_value = leaf_value[available]
+                leaf_value, _ = leaf_value.sort()
 
-                # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-                action_probs[available] += self.epsilon / len(available)
-                action_probs[idx_max] -= self.epsilon
+                # [TODO] width search
+                if torch.abs(leaf_value[-1] - leaf_value[-2]) > threshold:
+                    print(k, "조건 만족되었을 때 k 값 ")
+                    break
 
-                """ use oracle """
-                """ calculate next node.select's node._Q """
-                # leaf_temp = node._Q + (leaf_value - node._Q)/ (node._n_visits+1)
-                # # do we need to calculate next node._u?
-                # leaf_value = leaf_value_[leaf_temp.argmax()]
+                else:
+                    # init_N = 2
+                    self.search_resource -= r  # 만약에 width search에 맞지 않다면 resource를 차감할거
+                    k += 1
 
-                """ use bellman expection to cal state value """
-                # leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
+                    # TODO 아마 Quantile이 3개일 때 뽑았을 때랑 9개 뽑았을 때의 정보를 받아야하기 때문에 함수로 따로 뺴줘야하지 않니
+                    # q_values = interpolate_quantiles(init_N ** k, init_N ** (k + 1))
 
-                """ use bellman optimality to cal state value """
-                leaf_value = leaf_value_[available].max()  # state value 를 구하는 방식
-            else:
-                # Even if len(available) == 0, there is no issue because the leaf value will eventually be set to 0.
-                leaf_value = leaf_value.max()
-            action_probs = zip(available, action_probs[available])
+                    print(k, "조건에 틀렸을 때 k 값 ")
+                leaf_value = leaf_value[available].max()  # [todo] 여기가 max값으로 줘도 되는지
 
-        elif self.rl_model == "QRDQN":
-            available, action_probs, leaf_value = self._policy(env)
+        else:
+            while (p <= 4) and (self.search_resource >= r):
+                # TODO selfplay 떄에는 leaf_value의 (1, 81, 36) 이렇게 나올텐데, 여기에서 3개 9개 27개 뽑자는거지
+                available, action_probs, leaf_value = self._policy(env)
+                # TODO 음 이렇게 하면 quantile value를 매번 새로 뽑게 되는거 아닌가
 
-            if len(available) > 0:
-                # Action probabilities need to be created as a one-hot vector
-                action_probs = np.zeros_like(action_probs)
+                # TODO Q1 - Q2 니까 n_quantile 에 대해서 width search 할때에는 평균내야할듯 그래서 leaf_value 첫번째 차원 에 대해서 평균
 
-                # In the case of QRDQN, the shape of leaf_value is (batch, n_quantiles, n_actions),
-                # so the average needs to be taken over the quantiles.
-                leaf_value_mean = leaf_value.cpu().mean(axis=1)
-                idx_max = available[np.argmax(leaf_value_mean[0, available])]
-                action_probs[idx_max] = 1
+                # Generate K random indices from the second dimension (which has size 81)
+                indices = torch.randperm(leaf_value.size(1))[:K]
 
-                # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
-                action_probs[available] += self.epsilon / len(available)
-                action_probs[idx_max] -= self.epsilon
+                # Use these indices to index into the second dimension
+                leaf_value_ = leaf_value[:, indices, :]
+                leaf_value_ = leaf_value_.mean(dim=1).flatten()
+                # leaf_value_.flatten()
 
-                """ use bellman optimality to cal state value """
-                leaf_value = leaf_value_mean.flatten()[available].max()
-                action_probs = zip(available, action_probs[available])
-            else:
-                # Even if len(available) == 0, there is no issue because the leaf value will eventually be set to 0.
-                leaf_value = leaf_value.cpu().mean(axis=1).max()
-                action_probs = zip(available, action_probs[available])
+                leaf_value_ = leaf_value_[available]
+                leaf_value_, _ = leaf_value_.sort()
 
-        elif self.rl_model in ["QAC", "QRQAC"]:
-            available, action_probs, leaf_value = self._policy(env)
-            action_probs = zip(available, action_probs[available])
-            leaf_value = leaf_value.mean()
+                # [TODO] width search 이거 같은 state에서 다른 action 으로 비교해야함.  abs(Q1 - Q2) >= threshold
+                if torch.abs(leaf_value[-1] - leaf_value[-2]) > threshold and self.search_resource >= r:
+                    action_probs = zip(available, action_probs[available])
+                    leaf_value = leaf_value.mean()
+                    print("width search가 끝났을 때 k 값 ", p)
+                    self.search_resource -= r
+                    print("width search 이후 남은 search resource : ", self.search_resource)
+                    break
 
-        else:  # state version AC, QRAC
-            available, action_probs, leaf_value = self._policy(env)
-            action_probs = zip(available, action_probs[available])
+                elif p == 4:  # if num_quantiles = 81 break 해야하는데 81개로 적용해야함
+                    break
+
+                else:
+                    p += 1
+                    print("depth search가 끝났을 때 k 값 ", p)
+                    self.search_resource -= r  # 만약에 width search에 맞지 않다면 resource를 차감할거
+                    print("width search 이후 남은 search resource : ", self.search_resource)
+                    # TODO 아마 Quantile이 3개일 때 뽑았을 때랑 9개 뽑았을 때의 정보를 받아야하기 때문에 함수로 따로 뺴줘야하지 않니
+                    # q_values = interpolate_quantiles(init_N ** k, init_N ** (k + 1))
+
 
         # Check for end of game
         end, winners = env.winner()
@@ -254,7 +256,7 @@ class MCTS(object):
         return "MCTS"
 
 
-class MCTSPlayer(object):
+class EMCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
