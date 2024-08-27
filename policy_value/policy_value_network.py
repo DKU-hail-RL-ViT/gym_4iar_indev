@@ -376,6 +376,42 @@ class EQRQAC(nn.Module):  # Efficient Quantile Regression action value actor cri
 
         return x_act, x_val
 
+    def forward_partially(self, state_input):
+        # common layers
+        x = F.relu(self.conv1(state_input))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+
+        # policy gradient layers
+        x_act = F.relu(self.act_conv1(x))
+        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
+        x_act = self.act_fc1(x_act)
+        x_act = F.log_softmax(x_act, dim=1)
+
+        # action value layers
+        x_val = F.relu(self.val_conv1(x))
+        x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
+        x_val = F.relu(self.val_fc1(x_val))
+        # x_val = self.val_fc2(x_val)
+        # x_val = x_val.view(-1, self.N, self.num_actions)
+
+        return x_val
+
+        # X_val * W 이때 W가 (원래 shape, 81*36)
+        # 이때 W의 몇개 열만 뽑으면 (원래 shape, 9*36)처럼 할수도 있는 것
+        # iter [ 0 ]
+        # idx_iter = [0,1,2, 36,37,38, ...]
+        # Z_k3 = x_val @ self._policy.val_fc2.weight.data[:, idx_iter] -->  (batchsize, 3*36)
+
+        # iter [ 1 ]
+        # idx_c = [3,4,5,6,7,8, 39,40,41,42,43,44, ...]
+        # Z_k9 = torch or np.zeros((batchsize, 9*36))
+        # Z_k9[:, idx_iter] = Z_k3
+        # Z_k9[: idx_c] = x_val @ self._policy.val_fc2.weight.data[:, idx_c]
+        # idx_iter = np.union(idx_iter, [3,4,5,6,7,8, 39,40,41,42,43,44, ...]).sort()
+
+        # iter [ 2 ]
+        # ...
 
 class PolicyValueNet:
     """policy-value network """
