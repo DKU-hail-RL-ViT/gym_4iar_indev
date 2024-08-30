@@ -413,6 +413,7 @@ class EQRQAC(nn.Module):  # Efficient Quantile Regression action value actor cri
         # iter [ 2 ]
         # ...
 
+
 class PolicyValueNet:
     """policy-value network """
 
@@ -536,10 +537,10 @@ class PolicyValueNet:
         # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
         # Note: the L2 penalty is incorporated in optimizer
 
-        value_ = value.clone().detach().to(self.device)
+        # value_ = value.clone().detach().to(self.device)
 
         if self.rl_model == "DQN":
-            value, _ = torch.max(value_, dim=1, keepdim=True)
+            value, _ = torch.max(value, dim=1, keepdim=True)
             loss = F.mse_loss(value.view(-1), winner_batch)
 
         elif self.rl_model in ["QRDQN", "QRQAC", "EQRDQN", "EQRQAC"]:
@@ -548,11 +549,11 @@ class PolicyValueNet:
             winner_batch = winner_batch.repeat(1, value.shape[1])
 
             if self.rl_model in ["QRDQN", "EQRDQN"]:
-                value, _ = torch.max(value_, dim=2)
+                value, _ = torch.max(value, dim=2)
                 value_loss = torch.mean(winner_batch - value)
 
             else:
-                value = torch.mean(value_, dim=2)
+                value = torch.mean(value, dim=2)
                 value_loss = F.mse_loss(winner_batch, value)
 
             huber_loss = torch.where(value_loss.abs() <= self.kappa, 0.5 * value_loss.pow(2),
@@ -573,7 +574,7 @@ class PolicyValueNet:
 
         elif self.rl_model in ["AC", "QRAC", "QAC"]:
             if self.rl_model == "QAC":
-                value = torch.mean(value_, dim=1, keepdim=True)
+                value = torch.mean(value, dim=1, keepdim=True)
 
             value_loss = F.mse_loss(value.view(-1), winner_batch)
             policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))

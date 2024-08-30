@@ -10,13 +10,13 @@ def softmax(x):
     return probs
 
 
-def interpolate_quantiles(interpolate_pre, interpolate_aft):
-    quantiles_old = np.linspace(0, 1, interpolate_pre + 1)
-    quantiles_new = np.linspace(0, 1, interpolate_aft + 1)
-
-    new_quantiles = np.interp(quantiles_new[1:-1], quantiles_old[1:-1], interpolate_pre)
-
-    return new_quantiles
+# def interpolate_quantiles(interpolate_pre, interpolate_aft):
+#     quantiles_old = np.linspace(0, 1, interpolate_pre + 1)
+#     quantiles_new = np.linspace(0, 1, interpolate_aft + 1)
+#
+#     new_quantiles = np.interp(quantiles_new[1:-1], quantiles_old[1:-1], interpolate_pre)
+#
+#     return new_quantiles
 
 
 class TreeNode(object):
@@ -125,7 +125,7 @@ class MCTS(object):
         node = self._root
         r = 1  # remain resource deduction params
         threshold = 0.1
-        K = 3 ** p
+        old_indices = []
 
         while self.search_resource >= r:
             if node.is_leaf():
@@ -165,44 +165,53 @@ class MCTS(object):
                 leaf_value = leaf_value[available].max()  # [todo] 여기가 max값으로 줘도 되는지
 
         else:
+            available, action_probs, leaf_value = self._policy(env)  # TODO 이렇게 하면 4번 뽑을테니까 self._policy는 바깥에 있는게 맞는거 같음.
+            # possible_indices = set(range(leaf_value.size(1)))
+            total_indices = set(range(leaf_value.size(1)))
             while (p <= 4) and (self.search_resource >= r):
-                # TODO selfplay 떄에는 leaf_value의 (1, 81, 36) 이렇게 나올텐데, 여기에서 3개 9개 27개 뽑자는거지
-                available, action_probs, leaf_value = self._policy(env)
-                # TODO 음 이렇게 하면 quantile value를 매번 새로 뽑게 되는거 아닌가
-
-                # TODO Q1 - Q2 니까 n_quantile 에 대해서 width search 할때에는 평균내야할듯 그래서 leaf_value 첫번째 차원 에 대해서 평균
 
                 # Generate K random indices from the second dimension (which has size 81)
-                indices = torch.randperm(leaf_value.size(1))[:K]
+                K = 3 ** p
+                remain_indices = K - len(old_indices)
+
+                # Generate a set of all possible indices and remove already selected indices
+                remaining_indices = list(total_indices - set(old_indices))
+
+                new_indices = torch.tensor(remaining_indices)[
+                    torch.randperm(len(remaining_indices))[:remain_indices]]
+
+                # Append new indices to the list of selected indices
+                old_indices += new_indices.tolist()
+
+                # Convert the list back to a tensor for indexing
+                old_indices_tensor = torch.tensor(old_indices, dtype=torch.long)
+                leaf_value_ = leaf_value[:, old_indices_tensor, :].mean(dim=1).flatten()
 
                 # Use these indices to index into the second dimension
-                leaf_value_ = leaf_value[:, indices, :]
-                leaf_value_ = leaf_value_.mean(dim=1).flatten()
-                # leaf_value_.flatten()
-
                 leaf_value_ = leaf_value_[available]
                 leaf_value_, _ = leaf_value_.sort()
+                print(leaf_value_[-1] - leaf_value_[-2])
 
-                # [TODO] width search 이거 같은 state에서 다른 action 으로 비교해야함.  abs(Q1 - Q2) >= threshold
-                if torch.abs(leaf_value[-1] - leaf_value[-2]) > threshold and self.search_resource >= r:
+                if torch.abs(leaf_value_[-1] - leaf_value_[-2]) > threshold and self.search_resource >= r:
                     action_probs = zip(available, action_probs[available])
-                    leaf_value = leaf_value.mean()
-                    print("width search가 끝났을 때 k 값 ", p)
-                    self.search_resource -= r
-                    print("width search 이후 남은 search resource : ", self.search_resource)
+                    leaf_value = leaf_value_
                     break
 
-                elif p == 4:  # if num_quantiles = 81 break 해야하는데 81개로 적용해야함
+                elif p == 4:
+                    action_probs = zip(available, action_probs[available])
+                    leaf_value = leaf_value_
                     break
 
                 else:
                     p += 1
-                    print("depth search가 끝났을 때 k 값 ", p)
-                    self.search_resource -= r  # 만약에 width search에 맞지 않다면 resource를 차감할거
-                    print("width search 이후 남은 search resource : ", self.search_resource)
-                    # TODO 아마 Quantile이 3개일 때 뽑았을 때랑 9개 뽑았을 때의 정보를 받아야하기 때문에 함수로 따로 뺴줘야하지 않니
-                    # q_values = interpolate_quantiles(init_N ** k, init_N ** (k + 1))
 
+                self.search_resource -= r
+                print("width search가 끝났을 때 k 값 :", K)
+                print("width search 이후 남은 search resource : ", self.search_resource)
+
+
+        # TODO 여기에 만약 중간에 break 되어서 빠져 나갔을때도 quantile 지정해줘야할거 같음
+        # TODO width search
 
         # Check for end of game
         end, winners = env.winner()
