@@ -205,10 +205,10 @@ class MCTS(object):
                     print("width search 중의 k 값 :", K)
                     print("width search 이후 남은 search resource : ", self.search_resource)
 
-                if self.search_resource >= r or p == 5:
+                if self.search_resource <= 0 or p == 5:
                     action_probs = zip(available, action_probs[available])
                     leaf_value = leaf_value_.mean()
-                    self.search_resource -= r
+                    # self.search_resource -= r
                     print("width search 중의 k 값 :", K)
                     print("width search 이후 남은 search resource : ", self.search_resource)
                     break
@@ -238,6 +238,8 @@ class MCTS(object):
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
+            if self.search_resource <=0:
+                break
             # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
             #     self.update_epsilon()
 
