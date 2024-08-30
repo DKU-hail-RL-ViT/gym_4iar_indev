@@ -142,7 +142,7 @@ class MCTS(object):
 
         if self.rl_model == "EQRDQN":
             while (k <= 4) and (self.search_resource > 0):
-                available, action_probs, leaf_value = self._policy(env, k)  # TODO 여기 policy 안에서 interpolate 해야하는 거긴 할건데
+                available, action_probs, leaf_value = self._policy(env)  # TODO 여기 policy 안에서 interpolate 해야하는 거긴 할건데
 
                 # get values of available
                 leaf_value = leaf_value[available]
@@ -165,8 +165,7 @@ class MCTS(object):
                 leaf_value = leaf_value[available].max()  # [todo] 여기가 max값으로 줘도 되는지
 
         else:
-            available, action_probs, leaf_value = self._policy(env)  # TODO 이렇게 하면 4번 뽑을테니까 self._policy는 바깥에 있는게 맞는거 같음.
-            # possible_indices = set(range(leaf_value.size(1)))
+            available, action_probs, leaf_value = self._policy(env)
             total_indices = set(range(leaf_value.size(1)))
             while (p <= 4) and (self.search_resource >= r):
 
@@ -184,8 +183,8 @@ class MCTS(object):
                 old_indices += new_indices.tolist()
 
                 # Convert the list back to a tensor for indexing
-                old_indices_tensor = torch.tensor(old_indices, dtype=torch.long)
-                leaf_value_ = leaf_value[:, old_indices_tensor, :].mean(dim=1).flatten()
+                old_indices_ = torch.tensor(old_indices, dtype=torch.long)
+                leaf_value_ = leaf_value[:, old_indices_, :].mean(dim=1).flatten()
 
                 # Use these indices to index into the second dimension
                 leaf_value_ = leaf_value_[available]
@@ -194,30 +193,33 @@ class MCTS(object):
 
                 if torch.abs(leaf_value_[-1] - leaf_value_[-2]) > threshold and self.search_resource >= r:
                     action_probs = zip(available, action_probs[available])
-                    leaf_value = leaf_value_
+                    leaf_value = leaf_value_.mean()
+                    self.search_resource -= r
+                    print("width search 중의 k 값 :", K)
+                    print("width search 이후 남은 search resource : ", self.search_resource)
                     break
 
                 elif p == 4:
                     action_probs = zip(available, action_probs[available])
-                    leaf_value = leaf_value_
+                    leaf_value = leaf_value_.mean()
+                    self.search_resource -= r
+                    print("width search 중의 k 값 :", K)
+                    print("width search 이후 남은 search resource : ", self.search_resource)
                     break
 
                 else:
                     p += 1
+                    self.search_resource -= r
+                    print("width search 중의 k 값 :", K)
+                    print("width search 이후 남은 search resource : ", self.search_resource)
 
-                self.search_resource -= r
-                print("width search가 끝났을 때 k 값 :", K)
-                print("width search 이후 남은 search resource : ", self.search_resource)
-
-
-        # TODO 여기에 만약 중간에 break 되어서 빠져 나갔을때도 quantile 지정해줘야할거 같음
-        # TODO width search
+        # TODO 여기에 만약 중간에 break 되어서 빠져 나가면 playout = playout - 1 해주고, wandb에 기록할 것
 
         # Check for end of game
         end, winners = env.winner()
 
         if not end:
-            node.expand(action_probs)  # DQN 버전 같은 경우는 어떤 action을 했는지에 대한 정보가 있어야 반영할 수 있으니 여기서 적절히 추출해야함.
+            node.expand(action_probs)
         else:
             if winners == -1:  # tie
                 leaf_value = 0.0
