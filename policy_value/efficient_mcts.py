@@ -187,31 +187,31 @@ class MCTS(object):
                 leaf_value_ = leaf_value[:, old_indices_, :].mean(dim=1).flatten()
 
                 # Use these indices to index into the second dimension
-                leaf_value_ = leaf_value_[available]
-                leaf_value_, _ = leaf_value_.sort()
-                print(leaf_value_[-1] - leaf_value_[-2])
+                not_available = np.setdiff1d(range(36), available)
+                leaf_value_[not_available] = -1e4
+                leaf_value_srted, idx_srted = leaf_value_.sort()
+                print(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]])
 
-                if torch.abs(leaf_value_[-1] - leaf_value_[-2]) > threshold and self.search_resource >= r:
+                if torch.abs(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]]) > threshold:
                     action_probs = zip(available, action_probs[available])
                     leaf_value = leaf_value_.mean()
                     self.search_resource -= r
                     print("width search 중의 k 값 :", K)
                     print("width search 이후 남은 search resource : ", self.search_resource)
                     break
-
-                elif p == 4:
-                    action_probs = zip(available, action_probs[available])
-                    leaf_value = leaf_value_.mean()
-                    self.search_resource -= r
-                    print("width search 중의 k 값 :", K)
-                    print("width search 이후 남은 search resource : ", self.search_resource)
-                    break
-
                 else:
                     p += 1
                     self.search_resource -= r
                     print("width search 중의 k 값 :", K)
                     print("width search 이후 남은 search resource : ", self.search_resource)
+
+                if self.search_resource >= r or p == 5:
+                    action_probs = zip(available, action_probs[available])
+                    leaf_value = leaf_value_.mean()
+                    self.search_resource -= r
+                    print("width search 중의 k 값 :", K)
+                    print("width search 이후 남은 search resource : ", self.search_resource)
+                    break
 
         # TODO 여기에 만약 중간에 break 되어서 빠져 나가면 playout = playout - 1 해주고, wandb에 기록할 것
 
