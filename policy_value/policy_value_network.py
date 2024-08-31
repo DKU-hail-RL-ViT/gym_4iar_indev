@@ -19,24 +19,6 @@ def calculate_quantile_regression(value_loss, huber_loss, quantile_tau):
         .sum(dim=1).mean()
 
 
-# def interpolate_quantiles(old_quantiles, new_quantile_count):
-#     # 기존 quantile의 개수
-#     old_quantile_count = len(old_quantiles)
-#
-#     # 새로운 quantile을 위한 위치 계산
-#     new_quantile_positions = np.linspace(0, 1, new_quantile_count + 1)
-#     old_quantile_positions = np.linspace(0, 1, old_quantile_count + 1)
-#
-#     # 새로운 quantile 값 계산 (보간 사용)
-#     new_quantiles = np.interp(new_quantile_positions[1:-1], old_quantile_positions[1:-1], old_quantiles)
-#
-#     return new_quantiles
-
-
-# 예시: quantile 2개에서 4개로 확장
-# q4_values = interpolate_quantiles(q2_values, 4)
-
-
 class DQN(nn.Module):
     """value network module"""
 
@@ -376,26 +358,26 @@ class EQRQAC(nn.Module):  # Efficient Quantile Regression action value actor cri
 
         return x_act, x_val
 
-    def forward_partially(self, state_input):
-        # common layers
-        x = F.relu(self.conv1(state_input))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-
-        # policy gradient layers
-        x_act = F.relu(self.act_conv1(x))
-        x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
-        x_act = self.act_fc1(x_act)
-        x_act = F.log_softmax(x_act, dim=1)
-
-        # action value layers
-        x_val = F.relu(self.val_conv1(x))
-        x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
-        x_val = F.relu(self.val_fc1(x_val))
-        # x_val = self.val_fc2(x_val)
-        # x_val = x_val.view(-1, self.N, self.num_actions)
-
-        return x_val
+    # def forward_partially(self, state_input):
+    #     # common layers
+    #     x = F.relu(self.conv1(state_input))
+    #     x = F.relu(self.conv2(x))
+    #     x = F.relu(self.conv3(x))
+    #
+    #     # policy gradient layers
+    #     x_act = F.relu(self.act_conv1(x))
+    #     x_act = x_act.view(-1, 4 * self.board_width * self.board_height)
+    #     x_act = self.act_fc1(x_act)
+    #     x_act = F.log_softmax(x_act, dim=1)
+    #
+    #     # action value layers
+    #     x_val = F.relu(self.val_conv1(x))
+    #     x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
+    #     x_val = F.relu(self.val_fc1(x_val))
+    #     # x_val = self.val_fc2(x_val)
+    #     # x_val = x_val.view(-1, self.N, self.num_actions)
+    #
+    #     return x_val
 
         # X_val * W 이때 W가 (원래 shape, 81*36)
         # 이때 W의 몇개 열만 뽑으면 (원래 shape, 9*36)처럼 할수도 있는 것
@@ -433,7 +415,7 @@ class PolicyValueNet:
         self.rl_model = rl_model
         self.gamma = 0.99
         self.kappa = 1.0
-        self.N = quantiles   # [TODO] 여기서도 efficient search 때는 이렇게 initilize해주면 안될 거 같은데
+        self.N = quantiles
         self.quantile_tau = torch.FloatTensor([i / self.N for i in range(1, self.N + 1)]).to(self.device)
         self.quantile_mid_tau = torch.FloatTensor([(i - 0.5) / self.N for i in range(1, self.N + 1)]).to(self.device)
         self.epsilon = 0.1
@@ -472,40 +454,24 @@ class PolicyValueNet:
         state_batch = np.array(state_batch)
         state_batch = torch.tensor(state_batch, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
+            if self.rl_model in ["QAC", "QRQAC", "EQRQAC"]:
+                # value.shape = (batch, n_actions) or (batch, n_quantiles, n_actions)
                 log_act_probs, value = self.policy_value_net(state_batch)
                 act_probs = torch.exp(log_act_probs).cpu().numpy()
-                value = value.cpu()
-
-                if self.rl_model == "DQN":
-                    value, _ = torch.max(value, dim=1, keepdim=True)  # value.shape = (batch, 1)
-                else:
-                    value = value.mean(axis=1)  # TODO 확인할 필요 mean을 해야하는지?
-                    value, _ = torch.max(value, dim=2, keepdim=True)  # value.shape = (batch, n_quantiles)
-
-            elif self.rl_model in ["QAC", "QRQAC", "EQRQAC"]:
-                log_act_probs, value = self.policy_value_net(state_batch)
-                act_probs = torch.exp(log_act_probs).cpu().numpy()
-
                 if self.rl_model == "QAC":
-                    value = torch.mean(value, dim=1,  keepdim=True)    # value.shape = (batch, 1)
-
+                    value = torch.mean(value, dim=1, keepdim=True)    # value.shape = (batch, 1)
                 else:
-                    value = torch.mean(value, dim=2, keepdim=True)  # value.shape = (batch, n_quantiles)
+                    value = torch.mean(value, dim=2, keepdim=True)  # value.shape = (batch, n_quantiles, 1)
 
-            elif self.rl_model == "EQRDQN" or self.rl_model == "EQRQAC":
-                log_act_probs, value = self.policy_value_net(state_batch, self.N)
-                act_probs = torch.exp(log_act_probs).cpu().numpy()
-
-            else:
+            else:  # AC or QRAC
                 log_act_probs, value = self.policy_value_net(state_batch)
-                act_probs = torch.exp(log_act_probs).cpu().numpy()  # 얘의 act_probs shape이랑 한번 체크
+                act_probs = torch.exp(log_act_probs).cpu().numpy()
 
             value = value.cpu().numpy()
 
         return act_probs, value
 
-    def policy_value_fn(self, env, p=None):
+    def policy_value_fn(self, env):
         """
         input: board
         output: a list of (action, probability) tuples for each available
@@ -536,9 +502,6 @@ class PolicyValueNet:
         log_act_probs, value = self.policy_value_net(state_batch)
         # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
         # Note: the L2 penalty is incorporated in optimizer
-
-        # value_ = value.clone().detach().to(self.device)
-
         if self.rl_model == "DQN":
             value, _ = torch.max(value, dim=1, keepdim=True)
             loss = F.mse_loss(value.view(-1), winner_batch)
@@ -550,8 +513,7 @@ class PolicyValueNet:
 
             if self.rl_model in ["QRDQN", "EQRDQN"]:
                 value, _ = torch.max(value, dim=2)
-                value_loss = torch.mean(winner_batch - value)
-
+                value_loss = torch.mean(abs(winner_batch - value))
             else:
                 value = torch.mean(value, dim=2)
                 value_loss = F.mse_loss(winner_batch, value)
@@ -565,10 +527,10 @@ class PolicyValueNet:
             #                                                          huber_loss,
             #                                                          self.quantile_tau)
 
-            if self.rl_model == "QRDQN" or self.rl_model == "EQRDQN":
+            if self.rl_model == "QRDQN":
                 loss = quantile_regression_loss
 
-            elif self.rl_model == "QRQAC" or self.rl_model == "EQRQAC":
+            elif self.rl_model == "QRQAC":
                 policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
                 loss = quantile_regression_loss + policy_loss
 

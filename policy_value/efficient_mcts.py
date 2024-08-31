@@ -1,6 +1,7 @@
 import numpy as np
 import copy
 import torch
+import wandb
 from fiar_env import Fiar
 
 
@@ -10,13 +11,17 @@ def softmax(x):
     return probs
 
 
-# def interpolate_quantiles(interpolate_pre, interpolate_aft):
-#     quantiles_old = np.linspace(0, 1, interpolate_pre + 1)
-#     quantiles_new = np.linspace(0, 1, interpolate_aft + 1)
-#
-#     new_quantiles = np.interp(quantiles_new[1:-1], quantiles_old[1:-1], interpolate_pre)
-#
-#     return new_quantiles
+def get_fixed_indices(p):
+    if p == 1:
+        return [13, 40, 67]
+    elif p == 2:
+        return [4, 13, 22, 31, 40, 49, 58, 67, 76]
+    elif p == 3:
+        return [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52, 55, 58, 61, 64, 67, 70, 73, 76, 79]
+    elif p == 4:
+        return list(range(81))
+    else:
+        raise ValueError("p should be between 1 and 4")
 
 
 class TreeNode(object):
@@ -116,8 +121,10 @@ class MCTS(object):
         self.min_epsilon = min_epsilon
         self.playout_resource = playout_resource
         self.search_resource = search_resource
+        self.depth_fre = 0
+        self.width_fre = 0
 
-    def _playout(self, env, p=1):
+    def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
@@ -125,7 +132,8 @@ class MCTS(object):
         node = self._root
         r = 1  # remain resource deduction params
         threshold = 0.1
-        old_indices = []
+        self.depth_fre = 0
+        self.width_fre = 0
 
         while self.search_resource >= r:
             if node.is_leaf():
@@ -135,85 +143,43 @@ class MCTS(object):
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
-            self.search_resource -= r  # depth search는 r 한번만 빠지고,
-            print("depth search 이후 남은 search resource : ", self.search_resource)
+            self.search_resource -= r
+            self.depth_fre += r
 
         p = 1
+        available, action_probs, leaf_value = self._policy(env)
+        while (p <= 4) and (self.search_resource > 0):
+            n_indices = get_fixed_indices(p)
+            leaf_value_ = leaf_value[:, n_indices, :].mean(dim=1).flatten()
 
-        if self.rl_model == "EQRDQN":
-            while (k <= 4) and (self.search_resource > 0):
-                available, action_probs, leaf_value = self._policy(env)  # TODO 여기 policy 안에서 interpolate 해야하는 거긴 할건데
+            # Use these indices to index into the second dimension
+            not_available = np.setdiff1d(range(36), available)
+            leaf_value_[not_available] = -1e4
+            leaf_value_srted, idx_srted = leaf_value_.sort()
+            print(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]])
 
-                # get values of available
-                leaf_value = leaf_value[available]
-                leaf_value, _ = leaf_value.sort()
-
-                # [TODO] width search
-                if torch.abs(leaf_value[-1] - leaf_value[-2]) > threshold:
-                    print(k, "조건 만족되었을 때 k 값 ")
-                    break
-
-                else:
-                    # init_N = 2
-                    self.search_resource -= r  # 만약에 width search에 맞지 않다면 resource를 차감할거
-                    k += 1
-
-                    # TODO 아마 Quantile이 3개일 때 뽑았을 때랑 9개 뽑았을 때의 정보를 받아야하기 때문에 함수로 따로 뺴줘야하지 않니
-                    # q_values = interpolate_quantiles(init_N ** k, init_N ** (k + 1))
-
-                    print(k, "조건에 틀렸을 때 k 값 ")
-                leaf_value = leaf_value[available].max()  # [todo] 여기가 max값으로 줘도 되는지
-
-        else:
-            available, action_probs, leaf_value = self._policy(env)
-            total_indices = set(range(leaf_value.size(1)))
-            while (p <= 4) and (self.search_resource >= r):
-
-                # Generate K random indices from the second dimension (which has size 81)
-                K = 3 ** p
-                remain_indices = K - len(old_indices)
-
-                # Generate a set of all possible indices and remove already selected indices
-                remaining_indices = list(total_indices - set(old_indices))
-
-                new_indices = torch.tensor(remaining_indices)[
-                    torch.randperm(len(remaining_indices))[:remain_indices]]
-
-                # Append new indices to the list of selected indices
-                old_indices += new_indices.tolist()
-
-                # Convert the list back to a tensor for indexing
-                old_indices_ = torch.tensor(old_indices, dtype=torch.long)
-                leaf_value_ = leaf_value[:, old_indices_, :].mean(dim=1).flatten()
-
-                # Use these indices to index into the second dimension
-                not_available = np.setdiff1d(range(36), available)
-                leaf_value_[not_available] = -1e4
-                leaf_value_srted, idx_srted = leaf_value_.sort()
-                print(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]])
-
-                if torch.abs(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]]) > threshold:
-                    action_probs = zip(available, action_probs[available])
+            if torch.abs(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]]) > threshold:
+                action_probs = zip(available, action_probs[available])
+                if self.rl_model == "EQRDQN":
+                    leaf_value = leaf_value_[idx_srted[-1]]
+                else:  # "EQRQAC"
                     leaf_value = leaf_value_.mean()
-                    self.search_resource -= r
-                    print("width search 중의 k 값 :", K)
-                    print("width search 이후 남은 search resource : ", self.search_resource)
-                    break
-                else:
-                    p += 1
-                    self.search_resource -= r
-                    print("width search 중의 k 값 :", K)
-                    print("width search 이후 남은 search resource : ", self.search_resource)
+                self.search_resource -= r
+                self.width_fre += r
+                break
+            else:
+                p += 1
+                self.search_resource -= r
+                self.width_fre += r
+                print("width search 이후 남은 search resource : ", self.search_resource)
 
-                if self.search_resource <= 0 or p == 5:
-                    action_probs = zip(available, action_probs[available])
+            if self.search_resource <= 0 or p == 5:
+                action_probs = zip(available, action_probs[available])
+                if self.rl_model == "EQRDQN":
+                    leaf_value = leaf_value_[idx_srted[-1]]
+                else:  # "EQRQAC"
                     leaf_value = leaf_value_.mean()
-                    # self.search_resource -= r
-                    print("width search 중의 k 값 :", K)
-                    print("width search 이후 남은 search resource : ", self.search_resource)
-                    break
-
-        # TODO 여기에 만약 중간에 break 되어서 빠져 나가면 playout = playout - 1 해주고, wandb에 기록할 것
+                break
 
         # Check for end of game
         end, winners = env.winner()
@@ -235,10 +201,14 @@ class MCTS(object):
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
+        wandb.log({"Remain Search Resource": self.search_resource})
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
-            if self.search_resource <=0:
+            print("Remain Search Resource: ", self.search_resource)
+            wandb.log({"width / depth Search Frequency": self.width_fre / self.depth_fre})
+            wandb.log({"Remain Search Resource": self.search_resource})
+            if self.search_resource <= 0:
                 break
             # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
             #     self.update_epsilon()

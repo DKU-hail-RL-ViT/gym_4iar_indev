@@ -18,7 +18,7 @@ from policy_value.efficient_mcts import EMCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=50)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=5)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
 parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0.4, 0.7
 
@@ -28,10 +28,10 @@ parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver      # Done
-# parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
+parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
-parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
+# parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
 
 """ MCTS parameter """
 parser.add_argument("--buffer_size", type=int, default=10000)
@@ -59,7 +59,6 @@ parser.add_argument("--init_model", type=str, default=None)
 
 """Efficient Search Hyperparameter"""
 parser.add_argument('--search_resource', type=int, default=10000)
-parser.add_argument('--playout_resource', type=int, default=5000)
 
 args = parser.parse_args()
 
@@ -201,7 +200,6 @@ def policy_update(lr_mul, policy_value_net, data_buffers=None, rl_model=None):
     state_batch = [data[0] for data in mini_batch]
     mcts_probs_batch = [data[1] for data in mini_batch]
     winner_batch = [data[2] for data in mini_batch]
-    old_probs, old_v = policy_value_net.policy_value(state_batch)
 
     if rl_model in ["DQN", "QRDQN", "EQRDQN"]:
         loss, entropy = policy_value_net.train_step(state_batch,
@@ -209,6 +207,8 @@ def policy_update(lr_mul, policy_value_net, data_buffers=None, rl_model=None):
                                                     winner_batch,
                                                     learn_rate * lr_multiplier)
     else:
+        old_probs, old_v = policy_value_net.policy_value(state_batch)
+
         for k in range(epochs):
             loss, entropy = policy_value_net.train_step(state_batch,
                                                         mcts_probs_batch,
@@ -260,7 +260,7 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     return win_ratio, training_mcts_player
 
 
-def start_play(env, player1, player2, move=None):
+def start_play(env, player1, player2):
     """start a game between two players"""
     obs, _ = env.reset()
     players = [0, 1]
@@ -291,7 +291,7 @@ if __name__ == '__main__':
     # wandb intialize
     # DQN, QRDQN, AC, QAC, QRAC, QRQAC, EQRDQN, EQRQAC
     if rl_model == "DQN":
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon) +
@@ -299,7 +299,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["QRDQN", "EQRDQN"]:
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon) +
