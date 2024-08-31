@@ -117,9 +117,6 @@ class MCTS(object):
         self.playout_resource = playout_resource
         self.search_resource = search_resource
 
-        # Resource hyperparameter
-        # self.R_rem = 100  # [TODO] Efficient search할 때 사용할 hyperparameter 로 일단 임시로 이렇게 해뒀음
-
     def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
@@ -174,11 +171,11 @@ class MCTS(object):
             if len(available) > 0:
                 # Action probabilities need to be created as a one-hot vector
                 action_probs = np.zeros_like(action_probs)
+                leaf_value_ = leaf_value.cpu().mean(axis=1).flatten()
 
                 # In the case of QRDQN, the shape of leaf_value is (batch, n_quantiles, n_actions),
                 # so the average needs to be taken over the quantiles.
-                leaf_value_mean = leaf_value.cpu().mean(axis=1)
-                idx_max = available[np.argmax(leaf_value_mean[0, available])]
+                idx_max = available[np.argmax(leaf_value_[available])]
                 action_probs[idx_max] = 1
 
                 # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
@@ -186,7 +183,7 @@ class MCTS(object):
                 action_probs[idx_max] -= self.epsilon
 
                 """ use bellman optimality to cal state value """
-                leaf_value = leaf_value_mean.flatten()[available].max()
+                leaf_value = leaf_value_[available].max()
                 action_probs = zip(available, action_probs[available])
             else:
                 # Even if len(available) == 0, there is no issue because the leaf value will eventually be set to 0.
@@ -225,7 +222,7 @@ class MCTS(object):
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
-            # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
+            # if self.rl_model in ["DQN", "QRDQN"]:
             #     self.update_epsilon()
 
         # calc the move probabilities based on visit counts at the root node
