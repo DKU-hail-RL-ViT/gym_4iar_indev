@@ -95,7 +95,7 @@ class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
     def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, epsilon=None,
-                 playout_resource=None, search_resource=None, epsilon_decay=None, min_epsilon=None, rl_model=None):
+                 search_resource=None, epsilon_decay=None, min_epsilon=None, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -114,7 +114,6 @@ class MCTS(object):
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
         self.min_epsilon = min_epsilon
-        self.playout_resource = playout_resource
         self.search_resource = search_resource
 
     def _playout(self, env):
@@ -255,10 +254,10 @@ class MCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
-                 epsilon=None, playout_resource=None, search_resource=None, epsilon_decay=None, min_epsilon=None,
+                 epsilon=None,  epsilon_decay=None, min_epsilon=None,
                  is_selfplay=0, elo=None, rl_model=None):
         self.mcts = MCTS(policy_value_function, c_puct, n_playout, epsilon,
-                         playout_resource, search_resource, epsilon_decay, min_epsilon, rl_model=rl_model)
+                          epsilon_decay, min_epsilon, rl_model=rl_model)
 
         self._is_selfplay = is_selfplay
         init_elo = 1500
