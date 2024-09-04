@@ -100,7 +100,7 @@ class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
     def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, epsilon=None,
-                 playout_resource=None, search_resource=None, epsilon_decay=None, min_epsilon=None, rl_model=None):
+                 search_resource=None, epsilon_decay=None, min_epsilon=None, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -119,8 +119,8 @@ class MCTS(object):
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
         self.min_epsilon = min_epsilon
-        self.playout_resource = playout_resource
         self.search_resource = search_resource
+        self.r = 1  # remain resource deduction params
         self.depth_fre = 0
         self.width_fre = 0
 
@@ -130,12 +130,11 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
-        r = 1  # remain resource deduction params
         threshold = 0.1
         self.depth_fre = 0
         self.width_fre = 0
 
-        while self.search_resource >= r:
+        while self.search_resource >= self.r:
             if node.is_leaf():
                 break
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
@@ -143,12 +142,13 @@ class MCTS(object):
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
-            self.search_resource -= r
-            self.depth_fre += r
+            self.search_resource -= self.r
+            self.depth_fre += self.r
 
         p = 1
         available, action_probs, leaf_value = self._policy(env)
-        while (p <= 4) and (self.search_resource > 0):
+
+        while (p <= 4) and (self.search_resource > self.r):
             n_indices = get_fixed_indices(p)
             leaf_value_ = leaf_value[:, n_indices, :].mean(dim=1).flatten()
 
@@ -156,7 +156,6 @@ class MCTS(object):
             not_available = np.setdiff1d(range(36), available)
             leaf_value_[not_available] = -1e4
             leaf_value_srted, idx_srted = leaf_value_.sort()
-            print(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]])
 
             if torch.abs(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]]) > threshold:
                 action_probs = zip(available, action_probs[available])
@@ -164,14 +163,28 @@ class MCTS(object):
                     leaf_value = leaf_value_[idx_srted[-1]]
                 else:  # "EQRQAC"
                     leaf_value = leaf_value_.mean()
-                self.search_resource -= r
-                self.width_fre += r
+                self.search_resource -= self.r
+                self.width_fre += self.r
+
+                # Check for end of game
+                end, winners = env.winner()
+
+                if not end:
+                    node.expand(action_probs)
+                else:
+                    if winners == -1:  # tie
+                        leaf_value = 0.0
+                    elif winners == env.turn():
+                        leaf_value = 1.0
+                    else:
+                        leaf_value = -1.0
+                node.update_recursive(-leaf_value)
                 break
+
             else:
                 p += 1
-                self.search_resource -= r
-                self.width_fre += r
-                print("width search 이후 남은 search resource : ", self.search_resource)
+                self.search_resource -= self.r
+                self.width_fre += self.r
 
             if self.search_resource <= 0 or p == 5:
                 action_probs = zip(available, action_probs[available])
@@ -179,21 +192,22 @@ class MCTS(object):
                     leaf_value = leaf_value_[idx_srted[-1]]
                 else:  # "EQRQAC"
                     leaf_value = leaf_value_.mean()
+
+                # Check for end of game
+                end, winners = env.winner()
+
+                if not end:
+                    node.expand(action_probs)
+                else:
+                    if winners == -1:  # tie
+                        leaf_value = 0.0
+                    elif winners == env.turn():
+                        leaf_value = 1.0
+                    else:
+                        leaf_value = -1.0
+                node.update_recursive(-leaf_value)
                 break
 
-        # Check for end of game
-        end, winners = env.winner()
-
-        if not end:
-            node.expand(action_probs)
-        else:
-            if winners == -1:  # tie
-                leaf_value = 0.0
-            elif winners == env.turn():
-                leaf_value = 1.0
-            else:
-                leaf_value = -1.0
-        node.update_recursive(-leaf_value)
 
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -206,12 +220,16 @@ class MCTS(object):
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
             print("Remain Search Resource: ", self.search_resource)
-            wandb.log({"width / depth Search Frequency": self.width_fre / self.depth_fre})
+
+            wandb.log({"Playout times": n})
+            wandb.log({"width / depth Search Frequency": self.width_fre / (self.depth_fre + 1e-8)})
             wandb.log({"Remain Search Resource": self.search_resource})
             if self.search_resource <= 0:
                 break
             # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
             #     self.update_epsilon()
+
+        print("Playout times", n)
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -243,10 +261,10 @@ class EMCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
-                 epsilon=None, playout_resource=None, search_resource=None, epsilon_decay=None, min_epsilon=None,
+                 epsilon=None, search_resource=None, epsilon_decay=None, min_epsilon=None,
                  is_selfplay=0, elo=None, rl_model=None):
         self.mcts = MCTS(policy_value_function, c_puct, n_playout, epsilon,
-                         playout_resource, search_resource, epsilon_decay, min_epsilon, rl_model=rl_model)
+                         search_resource, epsilon_decay, min_epsilon, rl_model=rl_model)
 
         self._is_selfplay = is_selfplay
         init_elo = 1500
@@ -262,6 +280,7 @@ class EMCTSPlayer(object):
     def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
+        self.mcts.search_resource = 200 # TODO 이게 맞는건지 모르겠음
 
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
