@@ -527,10 +527,10 @@ class PolicyValueNet:
             #                                                          huber_loss,
             #                                                          self.quantile_tau)
 
-            if self.rl_model == "QRDQN":
+            if self.rl_model in ["QRDQN", "EQRDQN"]:
                 loss = quantile_regression_loss
 
-            elif self.rl_model == "QRQAC":
+            else:
                 policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
                 loss = quantile_regression_loss + policy_loss
 
