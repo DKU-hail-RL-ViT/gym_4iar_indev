@@ -290,7 +290,7 @@ if __name__ == '__main__':
     # wandb intialize
     # DQN, QRDQN, AC, QAC, QRAC, QRQAC, EQRDQN, EQRQAC
     if rl_model == "DQN":
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon) +
@@ -298,7 +298,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["QRDQN", "EQRDQN"]:
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon) +
@@ -306,7 +306,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["AC", "QAC"]:
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
@@ -314,7 +314,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +

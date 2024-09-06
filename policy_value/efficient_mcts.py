@@ -219,10 +219,11 @@ class MCTS(object):
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
-            print("Remain Search Resource: ", self.search_resource)
+            # print("Remain Search Resource: ", self.search_resource)
+            # print("width / depth Search Frequency", round(self.width_fre / (self.depth_fre + 1e-8), 2))
 
             wandb.log({"Playout times": n})
-            wandb.log({"width / depth Search Frequency": self.width_fre / (self.depth_fre + 1e-8)})
+            wandb.log({"width / depth Search Frequency": round(self.width_fre / (self.depth_fre + 1e-8), -3)})
             wandb.log({"Remain Search Resource": self.search_resource})
             if self.search_resource <= 0:
                 break
@@ -280,7 +281,7 @@ class EMCTSPlayer(object):
     def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
-        self.mcts.search_resource = 200 # TODO 이게 맞는건지 모르겠음
+        self.mcts.search_resource = 200 # TODO 이게 맞는건지 모르겠음 수정하긴해야할건데 일단 놔둠
 
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
