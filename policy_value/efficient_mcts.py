@@ -121,6 +121,7 @@ class MCTS(object):
         self.min_epsilon = min_epsilon
         self.search_resource = search_resource
         self.r = 1  # remain resource deduction params
+        self.p = 1
         self.depth_fre = 0
         self.width_fre = 0
 
@@ -145,11 +146,11 @@ class MCTS(object):
             self.search_resource -= self.r
             self.depth_fre += self.r
 
-        p = 1
+        self.p = 1
         available, action_probs, leaf_value = self._policy(env)
 
-        while (p <= 4) and (self.search_resource > self.r):
-            n_indices = get_fixed_indices(p)
+        while (self.p <= 4) and (self.search_resource > self.r):
+            n_indices = get_fixed_indices(self.p)
             leaf_value_ = leaf_value[:, n_indices, :].mean(dim=1).flatten()
 
             # Use these indices to index into the second dimension
@@ -163,7 +164,8 @@ class MCTS(object):
                     leaf_value = leaf_value_[idx_srted[-1]]
                 else:  # "EQRQAC"
                     leaf_value = leaf_value_.mean()
-                self.search_resource -= self.r
+
+                self.update_search_resource(self.p, n_indices)
                 self.width_fre += self.r
 
                 # Check for end of game
@@ -182,11 +184,11 @@ class MCTS(object):
                 break
 
             else:
-                p += 1
-                self.search_resource -= self.r
+                self.update_search_resource(self.p)
                 self.width_fre += self.r
+                self.p += 1
 
-            if self.search_resource <= 0 or p == 5:
+            if self.search_resource <= 0 or self.p == 5:
                 action_probs = zip(available, action_probs[available])
                 if self.rl_model == "EQRDQN":
                     leaf_value = leaf_value_[idx_srted[-1]]
@@ -208,29 +210,35 @@ class MCTS(object):
                 node.update_recursive(-leaf_value)
                 break
 
-
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
-        wandb.log({"Remain Search Resource": self.search_resource})
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
-            # print("Remain Search Resource: ", self.search_resource)
-            # print("width / depth Search Frequency", round(self.width_fre / (self.depth_fre + 1e-8), 2))
 
-            wandb.log({"Playout times": n})
-            wandb.log({"width / depth Search Frequency": round(self.width_fre / (self.depth_fre + 1e-8), -3)})
-            wandb.log({"Remain Search Resource": self.search_resource})
+            wandb.log({
+                "Depth search times": self.depth_fre,
+                "Use Resource in depth search": self.depth_fre,
+                "Width search times": self.width_fre,
+                "Use Resource in width search": self.width_fre,
+                "Total search times": self.depth_fre + self.width_fre
+            })
             if self.search_resource <= 0:
+                self.search_resource = 0
                 break
+
             # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
             #     self.update_epsilon()
 
         print("Playout times", n)
+        wandb.log({
+            "Playout times": n,
+            "Remain Search Resource": self.search_resource
+        })
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -249,6 +257,12 @@ class MCTS(object):
             self._root._parent = None
         else:
             self._root = TreeNode(None, 1.0)
+
+    def update_search_resource(self, p):
+        if p in [1, 2, 3, 4]: # TODO 여기도 수정해야 할거 그냥 숫자로 해뒀는데
+            self.search_resource -= 2 ** (p-1) * 3
+        else:
+            assert False, "not defined"
 
     # def update_epsilon(self):
     #     self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
@@ -271,6 +285,7 @@ class EMCTSPlayer(object):
         init_elo = 1500
         self.elo = elo if elo is not None else init_elo
         self.rl_model = rl_model
+        self.resource = search_resource
 
     def set_player_ind(self, p):
         self.player = p
@@ -281,7 +296,7 @@ class EMCTSPlayer(object):
     def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
-        self.mcts.search_resource = 200 # TODO 이게 맞는건지 모르겠음 수정하긴해야할건데 일단 놔둠
+        self.mcts.search_resource = self.resource
 
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
