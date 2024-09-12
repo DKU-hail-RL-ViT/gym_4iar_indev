@@ -498,7 +498,6 @@ class PolicyValueNet:
         mcts_probs = torch.tensor(mcts_probs_np, dtype=torch.float32, device=self.device)
         winner_batch = torch.tensor(winner_batch_np, dtype=torch.float32, device=self.device)
 
-        set_learning_rate(self.optimizer, lr)
         log_act_probs, value = self.policy_value_net(state_batch)
         # define the loss = (z - v)^2 - pi^T * log(p) + c||theta||^2
         # Note: the L2 penalty is incorporated in optimizer
@@ -547,6 +546,9 @@ class PolicyValueNet:
 
         # when call backward, the grad will accumulate. so zero grad before backward
         self.optimizer.zero_grad()
+        set_learning_rate(self.optimizer, lr)
+
+        # backward and optimize
         loss.backward()
         self.optimizer.step()
 

@@ -58,7 +58,7 @@ parser.add_argument("--init_model", type=str, default=None)
 # parser.add_argument('--min_epsilon', type=float, default=0.1, help='Minimum value for epsilon after decay')
 
 """Efficient Search Hyperparameter"""
-parser.add_argument('--search_resource', type=int, default=200)
+parser.add_argument('--search_resource', type=int, default=2000)
 
 args = parser.parse_args()
 
@@ -314,7 +314,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
@@ -356,7 +356,7 @@ if __name__ == '__main__':
                                        search_resource, is_selfplay=1, rl_model=rl_model)
     else:
         curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, epsilon,
-                                      search_resource, is_selfplay=1, rl_model=rl_model)
+                                      is_selfplay=1, rl_model=rl_model)
     # curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
     #                               epsilon, epsilon_decay, min_epsilon, is_selfplay=1, rl_model=rl_model)
     data_buffer_training_iters = deque(maxlen=20)
