@@ -314,7 +314,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
-        wandb.init(mode="offline",
+        wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +

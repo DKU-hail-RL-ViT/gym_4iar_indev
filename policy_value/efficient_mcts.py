@@ -216,28 +216,35 @@ class MCTS(object):
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
+
+        depth_ = 0
+        widht_ = 0
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
 
-            wandb.log({
-                "Depth search times": self.depth_fre,
-                "Use Resource in depth search": self.depth_fre,
-                "Width search times": self.width_fre,
-                "Use Resource in width search": self.width_fre,
-                "Total search times": self.depth_fre + self.width_fre
-            })
+            depth_ += self.depth_fre
+            widht_ += self.width_fre
+
             if self.search_resource <= 0:
                 self.search_resource = 0
                 break
+
+            wandb.log({
+                "playout/depth": self.depth_fre,
+                "playout/width": self.width_fre,
+                "playout/n":n
+            })
 
             # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
             #     self.update_epsilon()
 
         print("Playout times", n)
         wandb.log({
-            "Playout times": n,
-            "Remain Search Resource": self.search_resource
+            "playout/total_depth": depth_,
+            "playout/total_width": widht_,
+            "playout/total_n": n,
+            "playout/remaining_resource": self.search_resource,
         })
 
         # calc the move probabilities based on visit counts at the root node
