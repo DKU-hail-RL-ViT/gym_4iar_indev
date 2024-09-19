@@ -416,9 +416,10 @@ class PolicyValueNet:
         self.gamma = 0.99
         self.kappa = 1.0
         self.N = quantiles
-        self.quantile_tau = torch.FloatTensor([i / self.N for i in range(1, self.N + 1)]).to(self.device)
-        self.quantile_mid_tau = torch.FloatTensor([(i - 0.5) / self.N for i in range(1, self.N + 1)]).to(self.device)
-        self.epsilon = 0.1
+        if not self.N is None:
+            self.quantile_tau = torch.FloatTensor([i / self.N for i in range(1, self.N + 1)]).to(self.device)
+            self.quantile_mid_tau = torch.FloatTensor([(i - 0.5) / self.N for i in range(1, self.N + 1)]).to(self.device)
+        # self.epsilon = 0.1
 
         # DQN, QRDQN, AC, QAC, QRAC, QRQAC, EQRDQN, EQRQAC
         if rl_model == "DQN":
@@ -522,16 +523,15 @@ class PolicyValueNet:
             quantile_regression_loss = calculate_quantile_regression(value_loss,
                                                                      huber_loss,
                                                                      self.quantile_mid_tau)
-            # quantile_regression_loss = calculate_quantile_regression(value_loss,
-            #                                                          huber_loss,
-            #                                                          self.quantile_tau)
-
             if self.rl_model in ["QRDQN", "EQRDQN"]:
                 loss = quantile_regression_loss
 
-            else:
+            elif self.rl_model in ["QRQAC", "EQRQAC"]:
                 policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
                 loss = quantile_regression_loss + policy_loss
+
+            else:
+                assert "No define"
 
         elif self.rl_model in ["AC", "QRAC", "QAC"]:
             if self.rl_model == "QAC":

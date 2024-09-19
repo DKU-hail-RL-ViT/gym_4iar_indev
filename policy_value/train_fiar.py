@@ -134,8 +134,7 @@ def collect_selfplay_data(env, mcts_player, game_iter, n_games=100):
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("\n ---------- Self-Play win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     print("Win rate : ", round(win_ratio * 100, 3), "%")
-    wandb.log({"Self-Play Win Ratio": round(win_ratio * 100, 3)})
-
+    wandb.log({"Win_Rate/self_play": round(win_ratio * 100, 3)})
     return data_buffer
 
 
@@ -373,7 +372,8 @@ if __name__ == '__main__':
                                                                            policy_value_net=policy_value_net,
                                                                            data_buffers=data_buffer_training_iters,
                                                                            rl_model=rl_model)
-            wandb.log({"loss": loss, "entropy": entropy})
+            wandb.log({"loss": loss,
+                       "entropy": entropy})
 
             if i == 0:
                 """make mcts agent training, eval version"""
@@ -481,7 +481,7 @@ if __name__ == '__main__':
                         assert False, "don't have model"
 
                 print("Win rate : ", round(win_ratio * 100, 3), "%")
-                wandb.log({"Evaluation Win Rate": round(win_ratio * 100, 3)})
+                wandb.log({"Win_Rate/Evaluate": round(win_ratio * 100, 3)})
 
                 if win_ratio > 0.5:
                     old_mcts_player = curr_mcts_player
