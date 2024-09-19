@@ -1,10 +1,10 @@
 from fiar_env import Fiar
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
-from itertools import product
 
 import argparse
 import csv
+import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--init_elo', type=int, default=1500)  # initial Elo rating
@@ -17,8 +17,56 @@ k_factor = args.k_factor
 c_puct = args.c_puct
 
 
-def wins(winner, result=0):
-    """ black standard win = 1, draw = 0.5 ,lose = 0 """
+def create_player(model, playout, quantile=None, epsilon=None):
+    """
+    MCTSPlayer 객체를 생성하는 함수.
+
+    Args:
+        model (str): RL model ("AC", "QAC", "QRAC", "QRQAC", "DQN", "QRDQN" 중 하나)
+        playout (int): number of playouts
+        quantile (int, optional): num of Quantile
+        epsilon (float, optional): Epsilon value
+
+    Returns:
+        player: 생성된 MCTSPlayer object
+    """
+    model_file = f"Eval/{model}_nmcts{playout}"
+    if quantile is not None:
+        model_file += f"_quantiles{quantile}"
+    if epsilon is not None:
+        model_file += f"_eps{epsilon}"
+    model_file += "/train_100.pth"
+
+    if not os.path.exists(model_file):
+        return None
+
+    policy_value_net = PolicyValueNet(
+        env.state().shape[1],
+        env.state().shape[2],
+        quantile if model in ["QRAC", "QRQAC", "QRDQN"] else None,
+        model_file=model_file,
+        rl_model=model
+    )
+
+    player = MCTSPlayer(
+        policy_value_net.policy_value_fn,
+        c_puct,
+        playout,
+        epsilon if model in ["DQN", "QRDQN"] else None,
+        is_selfplay=0,
+        rl_model=model
+    )
+
+    player.name = f"{model}_nmcts{playout}"
+    if quantile is not None:
+        player.name += f"_quantiles{quantile}"
+    if epsilon is not None:
+        player.name += f"_eps{epsilon}"
+
+    return player
+
+
+def wins(winner):
     if winner == 1:  # p1 = black & p1 wins
         result = 1
     elif winner == -0.5:  # p1 = black & p2 wins
@@ -39,8 +87,6 @@ def start_play(env, player1, player2):
     player2.set_player_ind(p2)
     players = {p1: player1, p2: player2}
     current_player = 0
-    move = None
-
     player_in_turn = players[current_player]
 
     while True:
@@ -52,7 +98,6 @@ def start_play(env, player1, player2):
         if not end:
             current_player = 1 - current_player
             player_in_turn = players[current_player]
-            player_in_turn.oppo_node_update(move)
 
         else:
             obs, _ = env.reset()
@@ -81,6 +126,7 @@ def simulate_game(player1, player2):
     # This is a stub function that randomly determines the outcome
     winner = start_play(env, player1, player2)
     result = wins(winner)
+
     if result == 1:
         player1.elo, player2.elo = update_elo(player1.elo, player2.elo)
     elif result == 0:
@@ -96,33 +142,52 @@ if __name__ == '__main__':
     env = Fiar()
     obs, _ = env.reset()
 
-    models = ["AC", "QRAC"]
-    playouts = [2, 10, 50, 100, 400]
-    file_nums = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-    quantiles = [2, 16, 32, 64]
+    models = ["AC", "QRAC", "QAC", "QRQAC", "DQN", "QRDQN"]
+    num_playout = [2, 10, 50, 100, 400]
+    num_quantile = [3, 9, 27, 81]
+    num_epsilon = [0.1, 0.4, 0.7]
     player_list = []
+    model_counts = {model: 0 for model in models}
 
-    for model, playout, file_num in product(models, playouts, file_nums):
-        if model == "AC":
-            # AC 모델의 경우 quantile 없이 파일 경로 생성
-            model_file = f"Eval/{model}_nmcts{playout}/train_{file_num:03d}.pth"
-            policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
-                                              model_file=model_file, rl_model="AC")
-            player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, playout, is_selfplay=0)
-            player.name = f"{model}_nmcts{playout}_train_{file_num:03d}"
-            player_list.append(player)
+    for model in models:
+        if model in ["AC", "QAC"]:
+            for playout in num_playout:
+                player = create_player(model, playout)
+                if player:
+                    player_list.append(player)
+                    model_counts[model] += 1
 
-        elif model == "QRAC":
+        elif model in ["QRAC", "QRQAC"]:
+            for playout in num_playout:
+                for quantile in num_quantile:
+                    player = create_player(model, playout, quantile=quantile)
+                    if player:
+                        player_list.append(player)
+                        model_counts[model] += 1
 
-            for quantile in quantiles:
-                model_file = f"Eval/{model}_nmcts{playout}_quantiles{quantile}/train_{file_num:03d}.pth"
-                policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2], quantile,
-                                                  model_file=model_file, rl_model="QRAC")
-                player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, playout, is_selfplay=0)
-                player.name = f"{model}_nmcts{playout}_quantiles{quantile}_train_{file_num:03d}.pth"
-                player_list.append(player)
+        elif model in ["DQN"]:
+            for playout in num_playout:
+                for epsilon in num_epsilon:
+                    player = create_player(model, playout, epsilon=epsilon)
+                    if player:
+                        player_list.append(player)
+                        model_counts[model] += 1
+
+        elif model in ["QRDQN"]:
+            for playout in num_playout:
+                for quantile in num_quantile:
+                    for epsilon in num_epsilon:
+                        player = create_player(model, playout, quantile=quantile, epsilon=epsilon)
+                        if player:
+                            player_list.append(player)
+                            model_counts[model] += 1
+
+
         else:
-            RuntimeError("wtf")
+            raise RuntimeError("Unexpected model type.")
+
+    for model, count in model_counts.items():
+        print(f"Number of {model} models: {count}")
 
     # List to hold game results
     game_results = []

@@ -218,22 +218,22 @@ class MCTS(object):
         """
 
         depth_ = 0
-        widht_ = 0
+        width_ = 0
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
 
             depth_ += self.depth_fre
-            widht_ += self.width_fre
+            width_ += self.width_fre
 
             if self.search_resource <= 0:
                 self.search_resource = 0
                 break
 
             wandb.log({
-                "playout/depth": self.depth_fre,
-                "playout/width": self.width_fre,
-                "playout/n":n
+                "playout/depth": int(self.depth_fre),
+                "playout/width": int(self.width_fre),
+                "playout/n": int(n)
             })
 
             # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
@@ -241,10 +241,10 @@ class MCTS(object):
 
         print("Playout times", n)
         wandb.log({
-            "playout/total_depth": depth_,
-            "playout/total_width": widht_,
-            "playout/total_n": n,
-            "playout/remaining_resource": self.search_resource,
+            "playout/total_depth": int(depth_),
+            "playout/total_width": int(width_),
+            "playout/total_n": int(n),
+            "playout/remaining_resource": int(self.search_resource),
         })
 
         # calc the move probabilities based on visit counts at the root node
@@ -266,7 +266,7 @@ class MCTS(object):
             self._root = TreeNode(None, 1.0)
 
     def update_search_resource(self, p):
-        if p in [1, 2, 3, 4]: # TODO 여기도 수정해야 할거 그냥 숫자로 해뒀는데
+        if p in [1, 2, 3, 4]:
             self.search_resource -= 2 ** (p-1) * 3
         else:
             assert False, "not defined"
