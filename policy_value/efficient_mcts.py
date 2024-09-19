@@ -5,6 +5,10 @@ import wandb
 from fiar_env import Fiar
 
 
+def is_float(a):
+    return a % 1 != 0
+
+
 def softmax(x):
     probs = np.exp(x - np.max(x))
     probs /= np.sum(probs)
@@ -165,7 +169,7 @@ class MCTS(object):
                 else:  # "EQRQAC"
                     leaf_value = leaf_value_.mean()
 
-                self.update_search_resource(self.p, n_indices)
+                self.update_search_resource(self.p)
                 self.width_fre += self.r
 
                 # Check for end of game
@@ -230,10 +234,20 @@ class MCTS(object):
                 self.search_resource = 0
                 break
 
+            if is_float(self.depth_fre):
+                print(f"{self.depth_fre} is float")
+
+            if is_float(self.width_fre):
+                print(f"{self.width_fre} is float")
+
+            if is_float(n):
+                print(f"n: {n} is float")
+
+
             wandb.log({
-                "playout/depth": int(self.depth_fre),
-                "playout/width": int(self.width_fre),
-                "playout/n": int(n)
+                "playout/depth": self.depth_fre,
+                "playout/width": self.width_fre,
+                "playout/n": n
             })
 
             # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
@@ -241,9 +255,9 @@ class MCTS(object):
 
         print("Playout times", n)
         wandb.log({
-            "playout/total_depth": int(depth_),
-            "playout/total_width": int(width_),
-            "playout/total_n": int(n),
+            "playout/total_depth": depth_,
+            "playout/total_width": width_,
+            "playout/total_n": n,
             "playout/remaining_resource": int(self.search_resource),
         })
 
