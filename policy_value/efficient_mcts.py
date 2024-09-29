@@ -6,7 +6,7 @@ from fiar_env import Fiar
 
 
 def is_float(a):
-    return a % 1 != 0
+    return np.floor(a) != float(a)
 
 
 def softmax(x):
@@ -147,8 +147,8 @@ class MCTS(object):
             # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
-            self.search_resource -= self.r
-            self.depth_fre += self.r
+            self.search_resource -= 1
+            self.depth_fre += 1
 
         self.p = 1
         available, action_probs, leaf_value = self._policy(env)
@@ -170,7 +170,7 @@ class MCTS(object):
                     leaf_value = leaf_value_.mean()
 
                 self.update_search_resource(self.p)
-                self.width_fre += self.r
+                self.width_fre += 1
 
                 # Check for end of game
                 end, winners = env.winner()
@@ -189,7 +189,7 @@ class MCTS(object):
 
             else:
                 self.update_search_resource(self.p)
-                self.width_fre += self.r
+                self.width_fre += 1
                 self.p += 1
 
             if self.search_resource <= 0 or self.p == 5:
@@ -220,45 +220,35 @@ class MCTS(object):
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
-
         depth_ = 0
         width_ = 0
+
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
 
-            depth_ += self.depth_fre
-            width_ += self.width_fre
+            depth_ += 1
+            width_ += 1
 
             if self.search_resource <= 0:
                 self.search_resource = 0
                 break
 
-            if is_float(self.depth_fre):
-                print(f"{self.depth_fre} is float")
-
-            if is_float(self.width_fre):
-                print(f"{self.width_fre} is float")
-
-            if is_float(n):
-                print(f"n: {n} is float")
-
-
             wandb.log({
-                "playout/depth": self.depth_fre,
-                "playout/width": self.width_fre,
-                "playout/n": n
+                "playout/depth": self.depth_fre / self.search_resource,
+                "playout/width": self.width_fre / self.search_resource,
+                "playout/remaining": self.width_fre / self.search_resource
             })
 
             # if self.rl_model in ["DQN", "QRDQN", "EQRDQN"]:
             #     self.update_epsilon()
 
-        print("Playout times", n)
+        print("Playout times", n+1)
         wandb.log({
             "playout/total_depth": depth_,
             "playout/total_width": width_,
-            "playout/total_n": n,
-            "playout/remaining_resource": int(self.search_resource),
+            "playout/total_n": n+1,
+            "playout/remaining_resource": self.search_resource
         })
 
         # calc the move probabilities based on visit counts at the root node

@@ -1,6 +1,7 @@
 import numpy as np
 import copy
-import torch
+import wandb
+
 from fiar_env import Fiar
 
 
@@ -115,6 +116,8 @@ class MCTS(object):
         self.epsilon_decay = epsilon_decay
         self.min_epsilon = min_epsilon
         self.search_resource = search_resource
+        self.depth_fre = 0
+        self.width_fre = 0
 
     def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
@@ -122,6 +125,10 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
+        self.depth_fre = 0
+        self.width_fre = 0
+        depth_fre = 0
+        width_fre = 0
 
         while (1):
             if node.is_leaf():
@@ -131,6 +138,9 @@ class MCTS(object):
             # Greedily select next move. "depth search"
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
+
+            depth_fre += 1
+            self.depth_fre += 1
 
         if self.rl_model in "DQN":
             available, action_probs, leaf_value = self._policy(env)
@@ -198,11 +208,14 @@ class MCTS(object):
             available, action_probs, leaf_value = self._policy(env)
             action_probs = zip(available, action_probs[available])
 
+        width_fre += 1
+        self.width_fre += 1
+
         # Check for end of game
         end, winners = env.winner()
 
         if not end:
-            node.expand(action_probs)  # DQN 버전 같은 경우는 어떤 action을 했는지에 대한 정보가 있어야 반영할 수 있으니 여기서 적절히 추출해야함.
+            node.expand(action_probs)
         else:
             if winners == -1:  # tie
                 leaf_value = 0.0
@@ -212,17 +225,38 @@ class MCTS(object):
                 leaf_value = -1.0
         node.update_recursive(-leaf_value)
 
+        return depth_fre, width_fre
+
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
+        depth_ = 0
+        width_ = 0
+        width_fre = 0
+        depth_fre = 0
+        search_resource = 2000
+
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
-            self._playout(env_copy)
+            depth_fre, width_fre = self._playout(env_copy)
+            depth_ += depth_fre
+            width_ += width_fre
             # if self.rl_model in ["DQN", "QRDQN"]:
             #     self.update_epsilon()
+
+        wandb.log({
+            "playout/depth": depth_fre,
+            "playout/width": width_fre,
+            "playout/depth_in_combined": depth_ / (depth_ + width_),
+            "playout/width_in_combined": width_ / (depth_ + width_),
+            "playout/total_depth": depth_,
+            "playout/total_width": width_,
+            "playout/total_n": n+1,
+            "playout/remaining_resource": (search_resource - depth_ - width_) / search_resource
+        })
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
