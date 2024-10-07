@@ -26,8 +26,8 @@ parser.add_argument('--epsilon', type=float, default=0.4)  # compare with 0.1, 0
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver                  # Done
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
-parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver      # Done
+parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver    # Done
+# parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver      # Done
 # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     # wandb intialize
     # DQN, QRDQN, AC, QAC, QRAC, QRQAC, EQRDQN, EQRQAC
     if rl_model == "DQN":
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar_sh",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon) +
@@ -297,7 +297,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["QRDQN", "EQRDQN"]:
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar_sh",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon) +
@@ -305,7 +305,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["AC", "QAC"]:
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar_sh",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
@@ -313,7 +313,7 @@ if __name__ == '__main__':
                    config=args.__dict__
                    )
     elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
-        wandb.init(mode="online",
+        wandb.init(mode="offline",
                    entity="hails",
                    project="gym_4iar_sh",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +

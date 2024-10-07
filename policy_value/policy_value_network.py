@@ -485,8 +485,11 @@ class PolicyValueNet:
         with torch.no_grad():
             log_act_probs, value = self.policy_value_net(current_state)
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
+            masked_act_probs = np.zeros_like(act_probs)
+            masked_act_probs[available] = act_probs[available]
+            masked_act_probs /= masked_act_probs.sum()
 
-        return available, act_probs, value
+        return available, masked_act_probs, value
 
     def train_step(self, state_batch, mcts_probs, winner_batch, lr):
         """perform a training step"""
