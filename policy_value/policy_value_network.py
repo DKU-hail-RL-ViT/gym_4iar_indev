@@ -487,7 +487,16 @@ class PolicyValueNet:
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
             masked_act_probs = np.zeros_like(act_probs)
             masked_act_probs[available] = act_probs[available]
-            masked_act_probs /= masked_act_probs.sum()
+            if masked_act_probs.sum() > 0:  # if have not available action
+                masked_act_probs /= masked_act_probs.sum()
+            else:
+                masked_act_probs /= (masked_act_probs.sum()+1)
+
+            if self.rl_model in ["QAC", "QRQAC", "DQN", "QRQDN", "EQRQAC", "EQRDQN"]: # if action version
+                value = value.cpu().numpy().flatten()
+                masked_value = np.zeros_like(value)
+                masked_value[available] = value[available]
+                value = torch.tensor(masked_value)
 
         return available, masked_act_probs, value
 
