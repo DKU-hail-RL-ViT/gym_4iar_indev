@@ -14,7 +14,6 @@ def softmax(x):
 def interpolate_quantiles(interpolate_pre, interpolate_aft):
     quantiles_old = np.linspace(0, 1, interpolate_pre + 1)
     quantiles_new = np.linspace(0, 1, interpolate_aft + 1)
-
     new_quantiles = np.interp(quantiles_new[1:-1], quantiles_old[1:-1], interpolate_pre)
 
     return new_quantiles
@@ -95,8 +94,9 @@ class TreeNode(object):
 class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
-    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, epsilon=None,
-                 search_resource=None, epsilon_decay=None, min_epsilon=None, rl_model=None):
+    def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, quantiles=None,
+                 epsilon=None, search_resource=None, epsilon_decay=None,
+                 min_epsilon=None, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -116,8 +116,7 @@ class MCTS(object):
         self.epsilon_decay = epsilon_decay
         self.min_epsilon = min_epsilon
         self.search_resource = search_resource
-        self.depth_fre = 0
-        self.width_fre = 0
+        self.quantiles = quantiles
 
     def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
@@ -125,22 +124,21 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
-        self.depth_fre = 0
-        self.width_fre = 0
         depth_fre = 0
         width_fre = 0
 
         while (1):
             if node.is_leaf():
+                if self.rl_model in ["AC", "QAC", "DQN"]:
+                    depth_fre += 1
+                else:
+                    depth_fre += self.quantiles
                 break
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
 
-            # Greedily select next move. "depth search"
+            # Greedily select next move.
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
-
-            depth_fre += 1
-            self.depth_fre += 1
 
         if self.rl_model in "DQN":
             available, action_probs, leaf_value = self._policy(env)
@@ -208,8 +206,17 @@ class MCTS(object):
             available, action_probs, leaf_value = self._policy(env)
             action_probs = zip(available, action_probs[available])
 
-        width_fre += 1
-        self.width_fre += 1
+        if self.rl_model in ["AC"]:
+            width_fre += 0
+
+        elif self.rl_model in ["QRAC"]:
+            width_fre += self.quantiles
+
+        elif self.rl_model in ["DQN", "QAC"]:
+            width_fre += len(available)
+
+        elif self.rl_model in ["QRDQN", "QRQAC"]:
+            width_fre += self.quantiles * len(available)
 
         # Check for end of game
         end, winners = env.winner()
@@ -227,7 +234,7 @@ class MCTS(object):
 
         return depth_fre, width_fre
 
-    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp, return_prob=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
@@ -247,16 +254,48 @@ class MCTS(object):
             # if self.rl_model in ["DQN", "QRDQN"]:
             #     self.update_epsilon()
 
-        wandb.log({
-            "playout/depth": depth_fre,
-            "playout/width": width_fre,
-            "playout/depth_in_combined": depth_ / (depth_ + width_),
-            "playout/width_in_combined": width_ / (depth_ + width_),
-            "playout/total_depth": depth_,
-            "playout/total_width": width_,
-            "playout/total_n": n+1,
-            "playout/remaining_resource": (search_resource - depth_ - width_) / search_resource
-        })
+        if return_prob == 1:  # if selfplay
+            wandb.log({
+                "selfplay/depth": depth_fre,
+                "selfplay/depth_resource_usage": depth_,
+                "selfplay/depth_ratio": depth_ / (depth_ + width_),
+
+                "selfplay/width": width_fre,
+                "selfplay/width_resource_usage": width_,
+                "selfplay/width_ratio": width_ / (depth_ + width_),
+
+                "selfplay/total_planning_depth": n+1,
+                # "playout/remaining_resource": (search_resource - depth_ - width_) / search_resource
+            })
+            if self.rl_model in ["AC"]:
+                wandb.log({
+                    "selfplay/total_resource_usage": depth_,
+                })
+            else:
+                wandb.log({
+                    "selfplay/total_resource_usage": depth_ + width_,
+                })
+        else:  # eval
+            wandb.log({
+                "eval/depth": depth_fre,
+                "eval/depth_resource_usage": depth_,
+                "eval/depth_ratio": depth_ / (depth_ + width_),
+
+                "eval/width": width_fre,
+                "eval/width_resource_usage": width_,
+                "eval/width_ratio": width_ / (depth_ + width_),
+
+                "eval/total_planning_depth": n + 1
+            })
+
+            if self.rl_model in ["AC"]:
+                wandb.log({
+                    "eval/total_resource_usage": depth_,
+                })
+            else:
+                wandb.log({
+                    "eval/total_resource_usage": depth_ + width_,
+                })
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -288,10 +327,10 @@ class MCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
-                 epsilon=None,  epsilon_decay=None, min_epsilon=None,
+                 quantiles=None, epsilon=None,  epsilon_decay=None, min_epsilon=None,
                  is_selfplay=0, elo=None, rl_model=None):
-        self.mcts = MCTS(policy_value_function, c_puct, n_playout, epsilon,
-                          epsilon_decay, min_epsilon, rl_model=rl_model)
+        self.mcts = MCTS(policy_value_function, c_puct, n_playout, quantiles,
+                         epsilon, epsilon_decay, min_epsilon, rl_model=rl_model)
 
         self._is_selfplay = is_selfplay
         init_elo = 1500
@@ -309,7 +348,7 @@ class MCTSPlayer(object):
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, temp, return_prob)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)
