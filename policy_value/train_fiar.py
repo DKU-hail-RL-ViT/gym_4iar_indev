@@ -17,9 +17,8 @@ from policy_value.efficient_mcts import EMCTSPlayer
 
 parser = argparse.ArgumentParser()
 
-
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=15)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=20)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
 parser.add_argument('--epsilon', type=float, default=0.4)  # compare with 0.1, 0.4, 0.7
 
@@ -44,7 +43,7 @@ parser.add_argument("--training_iterations", type=int, default=100)
 parser.add_argument("--temp", type=float, default=1.0)
 
 """ Policy update parameter """
-parser.add_argument("--batch_size", type=int, default=256)
+parser.add_argument("--batch_size", type=int, default=64)
 parser.add_argument("--learn_rate", type=float, default=1e-3)
 parser.add_argument("--lr_mul", type=float, default=1.0)
 parser.add_argument("--kl_targ", type=float, default=0.02)
@@ -59,7 +58,7 @@ parser.add_argument("--init_model", type=str, default=None)
 # parser.add_argument('--min_epsilon', type=float, default=0.1, help='Minimum value for epsilon after decay')
 
 """Efficient Search Hyperparameter"""
-parser.add_argument('--search_resource', type=int, default=2000) # defalut 2000
+parser.add_argument('--search_resource', type=int, default=2000)  # defalut 2000
 
 args = parser.parse_args()
 
@@ -136,6 +135,7 @@ def collect_selfplay_data(env, mcts_player, game_iter, n_games=100):
     print("\n ---------- Self-Play win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     print("Win rate : ", round(win_ratio * 100, 3), "%")
     wandb.log({"Win_Rate/self_play": round(win_ratio * 100, 3)})
+
     return data_buffer
 
 
@@ -240,14 +240,11 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     Evaluate the trained policy by playing against the pure MCTS player
     Note: this is only for monitoring the progress of training
     """
-    training_mcts_player = current_mcts_player  # training Agent
+    training_mcts_player = current_mcts_player
     opponent_mcts_player = old_mcts_player
-    # leaf_mcts_player = MCTS_leaf(policy_value_fn, c_puct=c_puct, n_playout=n_playout)
-    # random_action_player = RandomAction()
     win_cnt = defaultdict(int)
 
     for j in range(n_games):
-        # reset for each game
         winner = start_play(env, training_mcts_player, opponent_mcts_player)
         if winner == -0.5:
             winner = 0
@@ -293,32 +290,28 @@ if __name__ == '__main__':
         wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar_sh",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon) +
-                        "-Date" + str(datetime.datetime.now()),
+                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
     elif rl_model in ["QRDQN", "EQRDQN"]:
         wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar_sh",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon) +
-                        "-Date" + str(datetime.datetime.now()),
+                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
     elif rl_model in ["AC", "QAC"]:
         wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar_sh",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) +
-                        "-Date" + str(datetime.datetime.now()),
+                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout),
                    config=args.__dict__
                    )
     elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
         wandb.init(mode="online",
                    entity="hails",
                    project="gym_4iar_sh",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) +
-                        "-Date" + str(datetime.datetime.now()),
+                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles),
                    config=args.__dict__
                    )
     else:
@@ -343,7 +336,6 @@ if __name__ == '__main__':
     obs_post[2] = np.zeros_like(obs[0])
     obs_post[3] = obs[turn_A] + obs[turn_B]
 
-    # initialize Network
     if init_model:
         policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
                                           quantiles, model_file=init_model, rl_model=rl_model)

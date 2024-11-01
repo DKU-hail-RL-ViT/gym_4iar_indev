@@ -5,7 +5,7 @@ logs/
 wandb/
 policy_value/Training
 policy_value/Eval
-*/train_fiar_copy1.py
+policy_value/train_fiar_copy1.py
 */train_fiar_copy2.py
 */train_fiar_copy3.py
 */train_fiar_copy4.py
@@ -20,3 +20,4 @@ fiar_env_copy.py
 *.zip
 *.png
 *.csv
+.DS_Store

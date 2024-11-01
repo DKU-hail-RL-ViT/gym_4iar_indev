@@ -19,6 +19,31 @@ def calculate_quantile_regression(value_loss, huber_loss, quantile_tau):
         .sum(dim=1).mean()
 
 
+def apply_masking(probs, available):
+    masked_probs = np.zeros_like(probs)
+    masked_probs[available] = probs[available]
+    total_sum = masked_probs.sum()
+    if total_sum > 0:
+        masked_probs /= total_sum
+    else:
+        masked_probs /= (total_sum + 1)  # 전체가 0인 경우 보정
+    return masked_probs
+
+
+def compute_masked_act_probs(log_act_probs, state_batch):
+    act_probs = torch.exp(log_act_probs).cpu().numpy()
+    available_mask = (state_batch[:, 3] == 0).cpu().float().numpy()
+    available_mask = available_mask.reshape(64, 36)
+    masked_act_probs = act_probs * available_mask
+
+    if available_mask.sum(axis=1).all() > 0:
+        act_probs = masked_act_probs / masked_act_probs.sum(axis=1, keepdims=True)
+    else:
+        act_probs = masked_act_probs / (masked_act_probs.sum() + 1)
+
+    return act_probs
+
+
 class DQN(nn.Module):
     """value network module"""
 
@@ -456,9 +481,8 @@ class PolicyValueNet:
         state_batch = torch.tensor(state_batch, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             if self.rl_model in ["QAC", "QRQAC", "EQRQAC"]:
-                # value.shape = (batch, n_actions) or (batch, n_quantiles, n_actions)
                 log_act_probs, value = self.policy_value_net(state_batch)
-                act_probs = torch.exp(log_act_probs).cpu().numpy()
+                act_probs = compute_masked_act_probs(log_act_probs, state_batch)
                 if self.rl_model == "QAC":
                     value = torch.mean(value, dim=1, keepdim=True)    # value.shape = (batch, 1)
                 else:
@@ -466,7 +490,7 @@ class PolicyValueNet:
 
             else:  # AC or QRAC
                 log_act_probs, value = self.policy_value_net(state_batch)
-                act_probs = torch.exp(log_act_probs).cpu().numpy()
+                act_probs = compute_masked_act_probs(log_act_probs, state_batch)
 
             value = value.cpu().numpy()
 
@@ -485,14 +509,9 @@ class PolicyValueNet:
         with torch.no_grad():
             log_act_probs, value = self.policy_value_net(current_state)
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
-            masked_act_probs = np.zeros_like(act_probs)
-            masked_act_probs[available] = act_probs[available]
-            if masked_act_probs.sum() > 0:  # if have not available action
-                masked_act_probs /= masked_act_probs.sum()
-            else:
-                masked_act_probs /= (masked_act_probs.sum()+1)
+            masked_act_probs = apply_masking(act_probs, available)
 
-            if self.rl_model in ["QAC", "QRQAC", "DQN", "QRQDN", "EQRQAC", "EQRDQN"]: # if action version
+            if self.rl_model in ["QAC", "QRQAC", "DQN", "QRQDN", "EQRQAC", "EQRDQN"]:  # if action version
                 value = value.cpu().numpy().flatten()
                 masked_value = np.zeros_like(value)
                 masked_value[available] = value[available]
@@ -572,12 +591,6 @@ class PolicyValueNet:
     def get_policy_param(self):
         net_params = self.policy_value_net.state_dict()
         return net_params
-
-    # def load_model(self, model_file):
-    #    """ load model params from file """
-    #    state_dict = torch.load(model_file)
-    #    self.policy_value_net.load_state_dict(state_dict)
-    #    return state_dict
 
     def save_model(self, model_file):
         """ save model params to file """
