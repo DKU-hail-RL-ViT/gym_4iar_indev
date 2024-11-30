@@ -511,12 +511,12 @@ class PolicyValueNet:
             act_probs = torch.exp(log_act_probs).cpu().numpy().flatten()
             masked_act_probs = apply_masking(act_probs, available)
 
-            if self.rl_model in ["QAC", "QRQAC", "DQN", "QRQDN", "EQRQAC", "EQRDQN"]:  # if action version
+            if self.rl_model in ["QAC", "QRQAC", "DQN", "QRDQN", "EQRQAC", "EQRDQN"]:  # if action version
                 value = value.cpu().numpy().squeeze()
                 masked_value = np.zeros_like(value)
                 if self.rl_model in ["QAC", "DQN"]:
                     masked_value[available] = value[available]
-                else:
+                elif self.rl_model in ["QRQAC", "QRDQN", "EQRQAC", "EQRDQN"]:
                     masked_value[:, available] = value[:, available]
                 value = torch.tensor(masked_value)
 
