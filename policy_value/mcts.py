@@ -95,8 +95,7 @@ class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
     def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, quantiles=None,
-                 epsilon=None, search_resource=None, epsilon_decay=None,
-                 min_epsilon=None, rl_model=None):
+                 epsilon=None, search_resource=None, epsilon_decay=None,rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -114,7 +113,6 @@ class MCTS(object):
         self.env = Fiar()
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
-        self.min_epsilon = min_epsilon
         self.search_resource = search_resource
         self.quantiles = quantiles
 
@@ -142,14 +140,16 @@ class MCTS(object):
 
         if self.rl_model in "DQN":
             available, action_probs, leaf_value = self._policy(env)
-
             if len(available) > 0:
                 # Action probabilities need to be created as a one-hot vector
                 action_probs = np.zeros_like(action_probs)
 
                 # argmax only for the sensible moves
-                leaf_value_ = leaf_value.cpu().flatten()
-                idx_max = available[np.argmax(leaf_value_[available])]
+                leaf_value_ = leaf_value.cpu().numpy()
+                masked_leaf_value = np.zeros_like(leaf_value_)
+                masked_leaf_value[available] = leaf_value_[available]
+
+                idx_max = available[np.argmax(masked_leaf_value[available])]
                 action_probs[idx_max] = 1
 
                 # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
@@ -314,10 +314,6 @@ class MCTS(object):
             self._root._parent = None
         else:
             self._root = TreeNode(None, 1.0)
-
-    # def update_epsilon(self):
-    #     self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
-    #     return self.epsilon
 
     def __str__(self):
         return "MCTS"

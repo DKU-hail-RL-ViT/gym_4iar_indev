@@ -124,10 +124,8 @@ class MCTS(object):
         self.epsilon_decay = epsilon_decay
         self.min_epsilon = min_epsilon
         self.search_resource = search_resource
-        self.r = 1  # remain resource deduction params
         self.p = 1
-        self.depth_fre = 0
-        self.width_fre = 0
+        self.depth_count = 0
 
     def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
@@ -136,10 +134,10 @@ class MCTS(object):
         """
         node = self._root
         threshold = 0.1
-        self.depth_fre = 0
-        self.width_fre = 0
+        depth_fre = 0
+        width_fre = 0
 
-        while self.search_resource >= self.r:
+        while self.search_resource > 0:
             if node.is_leaf():
                 break
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
@@ -148,14 +146,14 @@ class MCTS(object):
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
             self.search_resource -= 1
-            self.depth_fre += 1
+            self.depth_count += 1
 
         self.p = 1
         available, action_probs, leaf_value = self._policy(env)
 
-        while (self.p <= 4) and (self.search_resource > self.r):
+        while (self.p <= 4) and (self.search_resource > 0):
             n_indices = get_fixed_indices(self.p)
-            leaf_value_ = leaf_value[:, n_indices, :].mean(dim=1).flatten()
+            leaf_value_ = leaf_value[n_indices, :].mean(dim=1).flatten()  # leaf_value shape : 2-dim
 
             # Use these indices to index into the second dimension
             not_available = np.setdiff1d(range(36), available)
@@ -170,7 +168,6 @@ class MCTS(object):
                     leaf_value = leaf_value_.mean()
 
                 self.update_search_resource(self.p)
-                self.width_fre += 1
 
                 # Check for end of game
                 end, winners = env.winner()
@@ -185,11 +182,11 @@ class MCTS(object):
                     else:
                         leaf_value = -1.0
                 node.update_recursive(-leaf_value)
-                break
+
+                return depth_fre, width_fre
 
             else:
                 self.update_search_resource(self.p)
-                self.width_fre += 1
                 self.p += 1
 
             if self.search_resource <= 0 or self.p == 5:
@@ -199,6 +196,9 @@ class MCTS(object):
                 else:  # "EQRQAC"
                     leaf_value = leaf_value_.mean()
 
+                depth_fre += 3 ** self.p * self.depth_count
+                width_fre += (3 ** self.p) * len(available)
+
                 # Check for end of game
                 end, winners = env.winner()
 
@@ -212,7 +212,8 @@ class MCTS(object):
                     else:
                         leaf_value = -1.0
                 node.update_recursive(-leaf_value)
-                break
+
+                return depth_fre, width_fre
 
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -275,9 +276,6 @@ class MCTS(object):
         else:
             assert False, "not defined"
 
-    # def update_epsilon(self):
-    #     self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
-    #     return self.epsilon
 
     def __str__(self):
         return "MCTS"

@@ -300,7 +300,7 @@ class QRQAC(nn.Module):  # Quantile Regression action value actor critic
 class EQRDQN(nn.Module):
     """policy-value network module"""
 
-    def __init__(self, board_width, board_height,  quantiles):
+    def __init__(self, board_width, board_height, quantiles):
         super(EQRDQN, self).__init__()
 
         self.board_width = board_width
@@ -318,7 +318,7 @@ class EQRDQN(nn.Module):
         self.act_fc1 = nn.Linear(2 * board_width * board_height, 64)
         self.act_fc2 = nn.Linear(64, self.num_actions * self.N)
 
-    def forward(self, state_input, n_quantiles):
+    def forward(self, state_input):
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -329,7 +329,7 @@ class EQRDQN(nn.Module):
         x_val = x_val.view(-1, 2 * self.board_width * self.board_height)
         x_val = F.relu(self.act_fc1(x_val))
         x_val = self.act_fc2(x_val)
-        x_val = x_val.view(-1, n_quantiles, self.num_actions)  # batch / quantile / action_space
+        x_val = x_val.view(-1, self.N, self.num_actions)  # batch / quantile / action_space
 
         # action value to policy layers
         x_act = x_val.mean(dim=1)
@@ -512,9 +512,12 @@ class PolicyValueNet:
             masked_act_probs = apply_masking(act_probs, available)
 
             if self.rl_model in ["QAC", "QRQAC", "DQN", "QRQDN", "EQRQAC", "EQRDQN"]:  # if action version
-                value = value.cpu().numpy().flatten()
+                value = value.cpu().numpy().squeeze()
                 masked_value = np.zeros_like(value)
-                masked_value[available] = value[available]
+                if self.rl_model in ["QAC", "DQN"]:
+                    masked_value[available] = value[available]
+                else:
+                    masked_value[:, available] = value[:, available]
                 value = torch.tensor(masked_value)
 
         return available, masked_act_probs, value
