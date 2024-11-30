@@ -18,15 +18,15 @@ from policy_value.efficient_mcts import EMCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=20)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
-parser.add_argument('--epsilon', type=float, default=0.4)  # compare with 0.1, 0.4, 0.7
+parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0.4, 0.7
 
 
 """ RL model """
-# parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
+parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
+# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
@@ -126,13 +126,10 @@ def collect_selfplay_data(env, mcts_player, game_iter, n_games=100):
         # augment the data
         play_data = get_equi_data(env, play_data)
         data_buffer.extend(play_data)
-
-        if rewards == -0.5:
-            rewards = 0
         win_cnt[rewards] += 1
 
     win_ratio = 1.0 * win_cnt[1] / n_games
-    print("\n ---------- Self-Play win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
+    print("\n ---------- Self-Play win: {}, tie:{}, lose: {} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     print("Win rate : ", round(win_ratio * 100, 3), "%")
     wandb.log({"Win_Rate/self_play": round(win_ratio * 100, 3)})
 
@@ -179,13 +176,14 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
                 game_iter + 1, self_play_i + 1, len(current_player)))
             winners_z = np.zeros(len(current_player))
 
-            if winners != -1:  # non draw
-                if winners == -0.5:  # when win white player adjust to 0
+            if winners != 0:  # non draw
+                if winners == -1:  # when win white player adjust to 0
                     winners = 0
                 # if winner is current player, winner_z = 1
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
-
+                if winners == 0:  # when win white player adjust to 0
+                    winners = -1
             return winners, zip(states, mcts_probs, winners_z)
 
 
@@ -246,13 +244,11 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
 
     for j in range(n_games):
         winner = start_play(env, training_mcts_player, opponent_mcts_player)
-        if winner == -0.5:
-            winner = 0
         win_cnt[winner] += 1
         print("{} / 30 ".format(j + 1))
 
     win_ratio = 1.0 * win_cnt[1] / n_games
-    print("---------- win: {}, lose: {}, tie:{} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
+    print("---------- win: {}, tie:{}, lose: {} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     return win_ratio, training_mcts_player
 
 
@@ -285,32 +281,27 @@ def start_play(env, player1, player2):
 
 if __name__ == '__main__':
     # wandb intialize
-    # DQN, QRDQN, AC, QAC, QRAC, QRQAC, EQRDQN, EQRQAC
     if rl_model == "DQN":
-        wandb.init(mode="online",
-                   entity="hails",
-                   project="gym_4iar_sh",
+        wandb.init(entity="hails",
+                   project="gym_4iar_sh2",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
     elif rl_model in ["QRDQN", "EQRDQN"]:
-        wandb.init(mode="online",
-                   entity="hails",
-                   project="gym_4iar_sh",
+        wandb.init(entity="hails",
+                   project="gym_4iar_sh2",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
     elif rl_model in ["AC", "QAC"]:
-        wandb.init(mode="online",
-                   entity="hails",
-                   project="gym_4iar_sh",
+        wandb.init(entity="hails",
+                   project="gym_4iar_sh2",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout),
                    config=args.__dict__
                    )
     elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
-        wandb.init(mode="online",
-                   entity="hails",
-                   project="gym_4iar_sh",
+        wandb.init(entity="hails",
+                   project="gym_4iar_sh2",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles),
                    config=args.__dict__
                    )
@@ -324,8 +315,6 @@ if __name__ == '__main__':
         device = torch.device("cuda")
     elif torch.backends.mps.is_available():  # Mac OS
         device = torch.device("mps")
-    else:  # CPU
-        device = torch.device("cpu")
 
     turn_A = turn(obs)
     turn_B = 1 - turn_A
@@ -353,8 +342,6 @@ if __name__ == '__main__':
         curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
                                       epsilon, search_resource, is_selfplay=1, rl_model=rl_model)
 
-    # curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-    #                               epsilon, epsilon_decay, min_epsilon, is_selfplay=1, rl_model=rl_model)
     data_buffer_training_iters = deque(maxlen=20)
     best_old_model = None
 
@@ -443,10 +430,6 @@ if __name__ == '__main__':
                     old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, epsilon,
                                                  search_resource, is_selfplay=0, rl_model=rl_model)
 
-                # old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout,
-                #                              epsilon, eval_epsilon_decay, eval_min_epsilon,
-                #                              is_selfplay=0, rl_model=rl_model)
-
                 """Training model"""
                 if rl_model in ["EQRDQN", "EQRQAC"]:
                     curr_mcts_player = EMCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, epsilon,
@@ -457,9 +440,6 @@ if __name__ == '__main__':
                 else:
                     curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, epsilon,
                                                   search_resource, is_selfplay=0, rl_model=rl_model)
-                # curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-                #                               eval_epsilon, eval_epsilon_decay, eval_min_epsilon,
-                #                               is_selfplay=0, rl_model=rl_model)
 
                 win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
