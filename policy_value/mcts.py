@@ -163,10 +163,10 @@ class MCTS(object):
                 # leaf_value = leaf_value_[leaf_temp.argmax()]
 
                 """ use bellman expection to cal state value """
-                # leaf_value = (leaf_value_*action_probs).mean() # state value 를 구하는 방식
+                # leaf_value = (leaf_value_*action_probs).mean()
 
                 """ use bellman optimality to cal state value """
-                leaf_value = leaf_value_[available].max()  # state value 를 구하는 방식
+                leaf_value = masked_leaf_value[available].max()
             else:
                 # Even if len(available) == 0, there is no issue because the leaf value will eventually be set to 0.
                 leaf_value = leaf_value.max()
@@ -178,11 +178,14 @@ class MCTS(object):
             if len(available) > 0:
                 # Action probabilities need to be created as a one-hot vector
                 action_probs = np.zeros_like(action_probs)
-                leaf_value_ = leaf_value.cpu().mean(axis=1).flatten()
+                leaf_value_ = leaf_value.cpu().mean(axis=0).squeeze()
+
+                masked_leaf_value = np.zeros_like(leaf_value_)
+                masked_leaf_value[available] = leaf_value_[available]
 
                 # In the case of QRDQN, the shape of leaf_value is (batch, n_quantiles, n_actions),
                 # so the average needs to be taken over the quantiles.
-                idx_max = available[np.argmax(leaf_value_[available])]
+                idx_max = available[np.argmax(masked_leaf_value[available])]
                 action_probs[idx_max] = 1
 
                 # add epsilon to sensible moves and discount as much as it from the action_probs[idx_max]
@@ -190,18 +193,19 @@ class MCTS(object):
                 action_probs[idx_max] -= self.epsilon
 
                 """ use bellman optimality to cal state value """
-                leaf_value = leaf_value_[available].max()
+                leaf_value = masked_leaf_value[available].max()
                 action_probs = zip(available, action_probs[available])
             else:
                 # Even if len(available) == 0, there is no issue because the leaf value will eventually be set to 0.
-                leaf_value = leaf_value.cpu().mean(axis=1).max()
+                leaf_value = leaf_value.cpu().mean(axis=0).max()
                 action_probs = zip(available, action_probs[available])
 
         elif self.rl_model in ["QAC", "QRQAC"]:
             available, action_probs, leaf_value = self._policy(env)
             action_probs = zip(available, action_probs[available])
-            leaf_value = leaf_value.mean()
-
+            if self.rl_model == "QRQAC":
+                leaf_value = leaf_value.cpu().mean(axis=0).squeeze()
+            leaf_value = leaf_value[available].mean()
         else:  # state version AC, QRAC
             available, action_probs, leaf_value = self._policy(env)
             action_probs = zip(available, action_probs[available])

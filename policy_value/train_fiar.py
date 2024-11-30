@@ -283,25 +283,25 @@ if __name__ == '__main__':
     # wandb intialize
     if rl_model == "DQN":
         wandb.init(entity="hails",
-                   project="gym_4iar_sh2",
+                   project="gym_4iar_36",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
     elif rl_model in ["QRDQN", "EQRDQN"]:
         wandb.init(entity="hails",
-                   project="gym_4iar_sh2",
+                   project="gym_4iar_36",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
     elif rl_model in ["AC", "QAC"]:
         wandb.init(entity="hails",
-                   project="gym_4iar_sh2",
+                   project="gym_4iar_36",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout),
                    config=args.__dict__
                    )
     elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
         wandb.init(entity="hails",
-                   project="gym_4iar_sh2",
+                   project="gym_4iar_36",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles),
                    config=args.__dict__
                    )
