@@ -203,9 +203,11 @@ class MCTS(object):
         elif self.rl_model in ["QAC", "QRQAC"]:
             available, action_probs, leaf_value = self._policy(env)
             action_probs = zip(available, action_probs[available])
+
             if self.rl_model == "QRQAC":
                 leaf_value = leaf_value.cpu().mean(axis=0).squeeze()
             leaf_value = leaf_value[available].mean()
+
         else:  # state version AC, QRAC
             available, action_probs, leaf_value = self._policy(env)
             action_probs = zip(available, action_probs[available])
@@ -248,7 +250,6 @@ class MCTS(object):
         width_ = 0
         width_fre = 0
         depth_fre = 0
-        search_resource = 2000
 
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
@@ -327,10 +328,9 @@ class MCTSPlayer(object):
     """AI player based on MCTS"""
 
     def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
-                 quantiles=None, epsilon=None,  epsilon_decay=None, min_epsilon=None,
-                 is_selfplay=0, elo=None, rl_model=None):
-        self.mcts = MCTS(policy_value_function, c_puct, n_playout, quantiles,
-                         epsilon, epsilon_decay, min_epsilon, rl_model=rl_model)
+                 quantiles=None, epsilon=None, is_selfplay=0, elo=None, rl_model=None):
+        self.mcts = MCTS(policy_value_function, c_puct, n_playout,
+                         quantiles, epsilon, rl_model=rl_model)
 
         self._is_selfplay = is_selfplay
         init_elo = 1500
