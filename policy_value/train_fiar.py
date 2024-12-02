@@ -25,9 +25,9 @@ parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
-parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
+# parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
-# parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
+parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
