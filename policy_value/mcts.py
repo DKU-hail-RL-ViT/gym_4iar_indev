@@ -228,7 +228,7 @@ class MCTS(object):
         if not end:
             node.expand(action_probs)
         else:
-            if winners == -1:  # tie
+            if winners == 0:  # tie
                 leaf_value = 0.0
             elif winners == env.turn():
                 leaf_value = 1.0
