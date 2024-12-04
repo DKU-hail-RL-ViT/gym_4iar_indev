@@ -139,10 +139,8 @@ class MCTS(object):
 
         while self.search_resource > 0:
             if node.is_leaf():
-                self.depth_count += 1
-                # print(self.depth_count)
                 break
-            # self.depth_count += 1
+            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
@@ -151,96 +149,104 @@ class MCTS(object):
         self.p = 1
         available, action_probs, leaf_value = self._policy(env)
 
-        while (self.p <= 4) and (self.search_resource > 0):
-            if len(available) > 0:
-                n_indices = get_fixed_indices(self.p)
-                action_probs_ = np.zeros_like(action_probs)
-                leaf_value_ = leaf_value[n_indices, :].cpu().mean(axis=0).squeeze()  # leaf_value shape : 2-dim to 1-dim
+        # print("available 개수 ", len(available))
 
-                # masked_leaf_value = np.zeros_like(leaf_value_)
-                # masked_leaf_value[available] = leaf_value_[available]
+        while (self.p <= 4) and (self.search_resource > 0) and (len(available) > 0):
+
+            n_indices = get_fixed_indices(self.p)
+            action_probs_ = np.zeros_like(action_probs)
+            leaf_value_ = leaf_value[n_indices, :].cpu().mean(axis=0).squeeze()  # leaf_value shape : 2-dim to 1-dim
+
+            # masked_leaf_value = np.zeros_like(leaf_value_)
+            # masked_leaf_value[available] = leaf_value_[available]
+
+            if self.rl_model == "EQRDQN":
+                idx_max = available[np.argmax(leaf_value_[available])]
+                action_probs_[idx_max] = 1
+                action_probs_[available] += self.epsilon / len(available)
+                action_probs_[idx_max] -= self.epsilon
+                action_probs = action_probs_
+
+            leaf_value_srted, idx_srted = leaf_value_.sort()
+
+            if torch.abs(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]]) > threshold:
+                # TODO action value 버전이니까 leaf_value구할 때 available하지 않은 action들에 masking 처리를 했었음.
+                # TODO 근데 available 한 action의 개수가 많을때는 딱히 문제가 되지 않을거 같은데
+                # TODO 예를 들어 1,2 개 남았다고 했을떄 available한 action의 value가 - 가 나오게 된다면?
+                # TODO 그러면 unavailable한 action의 value값이 되게 되는데
+                # TODO 다시 말해 masking한 action value 가 되어버리니까 0이 되는데
+                # TODO QRDQN 은 action value를 가지고 가장 높은 value에 1을 넣어주니까 이런 문제는 발생하지 않을거 같은데
+                # TODO QRQAC 은 network에 나온 값을 masking처리만 하고 사용되니까 이런 문제가 발생할 수 있을 것
+
+                action_probs = zip(available, action_probs[available])
+                masked_leaf_value = leaf_value_.mean(axis=0).squeeze()
 
                 if self.rl_model == "EQRDQN":
-                    idx_max = available[np.argmax(leaf_value_[available])]
-                    action_probs_[idx_max] = 1
-                    action_probs_[available] += self.epsilon / len(available)
-                    action_probs_[idx_max] -= self.epsilon
-                    action_probs = action_probs_
+                    print("heloo", len(available))
+                    print(masked_leaf_value.shape())
+                    leaf_value = masked_leaf_value[idx_srted[-1]]  # max Q-value
+                elif self.rl_model == "EQRQAC":
+                    leaf_value = masked_leaf_value[available].mean()  # max Q-value
 
-                leaf_value_srted, idx_srted = leaf_value_.sort()
+                # self.update_depth_search_resource(self.p)
+                # self.update_width_search_resource(self.p, available)  # TODO 이게 머하는건지 알아보기
 
-                if torch.abs(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]]) > threshold:
-                    # TODO action value 버전이니까 leaf_value구할 때 available하지 않은 action들에 masking 처리를 했었음.
-                    # TODO 근데 available 한 action의 개수가 많을때는 딱히 문제가 되지 않을거 같은데
-                    # TODO 예를 들어 1,2 개 남았다고 했을떄 available한 action의 value가 - 가 나오게 된다면?
-                    # TODO 그러면 unavailable한 action의 value값이 되게 되는데
-                    # TODO 다시 말해 masking한 action value 가 되어버리니까 0이 되는데
-                    # TODO QRDQN 은 action value를 가지고 가장 높은 value에 1을 넣어주니까 이런 문제는 발생하지 않을거 같은데
-                    # TODO QRQAC 은 network에 나온 값을 masking처리만 하고 사용되니까 이런 문제가 발생할 수 있을 것
+                # Check for end of game
+                end, winners = env.winner()
 
-                    action_probs = zip(available, action_probs[available])
-                    masked_leaf_value = leaf_value_.mean(axis=0).squeeze()
-
-                    if self.rl_model == "EQRDQN":
-                        print(len(available))
-                        leaf_value = masked_leaf_value[idx_srted[-1]]  # max Q-value
-                    elif self.rl_model == "EQRQAC":
-                        leaf_value = masked_leaf_value[available].mean()  # max Q-value
-
-                    self.update_search_resource(self.p) # TODO 이게 머하는건지 알아보기
-
-                    # Check for end of game
-                    end, winners = env.winner()
-
-                    if not end:
-                        node.expand(action_probs)
-                    else:
-                        if winners == 0:  # tie
-                            leaf_value = 0.0
-                        elif winners == env.turn():
-                            leaf_value = 1.0
-                        else:
-                            leaf_value = -1.0
-                    node.update_recursive(-leaf_value)
-
-                    depth_fre += (3 ** self.p) * self.depth_count
-                    width_fre += (3 ** self.p) * len(available)
-                    # print("depth uses:", depth_fre)
-                    # print("width uses:", width_fre)
-
-                    return depth_fre, width_fre
-
+                if not end:
+                    node.expand(action_probs)
                 else:
-                    self.update_search_resource(self.p)
-                    self.p += 1
-
-                if self.search_resource <= 0 or self.p == 5: # TODO self.p -1 로 계산되어야하는 거 아닌가
-                    action_probs = zip(available, action_probs[available])
-                    leaf_value = leaf_value_[idx_srted[-1]]
-
-                    depth_fre += (3 ** self.p) * self.depth_count
-                    width_fre += (3 ** self.p) * len(available)
-
-                    # Check for end of game
-                    end, winners = env.winner()
-
-                    if not end:
-                        node.expand(action_probs)
+                    if winners == 0:  # tie
+                        leaf_value = 0.0
+                    elif winners == env.turn():
+                        leaf_value = 1.0
                     else:
-                        if winners == 0:  # tie
-                            leaf_value = 0.0
-                        elif winners == env.turn():
-                            leaf_value = 1.0
-                        else:
-                            leaf_value = -1.0
-                    node.update_recursive(-leaf_value)
+                        leaf_value = -1.0
+                node.update_recursive(-leaf_value)
 
-                    depth_fre += 3 ** (self.p-1) * self.depth_count
-                    width_fre += 3 ** (self.p-1) * len(available)
-                    # print("depth uses:", depth_fre)
-                    # print("width uses:", width_fre)
+                depth_fre += (3 ** self.p)
+                width_fre += (3 ** self.p) * len(available)
+                # print("depth uses:", depth_fre)
+                # print("width uses:", width_fre)
+                print("P=5가 아닐떄 값",self.p)
+                print("WTF")
+                return depth_fre, width_fre
 
-                    return depth_fre, width_fre
+            else:
+                self.update_depth_search_resource(self.p)
+                self.update_width_search_resource(self.p, available)
+                self.p += 1
+
+            if self.search_resource <= 0 or self.p == 5: # TODO self.p -1 로 계산되어야하는 거 아닌가
+                action_probs = zip(available, action_probs[available])
+                leaf_value = leaf_value_[idx_srted[-1]]
+
+                depth_fre += (3 ** self.p)
+                width_fre += (3 ** self.p) * len(available)
+
+                # Check for end of game
+                end, winners = env.winner()
+
+                if not end:
+                    node.expand(action_probs)
+                else:
+                    if winners == 0:  # tie
+                        leaf_value = 0.0
+                    elif winners == env.turn():
+                        leaf_value = 1.0
+                    else:
+                        leaf_value = -1.0
+                node.update_recursive(-leaf_value)
+
+                depth_fre += 3 ** (self.p-1)
+                width_fre += 3 ** (self.p-1) * len(available)
+                # print("depth uses:", depth_fre)
+                # print("width uses:", width_fre)
+
+                # print("P=5일때 값", self.p)
+
+                return depth_fre, width_fre
 
 
 
@@ -262,8 +268,8 @@ class MCTS(object):
             depth_ += depth_fre
             width_ += width_fre
 
+            # print("Remain resource", self.search_resource)
             if self.search_resource <= 0:
-                self.search_resource = 0
                 break
 
         if return_prob == 1:
@@ -313,12 +319,18 @@ class MCTS(object):
         else:
             self._root = TreeNode(None, 1.0)
 
-    def update_search_resource(self, p):
+    def update_depth_search_resource(self, p):
         if p in [1, 2, 3, 4]:
             self.search_resource -= 2 ** (p-1) * 3
         else:
             assert False, "not defined"
 
+    def update_width_search_resource(self, p, available):
+        # print("available 개수 ", len(available))
+        if p in [1, 2, 3, 4]:
+            self.search_resource -= 2 ** (p-1) * 3 * len(available)
+        else:
+            assert False, "not defined"
 
     def __str__(self):
         return "MCTS"
