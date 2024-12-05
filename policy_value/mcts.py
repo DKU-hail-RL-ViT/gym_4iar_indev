@@ -240,7 +240,7 @@ class MCTS(object):
 
         return depth_fre, width_fre
 
-    def get_move_probs(self, env, temp, return_prob=None):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
@@ -256,51 +256,27 @@ class MCTS(object):
             depth_fre, width_fre = self._playout(env_copy)
             depth_ += depth_fre
             width_ += width_fre
-            # if self.rl_model in ["DQN", "QRDQN"]:
-            #     self.update_epsilon()
 
-        if return_prob == 1:  # if selfplay
+        wandb.log({
+            "resource/depth": depth_fre,
+            "resource/depth_resource_usage": depth_,
+            "resource/depth_ratio": depth_ / (depth_ + width_),
+
+            "resource/width": width_fre,
+            "resource/width_resource_usage": width_,
+            "resource/width_ratio": width_ / (depth_ + width_),
+
+            "resource/total_resource_usage": depth_ + width_,
+            "resource/total_planning_depth": n + 1
+        })
+        if self.rl_model in ["AC"]:
             wandb.log({
-                "selfplay/depth": depth_fre,
-                "selfplay/depth_resource_usage": depth_,
-                "selfplay/depth_ratio": depth_ / (depth_ + width_),
-
-                "selfplay/width": width_fre,
-                "selfplay/width_resource_usage": width_,
-                "selfplay/width_ratio": width_ / (depth_ + width_),
-
-                "selfplay/total_planning_depth": n+1,
-                # "playout/remaining_resource": (search_resource - depth_ - width_) / search_resource
+                "resource/total_resource_usage": depth_,
             })
-            if self.rl_model in ["AC"]:
-                wandb.log({
-                    "selfplay/total_resource_usage": depth_,
-                })
-            else:
-                wandb.log({
-                    "selfplay/total_resource_usage": depth_ + width_,
-                })
-        else:  # eval
+        else:
             wandb.log({
-                "eval/depth": depth_fre,
-                "eval/depth_resource_usage": depth_,
-                "eval/depth_ratio": depth_ / (depth_ + width_),
-
-                "eval/width": width_fre,
-                "eval/width_resource_usage": width_,
-                "eval/width_ratio": width_ / (depth_ + width_),
-
-                "eval/total_planning_depth": n + 1
+                "resource/total_resource_usage": depth_ + width_,
             })
-
-            if self.rl_model in ["AC"]:
-                wandb.log({
-                    "eval/total_resource_usage": depth_,
-                })
-            else:
-                wandb.log({
-                    "eval/total_resource_usage": depth_ + width_,
-                })
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -348,7 +324,7 @@ class MCTSPlayer(object):
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, temp, return_prob)  # env.state_.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)

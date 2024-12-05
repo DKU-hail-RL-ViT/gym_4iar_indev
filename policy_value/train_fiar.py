@@ -18,19 +18,19 @@ from policy_value.efficient_mcts import EMCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=50)  # compare with 2, 10, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=3)  # compare with 3, 9, 27, 81
-parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0.4, 0.7
+parser.add_argument("--n_playout", type=int, default=10000)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
+parser.add_argument('--epsilon', type=float, default=0.7)  # compare with 0.1, 0.4, 0.7
 
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
-parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
+# parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
-# parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
+parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
 
 """ MCTS parameter """
@@ -58,7 +58,12 @@ parser.add_argument("--init_model", type=str, default=None)
 # parser.add_argument('--min_epsilon', type=float, default=0.1, help='Minimum value for epsilon after decay')
 
 """Efficient Search Hyperparameter"""
-parser.add_argument('--search_resource', type=int, default=2000)  # defalut 2000
+# EQRDQN eps 0.1 (2, 5913), (10, 26325), (50, 120366), (100, 246969),(400, 951426)
+# EQRDQN eps 0.4 (2, 5913), (10, 26325), (50, 137376), (100, 271512),(400, 1066365)
+# EQRDQN eps 0.7 (2, 5913), (10, 26325), (50, 139239), (100, 278073),(400, 1065717)
+# EQRQAC (2, 5913), (10, 29231), (50, 144828), (100, 286578),(400, 1137078)
+
+parser.add_argument('--search_resource', type=int, default=26325)
 
 args = parser.parse_args()
 
@@ -80,9 +85,38 @@ init_model = args.init_model
 rl_model = args.rl_model
 quantiles = args.quantiles
 epsilon = args.epsilon
-# epsilon_decay = args.epsilon_decay
-# min_epsilon = args.min_epsilon
 search_resource = args.search_resource
+
+
+def create_models(rl_model, epsilon=None, n_playout=None, quantiles=None, search_resource=None, i=None):
+    if rl_model == "DQN":
+        model_file = f"Training/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{i + 1:03d}.pth"
+        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{i + 1:03d}.pth"
+
+    elif rl_model in ["QRDQN"]:
+        model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{i + 1:03d}.pth"
+        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{i + 1:03d}.pth"
+
+    elif rl_model in ["EQRDQN"]:
+        model_file = f"Training/{rl_model}_resource{search_resource}_eps{epsilon}/train_{i + 1:03d}.pth"
+        eval_model_file = f"Eval/{rl_model}_resource{search_resource}_eps{epsilon}/train_{i + 1:03d}.pth"
+
+    elif rl_model in ["AC", "QAC"]:
+        model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
+        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
+
+    elif rl_model in ["QRAC", "QRQAC"]:
+        model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
+        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
+
+    elif rl_model in ["EQRQAC"]:
+        model_file = f"Training/{rl_model}_resource{search_resource}/train_{i + 1:03d}.pth"
+        eval_model_file = f"Eval/{rl_model}_resource{search_resource}/train_{i + 1:03d}.pth"
+
+    else:
+        assert False, "Model is not defined"
+
+    return model_file, eval_model_file
 
 
 def get_equi_data(env, play_data):
@@ -177,12 +211,12 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
             winners_z = np.zeros(len(current_player))
 
             if winners != 0:  # non draw
-                if winners == -1:  # when win white player adjust to 0
+                if winners == -1:
                     winners = 0
                 # if winner is current player, winner_z = 1
                 winners_z[np.array(current_player) == 1 - winners] = 1.0
                 winners_z[np.array(current_player) != 1 - winners] = -1.0
-                if winners == 0:  # when win white player adjust to 0
+                if winners == 0:
                     winners = -1
             return winners, zip(states, mcts_probs, winners_z)
 
@@ -287,10 +321,16 @@ if __name__ == '__main__':
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
-    elif rl_model in ["QRDQN", "EQRDQN"]:
+    elif rl_model in ["QRDQN"]:
         wandb.init(entity="hails",
                    project="gym_4iar_sh36",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon),
+                   config=args.__dict__
+                   )
+    elif rl_model in ["EQRDQN"]:
+        wandb.init(entity="hails",
+                   project="gym_4iar_sh2",
+                   name="FIAR-" + rl_model + "-Resource" + str(search_resource) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
     elif rl_model in ["AC", "QAC"]:
@@ -299,10 +339,16 @@ if __name__ == '__main__':
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout),
                    config=args.__dict__
                    )
-    elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
+    elif rl_model in ["QRAC", "QRQAC"]:
         wandb.init(entity="hails",
                    project="gym_4iar_sh36",
                    name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles),
+                   config=args.__dict__
+                   )
+    elif rl_model in ["EQRQAC"]:
+        wandb.init(entity="hails",
+                   project="gym_4iar_sh2",
+                   name="FIAR-" + rl_model + "-Resource" + str(search_resource),
                    config=args.__dict__
                    )
     else:
@@ -337,10 +383,10 @@ if __name__ == '__main__':
                                        epsilon, search_resource, is_selfplay=1, rl_model=rl_model)
     elif rl_model in ["DQN", "QRDQN", "QRAC", "QRQAC"]:
         curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, quantiles,
-                                      epsilon, search_resource, is_selfplay=1, rl_model=rl_model)
+                                      epsilon, is_selfplay=1, rl_model=rl_model)
     else:
         curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout,
-                                      epsilon, search_resource, is_selfplay=1, rl_model=rl_model)
+                                      epsilon, is_selfplay=1, rl_model=rl_model)
 
     data_buffer_training_iters = deque(maxlen=20)
     best_old_model = None
@@ -362,24 +408,8 @@ if __name__ == '__main__':
             if i == 0:
                 """make mcts agent training, eval version"""
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-                if rl_model == "DQN":
-                    model_file = f"Training/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{i + 1:03d}.pth"
-                    eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{i + 1:03d}.pth"
+                model_file, eval_model_file = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, i)
 
-                elif rl_model in ["QRDQN", "EQRDQN"]:
-                    model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{i + 1:03d}.pth"
-                    eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{i + 1:03d}.pth"
-
-                elif rl_model in ["AC", "QAC"]:
-                    model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-                    eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-
-                elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
-                    model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
-                    eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
-
-                else:
-                    assert False, "Model is not defined"
                 policy_value_net.save_model(model_file)
                 policy_value_net.save_model(eval_model_file)
 
@@ -388,47 +418,54 @@ if __name__ == '__main__':
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}_eps{epsilon}")
                                       if file.startswith('train_')]
-                    old_i = max(existing_files)
-                    best_old_model = f"Training/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{old_i:03d}.pth"
 
-                elif rl_model in ["QRDQN", "EQRDQN"]:
+                elif rl_model in ["QRDQN"]:
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in
                                       os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}")
                                       if file.startswith('train_')]
-                    old_i = max(existing_files)
-                    best_old_model = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{old_i:03d}.pth"
+
+                elif rl_model in ["EQRDQN"]:
+                    existing_files = [int(file.split('_')[-1].split('.')[0])
+                                      for file in
+                                      os.listdir(f"Training/{rl_model}_resource{search_resource}_eps{epsilon}")
+                                      if file.startswith('train_')]
 
                 elif rl_model in ["AC", "QAC"]:
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
                                       if file.startswith('train_')]
-                    old_i = max(existing_files)
-                    best_old_model = f"Training/{rl_model}_nmcts{n_playout}/train_{old_i:03d}.pth"
 
-                elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
+                elif rl_model in ["QRAC", "QRQAC"]:
                     existing_files = [int(file.split('_')[-1].split('.')[0])
                                       for file in
                                       os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
                                       if file.startswith('train_')]
-                    old_i = max(existing_files)
-                    best_old_model = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{old_i:03d}.pth"
+
+                elif rl_model in ["EQRQAC"]:
+                    existing_files = [int(file.split('_')[-1].split('.')[0])
+                                      for file in
+                                      os.listdir(f"Training/{rl_model}_resource{search_resource}")
+                                      if file.startswith('train_')]
+
                 else:
                     assert False, "Model is not defined"
 
+                old_i = max(existing_files)
+                best_old_model, _ = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, old_i)
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantiles,
                                                       best_old_model, rl_model=rl_model)
 
                 """The most recent model with the highest win rate among the trained models"""
                 if rl_model in ["EQRDQN", "EQRQAC"]:
                     old_mcts_player = EMCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, epsilon,
-                                                 search_resource, is_selfplay=0, rl_model=rl_model)
+                                                  search_resource, is_selfplay=0, rl_model=rl_model)
                 elif rl_model in ["DQN", "QRDQN", "QRAC", "QRQAC"]:
                     old_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, quantiles,
-                                                  epsilon, search_resource, is_selfplay=0, rl_model=rl_model)
+                                                  epsilon, is_selfplay=0, rl_model=rl_model)
                 else:
                     old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, epsilon,
-                                                 search_resource, is_selfplay=0, rl_model=rl_model)
+                                                 is_selfplay=0, rl_model=rl_model)
 
                 """Training model"""
                 if rl_model in ["EQRDQN", "EQRQAC"]:
@@ -436,52 +473,23 @@ if __name__ == '__main__':
                                                    search_resource, is_selfplay=0, rl_model=rl_model)
                 elif rl_model in ["DQN", "QRDQN", "QRAC", "QRQAC"]:
                     curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, quantiles,
-                                                  epsilon, search_resource, is_selfplay=0, rl_model=rl_model)
+                                                  epsilon, is_selfplay=0, rl_model=rl_model)
                 else:
                     curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, epsilon,
-                                                  search_resource, is_selfplay=0, rl_model=rl_model)
+                                                  is_selfplay=0, rl_model=rl_model)
 
                 win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
-                if (i + 1) % 10 == 0:  # save model 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 (1+10
-                    # : total 11)
-                    if rl_model == "DQN":
-                        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{i + 1:03d}.pth"
-                        policy_value_net.save_model(eval_model_file)
-
-                    elif rl_model in ["QRDQN", "EQRDQN"]:
-                        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{i + 1:03d}.pth"
-                        policy_value_net.save_model(eval_model_file)
-
-                    elif rl_model in ["AC", "QAC"]:
-                        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-                        policy_value_net.save_model(eval_model_file)
-
-                    elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
-                        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
-                        policy_value_net.save_model(eval_model_file)
-                    else:
-                        assert False, "don't have model"
+                if (i + 1) % 10 == 0:  # save model 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 (1+10: total 11)
+                    _, eval_model_file = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, i)
+                    policy_value_net.save_model(eval_model_file)
 
                 print("Win rate : ", round(win_ratio * 100, 3), "%")
                 wandb.log({"Win_Rate/Evaluate": round(win_ratio * 100, 3)})
 
                 if win_ratio > 0.5:
                     old_mcts_player = curr_mcts_player
-                    if rl_model == "DQN":
-                        model_file = f"Training/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{i + 1:03d}.pth"
-
-                    elif rl_model in ["QRDQN", "EQRDQN"]:
-                        model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{i + 1:03d}.pth"
-
-                    elif rl_model in ["AC", "QAC"]:
-                        model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-
-                    elif rl_model in ["QRAC", "QRQAC", "EQRQAC"]:
-                        model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
-
-                    else:
-                        assert False, "don't have model"
+                    model_file, _ = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, i)
                     policy_value_net.save_model(model_file)
                     print(" ---------- New best policy!!! ---------- ")
 
