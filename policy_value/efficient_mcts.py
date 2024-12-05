@@ -104,7 +104,7 @@ class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
     def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, epsilon=None,
-                 search_resource=None, epsilon_decay=None, min_epsilon=None, rl_model=None):
+                 search_resource=None, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -119,11 +119,9 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
         self.rl_model = rl_model
-        self.env = Fiar()
         self.epsilon = epsilon
-        self.epsilon_decay = epsilon_decay
-        self.min_epsilon = min_epsilon
         self.search_resource = search_resource
+        self.total_resource = search_resource
         self.p = 1
 
     def _playout(self, env):
@@ -148,8 +146,6 @@ class MCTS(object):
 
         self.p = 1
         available, action_probs, leaf_value = self._policy(env)
-
-        # print("available 개수 ", len(available))
 
         while (self.p <= 4) and (self.search_resource > 0) and (len(available) > 0):
 
@@ -182,14 +178,9 @@ class MCTS(object):
                 masked_leaf_value = leaf_value_.mean(axis=0).squeeze()
 
                 if self.rl_model == "EQRDQN":
-                    print("heloo", len(available))
-                    print(masked_leaf_value.shape())
                     leaf_value = masked_leaf_value[idx_srted[-1]]  # max Q-value
                 elif self.rl_model == "EQRQAC":
                     leaf_value = masked_leaf_value[available].mean()  # max Q-value
-
-                # self.update_depth_search_resource(self.p)
-                # self.update_width_search_resource(self.p, available)  # TODO 이게 머하는건지 알아보기
 
                 # Check for end of game
                 end, winners = env.winner()
@@ -205,12 +196,11 @@ class MCTS(object):
                         leaf_value = -1.0
                 node.update_recursive(-leaf_value)
 
-                depth_fre += (3 ** self.p)
-                width_fre += (3 ** self.p) * len(available)
-                # print("depth uses:", depth_fre)
-                # print("width uses:", width_fre)
-                print("P=5가 아닐떄 값",self.p)
-                print("WTF")
+                depth_fre += (3 ** (self.p-1))
+                width_fre += (3 ** (self.p-1)) * len(available)
+
+                print("P=5가 아닐떄 값", self.p-1)
+                print(depth_fre, width_fre)
                 return depth_fre, width_fre
 
             else:
@@ -218,12 +208,9 @@ class MCTS(object):
                 self.update_width_search_resource(self.p, available)
                 self.p += 1
 
-            if self.search_resource <= 0 or self.p == 5: # TODO self.p -1 로 계산되어야하는 거 아닌가
+            if self.search_resource <= 0 or self.p == 5:
                 action_probs = zip(available, action_probs[available])
                 leaf_value = leaf_value_[idx_srted[-1]]
-
-                depth_fre += (3 ** self.p)
-                width_fre += (3 ** self.p) * len(available)
 
                 # Check for end of game
                 end, winners = env.winner()
@@ -241,15 +228,8 @@ class MCTS(object):
 
                 depth_fre += 3 ** (self.p-1)
                 width_fre += 3 ** (self.p-1) * len(available)
-                # print("depth uses:", depth_fre)
-                # print("width uses:", width_fre)
-
-                # print("P=5일때 값", self.p)
 
                 return depth_fre, width_fre
-
-
-
 
     def get_move_probs(self, env, temp, return_prob=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -262,13 +242,20 @@ class MCTS(object):
         width_fre = 0
         depth_fre = 0
 
+        if self.rl_model in ["EQRDQN", "EQRQAC"]:
+            wandb.log({"resource/remain_resource": self.search_resource,
+                       "resource/remain_resource_ratio": self.search_resource / self.total_resource})
+
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             depth_fre, width_fre = self._playout(env_copy)
             depth_ += depth_fre
             width_ += width_fre
 
-            # print("Remain resource", self.search_resource)
+            if self.rl_model in ["EQRDQN", "EQRQAC"]:
+                wandb.log({"resource/remain_resource": self.search_resource,
+                           "resource/remain_resource_ratio": self.search_resource / self.total_resource})
+
             if self.search_resource <= 0:
                 break
 
@@ -299,8 +286,6 @@ class MCTS(object):
                 "eval/total_planning_depth": n + 1
             })
 
-        print("Playout times", n + 1)
-
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
                       for act, node in self._root._children.items()]
@@ -326,7 +311,6 @@ class MCTS(object):
             assert False, "not defined"
 
     def update_width_search_resource(self, p, available):
-        # print("available 개수 ", len(available))
         if p in [1, 2, 3, 4]:
             self.search_resource -= 2 ** (p-1) * 3 * len(available)
         else:
@@ -339,8 +323,8 @@ class MCTS(object):
 class EMCTSPlayer(object):
     """AI player based on MCTS"""
 
-    def __init__(self, policy_value_function, c_puct=5, n_playout=2000,
-                 epsilon=None, search_resource=None, is_selfplay=0, elo=None, rl_model=None):
+    def __init__(self, policy_value_function, c_puct=5, n_playout=2000, epsilon=None,
+                 search_resource=None, is_selfplay=0, elo=None, rl_model=None):
         self.mcts = MCTS(policy_value_function, c_puct, n_playout, epsilon,
                          search_resource, rl_model=rl_model)
 
