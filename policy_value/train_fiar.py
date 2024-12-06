@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser()
 """ tuning parameter """
 parser.add_argument("--n_playout", type=int, default=10000)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
-parser.add_argument('--epsilon', type=float, default=0.7)  # compare with 0.1, 0.4, 0.7
+parser.add_argument('--epsilon', type=float, default=0.4)  # compare with 0.1, 0.4, 0.7
 
 
 """ RL model """
@@ -63,7 +63,7 @@ parser.add_argument("--init_model", type=str, default=None)
 # EQRDQN eps 0.7 (2, 5913), (10, 26325), (50, 139239), (100, 278073),(400, 1065717)
 # EQRQAC (2, 5913), (10, 29231), (50, 144828), (100, 286578),(400, 1137078)
 
-parser.add_argument('--search_resource', type=int, default=26325)
+parser.add_argument('--search_resource', type=int, default=5913)
 
 args = parser.parse_args()
 
@@ -329,7 +329,7 @@ if __name__ == '__main__':
                    )
     elif rl_model in ["EQRDQN"]:
         wandb.init(entity="hails",
-                   project="gym_4iar_sh2",
+                   project="gym_4iar_sh36",
                    name="FIAR-" + rl_model + "-Resource" + str(search_resource) + "-Eps" + str(epsilon),
                    config=args.__dict__
                    )
@@ -347,7 +347,7 @@ if __name__ == '__main__':
                    )
     elif rl_model in ["EQRQAC"]:
         wandb.init(entity="hails",
-                   project="gym_4iar_sh2",
+                   project="gym_4iar_sh36",
                    name="FIAR-" + rl_model + "-Resource" + str(search_resource),
                    config=args.__dict__
                    )
@@ -452,7 +452,7 @@ if __name__ == '__main__':
                     assert False, "Model is not defined"
 
                 old_i = max(existing_files)
-                best_old_model, _ = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, old_i)
+                best_old_model, _ = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, (old_i-1))
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantiles,
                                                       best_old_model, rl_model=rl_model)
 
