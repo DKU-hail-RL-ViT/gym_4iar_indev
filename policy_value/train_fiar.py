@@ -18,9 +18,9 @@ from policy_value.efficient_mcts import EMCTSPlayer
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=10000)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=40000)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
-parser.add_argument('--epsilon', type=float, default=0.4)  # compare with 0.1, 0.4, 0.7
+parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0.4, 0.7
 
 
 """ RL model """
@@ -29,7 +29,7 @@ parser.add_argument('--epsilon', type=float, default=0.4)  # compare with 0.1, 0
 # parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver
-# parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
+# # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
 
@@ -63,7 +63,7 @@ parser.add_argument("--init_model", type=str, default=None)
 # EQRDQN eps 0.7 (2, 5913), (10, 26325), (50, 139239), (100, 278073),(400, 1065717)
 # EQRQAC (2, 5913), (10, 29231), (50, 144828), (100, 286578),(400, 1137078)
 
-parser.add_argument('--search_resource', type=int, default=5913)
+parser.add_argument('--search_resource', type=int, default=120366)
 
 args = parser.parse_args()
 

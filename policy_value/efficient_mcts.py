@@ -243,9 +243,6 @@ class MCTS(object):
 
                 return width_fre, depth_fre
 
-
-
-
     def get_move_probs(self, env, temp, return_prob=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
@@ -274,32 +271,45 @@ class MCTS(object):
             if self.search_resource <= 0:
                 break
 
-        if return_prob == 1:
+        if not depth_ == 0 and width_ == 0:
             wandb.log({
-                "selfplay/depth": depth_fre,
-                "selfplay/depth_resource_usage": depth_,
-                "selfplay/depth_ratio": depth_ / (depth_ + width_),
+                "resource/depth": depth_fre,
+                "resource/depth_resource_usage": depth_,
+                "resource/depth_ratio": depth_ / (depth_ + width_),
 
-                "selfplay/width": width_fre,
-                "selfplay/width_resource_usage": width_,
-                "selfplay/width_ratio": width_ / (depth_ + width_),
+                "resource/width": width_fre,
+                "resource/width_resource_usage": width_,
+                "resource/width_ratio": width_ / (depth_ + width_),
 
-                "selfplay/total_resource_usage": depth_ + width_,
-                "selfplay/total_planning_depth": n + 1
+                "resource/total_resource_usage": depth_ + width_,
+                "resource/total_planning_depth": n + 1
             })
-        else:  # eval
-            wandb.log({
-                "eval/depth": depth_fre,
-                "eval/depth_resource_usage": depth_,
-                "eval/depth_ratio": depth_ / (depth_ + width_),
+            if return_prob == 1:
+                wandb.log({
+                    "selfplay/depth": depth_fre,
+                    "selfplay/depth_resource_usage": depth_,
+                    "selfplay/depth_ratio": depth_ / (depth_ + width_),
 
-                "eval/width": width_fre,
-                "eval/width_resource_usage": width_,
-                "eval/width_ratio": width_ / (depth_ + width_),
+                    "selfplay/width": width_fre,
+                    "selfplay/width_resource_usage": width_,
+                    "selfplay/width_ratio": width_ / (depth_ + width_),
 
-                "eval/total_resource_usage": depth_ + width_,
-                "eval/total_planning_depth": n + 1
-            })
+                    "selfplay/total_resource_usage": depth_ + width_,
+                    "selfplay/total_planning_depth": n + 1
+                })
+            else:  # eval
+                wandb.log({
+                    "eval/depth": depth_fre,
+                    "eval/depth_resource_usage": depth_,
+                    "eval/depth_ratio": depth_ / (depth_ + width_),
+
+                    "eval/width": width_fre,
+                    "eval/width_resource_usage": width_,
+                    "eval/width_ratio": width_ / (depth_ + width_),
+
+                    "eval/total_resource_usage": depth_ + width_,
+                    "eval/total_planning_depth": n + 1
+                })
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
