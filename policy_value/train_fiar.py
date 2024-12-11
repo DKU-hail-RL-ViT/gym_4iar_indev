@@ -28,7 +28,7 @@ parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0
 # EQRDQN eps 0.7 (2, 5913), (10, 26325), (50, 139239), (100, 278073),(400, 1065717)
 # EQRQAC (2, 5913), (10, 29231), (50, 144828), (100, 286578),(400, 1137078)
 
-parser.add_argument('--search_resource', type=int, default=5913)
+parser.add_argument('--search_resource', type=int, default=26325)
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver

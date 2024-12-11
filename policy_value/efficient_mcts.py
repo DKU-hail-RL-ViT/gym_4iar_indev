@@ -133,9 +133,8 @@ class MCTS(object):
         threshold = 0.1
         depth_fre = 0
         width_fre = 0
-        self.depth_count = 0
 
-        while self.search_resource > 0:
+        while self.search_resource > 3 ** (self.p) + 3 ** (self.p) * len(node._children):
             if node.is_leaf():
                 break
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
@@ -147,9 +146,13 @@ class MCTS(object):
         self.p = 1
         available, action_probs, leaf_value = self._policy(env)
 
-        while (self.p <= 4) and (self.search_resource > 0):
-            if len(available) > 0:
+        # while (self.p <= 4) and (self.search_resource >= 3 ** self.p + 3 ** self.p * len(available)):
+        while self.search_resource >= 3 ** self.p + 3 ** self.p * len(available):
 
+            # print(3 ** (self.p))
+            # print(3 ** (self.p) * len(available))
+
+            if len(available) > 0:
                 n_indices = get_fixed_indices(self.p)
                 action_probs_ = np.zeros_like(action_probs)
                 leaf_value_ = leaf_value[n_indices, :].cpu().mean(axis=0).squeeze()  # leaf_value shape : 2-dim to 1-dim
@@ -188,14 +191,14 @@ class MCTS(object):
                     depth_fre += (3 ** (self.p-1))
                     width_fre += (3 ** (self.p-1)) * len(available)
 
-                    return depth_fre, width_fre
+                    return available, depth_fre, width_fre
 
                 else:
                     self.update_depth_search_resource(self.p)
                     self.update_width_search_resource(self.p, available)
                     self.p += 1
 
-                if self.search_resource <= 0 or self.p == 5:
+                if self.search_resource <= 3 ** self.p + 3 ** self.p * len(available) or self.p == 5:
                     action_probs = zip(available, action_probs[available])
                     leaf_value = leaf_value_[idx_srted[-1]]
 
@@ -216,7 +219,7 @@ class MCTS(object):
                     depth_fre += 3 ** (self.p-1)
                     width_fre += 3 ** (self.p-1) * len(available)
 
-                    return depth_fre, width_fre
+                    return available, depth_fre, width_fre
 
             else:
                 if self.rl_model == "EQRDQN":
@@ -241,7 +244,7 @@ class MCTS(object):
                 width_fre += 0
                 depth_fre += 0
 
-                return width_fre, depth_fre
+                return available, width_fre, depth_fre
 
     def get_move_probs(self, env, temp, return_prob=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -253,14 +256,21 @@ class MCTS(object):
         width_ = 0
         width_fre = 0
         depth_fre = 0
+        next_width_fre = 0
 
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
-            depth_fre, width_fre = self._playout(env_copy)
+            available, depth_fre, width_fre = self._playout(env_copy)
+
             depth_ += depth_fre
             width_ += width_fre
 
-            if self.search_resource <= 0:
+            if width_fre != 0:
+                next_width_fre = width_fre ** (self.p / (self.p-1))
+            else:
+                next_width_fre = width_fre
+
+            if self.total_resource < depth_ + width_ + depth_fre + next_width_fre:
                 break
 
         wandb.log({
@@ -274,8 +284,8 @@ class MCTS(object):
 
             "resource/total_resource_usage": depth_ + width_,
             "resource/total_planning_depth": n + 1,
-            "resource/remain_resource": self.search_resource,
-            "resource/remain_resource_ratio": self.search_resource / self.total_resource
+            "resource/remain_resource": self.total_resource - depth_ - width_ - depth_fre - width_fre,
+            "resource/remain_resource_ratio": (self.total_resource - depth_ - width_ - depth_fre - width_fre) / self.total_resource
         })
         if return_prob == 1:
             wandb.log({
