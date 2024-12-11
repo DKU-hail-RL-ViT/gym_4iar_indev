@@ -22,6 +22,13 @@ parser.add_argument("--n_playout", type=int, default=40000)  # compare with 2, 1
 parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
 parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0.4, 0.7
 
+"""Efficient Search Hyperparameter"""
+# EQRDQN eps 0.1 (2, 5913), (10, 26325), (50, 120366), (100, 246969),(400, 951426)
+# EQRDQN eps 0.4 (2, 5913), (10, 26325), (50, 137376), (100, 271512),(400, 1066365)
+# EQRDQN eps 0.7 (2, 5913), (10, 26325), (50, 139239), (100, 278073),(400, 1065717)
+# EQRQAC (2, 5913), (10, 29231), (50, 144828), (100, 286578),(400, 1137078)
+
+parser.add_argument('--search_resource', type=int, default=5913)
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
@@ -51,19 +58,6 @@ parser.add_argument("--kl_targ", type=float, default=0.02)
 """ Policy evaluate parameter """
 parser.add_argument("--win_ratio", type=float, default=0.0)
 parser.add_argument("--init_model", type=str, default=None)
-
-"""DQN epsilon parameter """
-# parser.add_argument('--epsilon_', type=float, default=0.5, help='use Ablation study')
-# parser.add_argument('--epsilon_decay', type=float, default=0.999, help='Decay rate for epsilon')
-# parser.add_argument('--min_epsilon', type=float, default=0.1, help='Minimum value for epsilon after decay')
-
-"""Efficient Search Hyperparameter"""
-# EQRDQN eps 0.1 (2, 5913), (10, 26325), (50, 120366), (100, 246969),(400, 951426)
-# EQRDQN eps 0.4 (2, 5913), (10, 26325), (50, 137376), (100, 271512),(400, 1066365)
-# EQRDQN eps 0.7 (2, 5913), (10, 26325), (50, 139239), (100, 278073),(400, 1065717)
-# EQRQAC (2, 5913), (10, 29231), (50, 144828), (100, 286578),(400, 1137078)
-
-parser.add_argument('--search_resource', type=int, default=120366)
 
 args = parser.parse_args()
 
