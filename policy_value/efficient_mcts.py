@@ -2,6 +2,7 @@ import numpy as np
 import copy
 import torch
 import wandb
+from matplotlib.style import available
 from fiar_env import Fiar
 
 
@@ -146,7 +147,6 @@ class MCTS(object):
         self.p = 1
         available, action_probs, leaf_value = self._policy(env)
 
-        # while (self.p <= 4) and (self.search_resource >= 3 ** self.p + 3 ** self.p * len(available)):
         while self.search_resource >= 3 ** self.p + 3 ** self.p * len(available):
 
             if len(available) > 0:
@@ -188,14 +188,14 @@ class MCTS(object):
                     depth_fre += (3 ** (self.p-1))
                     width_fre += (3 ** (self.p-1)) * len(available)
 
-                    return depth_fre, width_fre
+                    return len(available), depth_fre, width_fre
 
                 else:
                     self.update_depth_search_resource(self.p)
                     self.update_width_search_resource(self.p, available)
                     self.p += 1
 
-                if self.search_resource <= 3 ** self.p + 3 ** self.p * len(available) or self.p == 5:
+                if self.p == 5 or self.search_resource <= 3 ** self.p + 3 ** self.p * len(available):
                     action_probs = zip(available, action_probs[available])
                     leaf_value = leaf_value_[idx_srted[-1]]
 
@@ -216,7 +216,7 @@ class MCTS(object):
                     depth_fre += 3 ** (self.p-1)
                     width_fre += 3 ** (self.p-1) * len(available)
 
-                    return depth_fre, width_fre
+                    return len(available), depth_fre, width_fre
 
             else:
                 if self.rl_model == "EQRDQN":
@@ -241,7 +241,7 @@ class MCTS(object):
                 width_fre += 3 ** self.p
                 depth_fre += 3 ** self.p
 
-                return width_fre, depth_fre
+                return  len(available), width_fre, depth_fre
 
     def get_move_probs(self, env, temp, return_prob=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -249,26 +249,47 @@ class MCTS(object):
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
-        depth_ = 0
-        width_ = 0
-        width_fre = 0
-        depth_fre = 0
-        next_depth_fre = 0
+        depth_, width_ = 0, 0
+        depth_fre, width_fre = 0, 0
+        next_depth_fre, next_width_fre = 0, 0
 
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
-            depth_fre, width_fre = self._playout(env_copy)
+            avail, depth_fre, width_fre = self._playout(env_copy)
 
             depth_ += depth_fre
             width_ += width_fre
 
-            if width_fre != 0 and self.p != 1:
-                next_depth_fre = 3 ** self.p
+            # if avail != 0:
+            #     if self.p != 5:
+            #         next_depth_fre = 3 ** self.p
+            #         next_width_fre = 3 ** self.p * avail
+            #     else:
+            #         next_depth_fre = 3 ** (self.p-1)
+            #         next_width_fre = 3 ** (self.p-1) * avail
+            # else:
+            #     if self.p != 5:
+            #         next_depth_fre = 3 ** self.p
+            #         next_width_fre = 3 ** self.p * avail
+            #     else:
+            #         next_depth_fre = 3 ** (self.p - 1)
+            #         next_width_fre = 3 ** (self.p - 1) * avail
+            if avail != 0:
+                if self.p != 5:
+                    next_depth_fre = 3 ** self.p
+                    next_width_fre = 3 ** self.p * len(available)
+                else:
+                    next_depth_fre = 3 ** (self.p)
+                    next_width_fre = 3 ** (self.p-1) * len(available)
+            else:
+                if self.p != 5:
+                    next_depth_fre = 3 ** self.p
+                    next_width_fre = 3 ** self.p * len(available)
+                else:
+                    next_depth_fre = 3 ** (self.p)
+                    next_width_fre = 3 ** (self.p - 1) * len(available)
 
-            # if self.search_resource < depth_ + width_:
-            #     break
-
-            if self.total_resource < depth_ + width_ + next_depth_fre + width_fre:
+            if self.total_resource < depth_ + width_ + next_depth_fre + next_width_fre:
                 break
 
         wandb.log({
@@ -282,8 +303,8 @@ class MCTS(object):
 
             "resource/total_resource_usage": depth_ + width_,
             "resource/total_planning_depth": n + 1,
-            "resource/remain_resource": self.total_resource - depth_ - width_ - depth_fre - width_fre,
-            "resource/remain_resource_ratio": (self.total_resource - depth_ - width_ - depth_fre - width_fre) / self.total_resource
+            "resource/remain_resource": self.total_resource - depth_ - width_,
+            "resource/remain_resource_ratio": (self.total_resource - depth_ - width_ ) / self.total_resource
         })
         if return_prob == 1:
             wandb.log({
