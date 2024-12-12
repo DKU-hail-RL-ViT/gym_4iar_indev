@@ -134,7 +134,7 @@ class MCTS(object):
         depth_fre = 0
         width_fre = 0
 
-        while self.search_resource > 3 ** (self.p) + 3 ** (self.p) * len(node._children):
+        while True:
             if node.is_leaf():
                 break
             assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
@@ -148,9 +148,6 @@ class MCTS(object):
 
         # while (self.p <= 4) and (self.search_resource >= 3 ** self.p + 3 ** self.p * len(available)):
         while self.search_resource >= 3 ** self.p + 3 ** self.p * len(available):
-
-            # print(3 ** (self.p))
-            # print(3 ** (self.p) * len(available))
 
             if len(available) > 0:
                 n_indices = get_fixed_indices(self.p)
@@ -191,7 +188,7 @@ class MCTS(object):
                     depth_fre += (3 ** (self.p-1))
                     width_fre += (3 ** (self.p-1)) * len(available)
 
-                    return available, depth_fre, width_fre
+                    return depth_fre, width_fre
 
                 else:
                     self.update_depth_search_resource(self.p)
@@ -219,7 +216,7 @@ class MCTS(object):
                     depth_fre += 3 ** (self.p-1)
                     width_fre += 3 ** (self.p-1) * len(available)
 
-                    return available, depth_fre, width_fre
+                    return depth_fre, width_fre
 
             else:
                 if self.rl_model == "EQRDQN":
@@ -241,10 +238,10 @@ class MCTS(object):
                         leaf_value = -1.0
                 node.update_recursive(-leaf_value)
 
-                width_fre += 0
-                depth_fre += 0
+                width_fre += 3 ** self.p
+                depth_fre += 3 ** self.p
 
-                return available, width_fre, depth_fre
+                return width_fre, depth_fre
 
     def get_move_probs(self, env, temp, return_prob=None):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -256,21 +253,22 @@ class MCTS(object):
         width_ = 0
         width_fre = 0
         depth_fre = 0
-        next_width_fre = 0
+        next_depth_fre = 0
 
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
-            available, depth_fre, width_fre = self._playout(env_copy)
+            depth_fre, width_fre = self._playout(env_copy)
 
             depth_ += depth_fre
             width_ += width_fre
 
-            if width_fre != 0:
-                next_width_fre = width_fre ** (self.p / (self.p-1))
-            else:
-                next_width_fre = width_fre
+            if width_fre != 0 and self.p != 1:
+                next_depth_fre = 3 ** self.p
 
-            if self.total_resource < depth_ + width_ + depth_fre + next_width_fre:
+            # if self.search_resource < depth_ + width_:
+            #     break
+
+            if self.total_resource < depth_ + width_ + next_depth_fre + width_fre:
                 break
 
         wandb.log({
