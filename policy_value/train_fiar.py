@@ -12,6 +12,7 @@ from fiar_env import Fiar, turn, action2d_ize
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
 from policy_value.efficient_mcts import EMCTSPlayer
+from policy_value.file_utils import *
 
 # from policy_value.policy_value_mcts_pure import RandomAction
 
@@ -28,7 +29,7 @@ parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0
 # EQRDQN eps 0.7 (2, 5913), (10, 26325), (50, 139239), (100, 278073),(400, 1065717)
 # EQRQAC (2, 5913), (10, 29231), (50, 144828), (100, 286578),(400, 1137078)
 
-parser.add_argument('--search_resource', type=int, default=26325)
+parser.add_argument('--search_resource', type=int, default=5913)
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
@@ -80,37 +81,6 @@ rl_model = args.rl_model
 quantiles = args.quantiles
 epsilon = args.epsilon
 search_resource = args.search_resource
-
-
-def create_models(rl_model, epsilon=None, n_playout=None, quantiles=None, search_resource=None, i=None):
-    if rl_model == "DQN":
-        model_file = f"Training/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{i + 1:03d}.pth"
-        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_eps{epsilon}/train_{i + 1:03d}.pth"
-
-    elif rl_model in ["QRDQN"]:
-        model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{i + 1:03d}.pth"
-        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}/train_{i + 1:03d}.pth"
-
-    elif rl_model in ["EQRDQN"]:
-        model_file = f"Training/{rl_model}_resource{search_resource}_eps{epsilon}/train_{i + 1:03d}.pth"
-        eval_model_file = f"Eval/{rl_model}_resource{search_resource}_eps{epsilon}/train_{i + 1:03d}.pth"
-
-    elif rl_model in ["AC", "QAC"]:
-        model_file = f"Training/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}/train_{i + 1:03d}.pth"
-
-    elif rl_model in ["QRAC", "QRQAC"]:
-        model_file = f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
-        eval_model_file = f"Eval/{rl_model}_nmcts{n_playout}_quantiles{quantiles}/train_{i + 1:03d}.pth"
-
-    elif rl_model in ["EQRQAC"]:
-        model_file = f"Training/{rl_model}_resource{search_resource}/train_{i + 1:03d}.pth"
-        eval_model_file = f"Eval/{rl_model}_resource{search_resource}/train_{i + 1:03d}.pth"
-
-    else:
-        assert False, "Model is not defined"
-
-    return model_file, eval_model_file
 
 
 def get_equi_data(env, play_data):
@@ -309,44 +279,8 @@ def start_play(env, player1, player2):
 
 if __name__ == '__main__':
     # wandb intialize
-    if rl_model == "DQN":
-        wandb.init(entity="hails",
-                   project="gym_4iar_sh36",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Eps" + str(epsilon),
-                   config=args.__dict__
-                   )
-    elif rl_model in ["QRDQN"]:
-        wandb.init(entity="hails",
-                   project="gym_4iar_sh36",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles) + "-Eps" + str(epsilon),
-                   config=args.__dict__
-                   )
-    elif rl_model in ["EQRDQN"]:
-        wandb.init(entity="hails",
-                   project="gym_4iar_sh36",
-                   name="FIAR-" + rl_model + "-Resource" + str(search_resource) + "-Eps" + str(epsilon),
-                   config=args.__dict__
-                   )
-    elif rl_model in ["AC", "QAC"]:
-        wandb.init(entity="hails",
-                   project="gym_4iar_sh36",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout),
-                   config=args.__dict__
-                   )
-    elif rl_model in ["QRAC", "QRQAC"]:
-        wandb.init(entity="hails",
-                   project="gym_4iar_sh36",
-                   name="FIAR-" + rl_model + "-MCTS" + str(n_playout) + "-Quantiles" + str(quantiles),
-                   config=args.__dict__
-                   )
-    elif rl_model in ["EQRQAC"]:
-        wandb.init(entity="hails",
-                   project="gym_4iar_sh36",
-                   name="FIAR-" + rl_model + "-Resource" + str(search_resource),
-                   config=args.__dict__
-                   )
-    else:
-        assert False, "Model is not defined"
+    initialize_wandb(rl_model, args, n_playout=n_playout, epsilon=epsilon,
+                     quantiles=quantiles, search_resource=search_resource)
 
     env = Fiar()
     obs, _ = env.reset()
@@ -408,43 +342,8 @@ if __name__ == '__main__':
                 policy_value_net.save_model(eval_model_file)
 
             else:
-                if rl_model == "DQN":
-                    existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}_eps{epsilon}")
-                                      if file.startswith('train_')]
-
-                elif rl_model in ["QRDQN"]:
-                    existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in
-                                      os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}")
-                                      if file.startswith('train_')]
-
-                elif rl_model in ["EQRDQN"]:
-                    existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in
-                                      os.listdir(f"Training/{rl_model}_resource{search_resource}_eps{epsilon}")
-                                      if file.startswith('train_')]
-
-                elif rl_model in ["AC", "QAC"]:
-                    existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in os.listdir(f"Training/{rl_model}_nmcts{n_playout}")
-                                      if file.startswith('train_')]
-
-                elif rl_model in ["QRAC", "QRQAC"]:
-                    existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in
-                                      os.listdir(f"Training/{rl_model}_nmcts{n_playout}_quantiles{quantiles}")
-                                      if file.startswith('train_')]
-
-                elif rl_model in ["EQRQAC"]:
-                    existing_files = [int(file.split('_')[-1].split('.')[0])
-                                      for file in
-                                      os.listdir(f"Training/{rl_model}_resource{search_resource}")
-                                      if file.startswith('train_')]
-
-                else:
-                    assert False, "Model is not defined"
-
+                existing_files = get_existing_files(rl_model, n_playout=n_playout, epsilon=epsilon,
+                                                    quantiles=quantiles, search_resource=search_resource)
                 old_i = max(existing_files)
                 best_old_model, _ = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, (old_i-1))
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantiles,
