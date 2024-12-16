@@ -2,8 +2,6 @@ import numpy as np
 import copy
 import torch
 import wandb
-from matplotlib.style import available
-from fiar_env import Fiar
 
 
 def is_float(a):
@@ -239,11 +237,11 @@ class MCTS(object):
                 node.update_recursive(-leaf_value)
 
                 width_fre += 3 ** self.p
-                depth_fre += 3 ** self.p
+                depth_fre += 3 ** self.p * 36  # when len(available) == 0,  action prob = uniform distribution
 
-                return  len(available), width_fre, depth_fre
+                return len(available), width_fre, depth_fre
 
-    def get_move_probs(self, env, temp, return_prob=None):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
@@ -251,45 +249,21 @@ class MCTS(object):
         """
         depth_, width_ = 0, 0
         depth_fre, width_fre = 0, 0
-        next_depth_fre, next_width_fre = 0, 0
 
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
             avail, depth_fre, width_fre = self._playout(env_copy)
-
             depth_ += depth_fre
             width_ += width_fre
 
-            # if avail != 0:
-            #     if self.p != 5:
-            #         next_depth_fre = 3 ** self.p
-            #         next_width_fre = 3 ** self.p * avail
-            #     else:
-            #         next_depth_fre = 3 ** (self.p-1)
-            #         next_width_fre = 3 ** (self.p-1) * avail
-            # else:
-            #     if self.p != 5:
-            #         next_depth_fre = 3 ** self.p
-            #         next_width_fre = 3 ** self.p * avail
-            #     else:
-            #         next_depth_fre = 3 ** (self.p - 1)
-            #         next_width_fre = 3 ** (self.p - 1) * avail
-            if avail != 0:
-                if self.p != 5:
-                    next_depth_fre = 3 ** self.p
-                    next_width_fre = 3 ** self.p * len(available)
-                else:
-                    next_depth_fre = 3 ** (self.p)
-                    next_width_fre = 3 ** (self.p-1) * len(available)
+            if self.p != 5:
+                next_depth_fre = 3 ** self.p
+                next_width_fre = 3 ** self.p * avail
             else:
-                if self.p != 5:
-                    next_depth_fre = 3 ** self.p
-                    next_width_fre = 3 ** self.p * len(available)
-                else:
-                    next_depth_fre = 3 ** (self.p)
-                    next_width_fre = 3 ** (self.p - 1) * len(available)
+                next_depth_fre = 3 ** self.p
+                next_width_fre = 3 ** (self.p - 1) * avail
 
-            if self.total_resource < depth_ + width_ + next_depth_fre + next_width_fre:
+            if self.search_resource < 0 or self.total_resource < depth_ + width_ + next_depth_fre + next_width_fre:
                 break
 
         wandb.log({
@@ -304,34 +278,8 @@ class MCTS(object):
             "resource/total_resource_usage": depth_ + width_,
             "resource/total_planning_depth": n + 1,
             "resource/remain_resource": self.total_resource - depth_ - width_,
-            "resource/remain_resource_ratio": (self.total_resource - depth_ - width_ ) / self.total_resource
+            "resource/remain_resource_ratio": (self.total_resource - depth_ - width_) / self.total_resource
         })
-        if return_prob == 1:
-            wandb.log({
-                "selfplay/depth": depth_fre,
-                "selfplay/depth_resource_usage": depth_,
-                "selfplay/depth_ratio": depth_ / (depth_ + width_+1),
-
-                "selfplay/width": width_fre,
-                "selfplay/width_resource_usage": width_,
-                "selfplay/width_ratio": width_ / (depth_ + width_+1),
-
-                "selfplay/total_resource_usage": depth_ + width_,
-                "selfplay/total_planning_depth": n + 1
-            })
-        else:  # eval
-            wandb.log({
-                "eval/depth": depth_fre,
-                "eval/depth_resource_usage": depth_,
-                "eval/depth_ratio": depth_ / (depth_ + width_+1),
-
-                "eval/width": width_fre,
-                "eval/width_resource_usage": width_,
-                "eval/width_ratio": width_ / (depth_ + width_+1),
-
-                "eval/total_resource_usage": depth_ + width_,
-                "eval/total_planning_depth": n + 1
-            })
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -393,7 +341,7 @@ class EMCTSPlayer(object):
         self.mcts.search_resource = self.resource
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, temp, return_prob)  # env.state_.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)
