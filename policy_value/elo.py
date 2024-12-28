@@ -230,6 +230,7 @@ if __name__ == '__main__':
     player_list.reverse()
 
     # Write player_list information to CSV
+    os.makedirs('./gamefile', exist_ok=True)
     with open('./gamefile/player_elo_result.csv', 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["Player Name", "Elo Rating"])
