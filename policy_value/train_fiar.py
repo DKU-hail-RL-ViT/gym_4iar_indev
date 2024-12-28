@@ -19,7 +19,7 @@ from policy_value.file_utils import *
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=50)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=400)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
 parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0.4, 0.7
 
@@ -32,9 +32,9 @@ parser.add_argument('--epsilon', type=float, default=0.1)  # compare with 0.1, 0
 parser.add_argument('--search_resource', type=int, default=5913)
 
 """ RL model """
-# parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
+parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
+# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver
 # # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
