@@ -1,10 +1,12 @@
 from fiar_env import Fiar
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
+from policy_value.efficient_mcts import EMCTSPlayer
 
 import argparse
 import csv
 import os
+import wandb
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--init_elo', type=int, default=1500)  # initial Elo rating
@@ -17,65 +19,61 @@ k_factor = args.k_factor
 c_puct = args.c_puct
 
 
-def create_player(model, playout, quantile=None, epsilon=None):
+def create_player(model, playout=None, search_resource=None, quantile=None, epsilon=None):
     """
-    MCTSPlayer 객체를 생성하는 함수.
+    MCTSPlayer ??? ???? ??.
 
     Args:
-        model (str): RL model ("AC", "QAC", "QRAC", "QRQAC", "DQN", "QRDQN" 중 하나)
+        model (str): RL model ("AC", "QAC", "QRAC", "QRQAC", "DQN", "QRDQN" ? ??)
         playout (int): number of playouts
         quantile (int, optional): num of Quantile
         epsilon (float, optional): Epsilon value
 
     Returns:
-        player: 생성된 MCTSPlayer object
+        player: ??? MCTSPlayer object
     """
-    model_file = f"Eval/{model}_nmcts{playout}"
+    model_file = f"Eval/{model}"
+
+    if model in ["EQRDQN", "EQRQAC"]:
+        model_file += f"_resource{search_resource}"
+    if playout is not None:
+        model_file += f"_nmcts{playout}"
     if quantile is not None:
         model_file += f"_quantiles{quantile}"
     if epsilon is not None:
         model_file += f"_eps{epsilon}"
+
     model_file += "/train_100.pth"
 
     if not os.path.exists(model_file):
         return None
 
-    policy_value_net = PolicyValueNet(
-        env.state().shape[1],
-        env.state().shape[2],
-        quantile if model in ["QRAC", "QRQAC", "QRDQN"] else None,
-        model_file=model_file,
-        rl_model=model
-    )
+    policy_value_net = PolicyValueNet(env.state().shape[1], env.state().shape[2],
+                                      quantile if model in ["QRAC", "QRQAC", "QRDQN"]
+                                      else (81 if model in ["EQRDQN", "EQRQAC"] else None),
+                                      model_file=model_file, rl_model=model
+                                      )
 
-    player = MCTSPlayer(
-        policy_value_net.policy_value_fn,
-        c_puct,
-        playout,
-        epsilon if model in ["DQN", "QRDQN"] else None,
-        is_selfplay=0,
-        rl_model=model
-    )
+    if model in ["DQN", "QRDQN", "QRAC", "QRQAC"]:
+        player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, playout, quantile, epsilon,
+                            is_selfplay=0, rl_model=model
+                            )
 
-    player.name = f"{model}_nmcts{playout}"
-    if quantile is not None:
-        player.name += f"_quantiles{quantile}"
-    if epsilon is not None:
-        player.name += f"_eps{epsilon}"
+    elif model in ["AC", "QAC"]:
+        player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, playout, epsilon,
+                            is_selfplay=0, rl_model=model
+                            )
+
+    else:  # EQRQAC, EQRDQN
+        playout = 40000
+        player = EMCTSPlayer(policy_value_net.policy_value_fn, c_puct, playout,
+                             epsilon if model in ["EQRDQN"] else None, search_resource,
+                             is_selfplay=0, rl_model=model
+                             )
+
+    player.name = model_file
 
     return player
-
-
-def wins(winner):
-    if winner == 1:  # p1 = black & p1 wins
-        result = 1
-    elif winner == -0.5:  # p1 = black & p2 wins
-        result = 0
-    elif winner == -1:  # p1 = black & draw
-        result = 0.5
-    else:
-        assert False  # should not reach here
-    return result
 
 
 def start_play(env, player1, player2):
@@ -125,13 +123,12 @@ def update_elo(winner_elo, loser_elo, draw=False, k=k_factor):
 def simulate_game(player1, player2):
     # This is a stub function that randomly determines the outcome
     winner = start_play(env, player1, player2)
-    result = wins(winner)
 
-    if result == 1:
+    if winner == 1:
         player1.elo, player2.elo = update_elo(player1.elo, player2.elo)
-    elif result == 0:
+    elif winner == -1:
         player2.elo, player1.elo = update_elo(player2.elo, player1.elo)
-    elif result == 0.5:
+    elif winner == 0:
         player1.elo, player2.elo = update_elo(player1.elo, player2.elo, draw=True)
     else:
         assert False
@@ -139,50 +136,73 @@ def simulate_game(player1, player2):
 
 if __name__ == '__main__':
 
+    wandb.init(entity="hails",
+               project="gym_4iar_elo",
+               name="elo_test",
+               config=args.__dict__
+               )
+
     env = Fiar()
     obs, _ = env.reset()
 
-    models = ["AC", "QRAC", "QAC", "QRQAC", "DQN", "QRDQN"]
+    models = ["AC", "QRAC", "QAC", "QRQAC", "DQN", "QRDQN", "EQRDQN", "EQRQAC"]
     num_playout = [2, 10, 50, 100, 400]
     num_quantile = [3, 9, 27, 81]
     num_epsilon = [0.1, 0.4, 0.7]
+
+    search_resource_qrdqn = [5913, 26325, 120366, 246969, 951426, 5913, 26325, 137376, 271512, 1066365,
+                             5913, 26325, 139239, 278073, 1065717]
+    index_slices = [5, 10, 15]
+
+    search_resource_qrqac = [5913, 29231, 144828, 286578, 1137078]
+
     player_list = []
     model_counts = {model: 0 for model in models}
 
     for model in models:
         if model in ["AC", "QAC"]:
             for playout in num_playout:
-                player = create_player(model, playout)
-                if player:
-                    player_list.append(player)
-                    model_counts[model] += 1
+                player = create_player(model=model, playout=playout)
+                player_list.append(player)
+                model_counts[model] += 1
 
         elif model in ["QRAC", "QRQAC"]:
             for playout in num_playout:
                 for quantile in num_quantile:
-                    player = create_player(model, playout, quantile=quantile)
-                    if player:
-                        player_list.append(player)
-                        model_counts[model] += 1
+                    player = create_player(model=model, playout=playout, quantile=quantile)
+                    player_list.append(player)
+                    model_counts[model] += 1
 
         elif model in ["DQN"]:
             for playout in num_playout:
                 for epsilon in num_epsilon:
-                    player = create_player(model, playout, epsilon=epsilon)
-                    if player:
-                        player_list.append(player)
-                        model_counts[model] += 1
+                    player = create_player(model=model, playout=playout, epsilon=epsilon)
+                    player_list.append(player)
+                    model_counts[model] += 1
 
         elif model in ["QRDQN"]:
             for playout in num_playout:
                 for quantile in num_quantile:
                     for epsilon in num_epsilon:
-                        player = create_player(model, playout, quantile=quantile, epsilon=epsilon)
-                        if player:
-                            player_list.append(player)
-                            model_counts[model] += 1
+                        player = create_player(model=model, playout=playout, quantile=quantile, epsilon=epsilon)
+                        player_list.append(player)
+                        model_counts[model] += 1
 
+        elif model == "EQRDQN":
+            for i, epsilon in enumerate(num_epsilon):
+                start_idx = index_slices[i - 1] if i > 0 else 0
+                end_idx = index_slices[i]
 
+                for resource in search_resource_qrdqn[start_idx:end_idx]:
+                    player = create_player(model=model, search_resource=resource, epsilon=epsilon)
+                    player_list.append(player)
+                    model_counts[model] += 1
+
+        elif model == "EQRQAC":
+            for resource in search_resource_qrqac:
+                player = create_player(model=model, search_resource=resource)
+                player_list.append(player)
+                model_counts[model] += 1
         else:
             raise RuntimeError("Unexpected model type.")
 

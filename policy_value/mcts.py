@@ -116,23 +116,32 @@ class MCTS(object):
         self.search_resource = search_resource
         self.quantiles = quantiles
 
-    def _playout(self, env):
+    def _playout(self, env, game_iter):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
-        depth_fre = 0
-        width_fre = 0
+        depth_times = 0
+        width_times = 0
+        planning_depth = 0
 
         while (1):
+            if self.rl_model in ["AC", "QAC", "DQN"]:
+                planning_depth += 1
+            else:
+                planning_depth += self.quantiles
+
             if node.is_leaf():
                 if self.rl_model in ["AC", "QAC", "DQN"]:
-                    depth_fre += 1
+                    depth_times += 1
                 else:
-                    depth_fre += self.quantiles
+                    depth_times += self.quantiles
                 break
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
+
+            if game_iter+1 in [1, 10, 20, 31, 50, 100]:
+                graph_name = f"depth_fre_game_iter_{game_iter+1}"
+                wandb.log({graph_name: planning_depth})
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
@@ -213,16 +222,16 @@ class MCTS(object):
             action_probs = zip(available, action_probs[available])
 
         if self.rl_model in ["AC"]:
-            width_fre += 0
+            width_times += 0
 
         elif self.rl_model in ["QRAC"]:
-            width_fre += self.quantiles
+            width_times += self.quantiles
 
         elif self.rl_model in ["DQN", "QAC"]:
-            width_fre += len(available)
+            width_times += len(available)
 
         elif self.rl_model in ["QRDQN", "QRQAC"]:
-            width_fre += self.quantiles * len(available)
+            width_times += self.quantiles * len(available)
 
         # Check for end of game
         end, winners = env.winner()
@@ -238,9 +247,9 @@ class MCTS(object):
                 leaf_value = -1.0
         node.update_recursive(-leaf_value)
 
-        return depth_fre, width_fre
+        return depth_times, width_times
 
-    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, game_iter, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
@@ -250,7 +259,7 @@ class MCTS(object):
 
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
-            depth_fre, width_fre = self._playout(env_copy)
+            depth_fre, width_fre = self._playout(env_copy, game_iter)
             depth_ += depth_fre
             width_ += width_fre
 
@@ -316,12 +325,12 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, game_iter=0, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, game_iter, temp)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)
