@@ -29,24 +29,24 @@ QAC_nmcts10,1394.8
 QAC_nmcts50,1867.5
 QAC_nmcts100,1874.4
 QAC_nmcts400,2072
-QRQAC_nmcts2_quantiles3 ,1195.8
-QRQAC_nmcts2_quantiles9 ,1411.3
+QRQAC_nmcts2_quantiles3,1195.8
+QRQAC_nmcts2_quantiles9,1411.3
 QRQAC_nmcts2_quantiles27,1235.1
 QRQAC_nmcts2_quantiles81,1282.6
-QRQAC_nmcts10_quantiles3 ,1501.1
-QRQAC_nmcts10_quantiles9 ,1494.5
+QRQAC_nmcts10_quantiles3,1501.1
+QRQAC_nmcts10_quantiles9,1494.5
 QRQAC_nmcts10_quantiles27,1464.2
 QRQAC_nmcts10_quantiles81,1294.4
-QRQAC_nmcts50_quantiles3 ,1855.1
-QRQAC_nmcts50_quantiles9 ,1848.9
+QRQAC_nmcts50_quantiles3,1855.1
+QRQAC_nmcts50_quantiles9,1848.9
 QRQAC_nmcts50_quantiles27,1847.6
 QRQAC_nmcts50_quantiles81,1777.5
-QRQAC_nmcts100_quantiles3 ,1843.1
-QRQAC_nmcts100_quantiles9 ,1867.8
+QRQAC_nmcts100_quantiles3,1843.1
+QRQAC_nmcts100_quantiles9,1867.8
 QRQAC_nmcts100_quantiles27,1880.9
 QRQAC_nmcts100_quantiles81,1982
-QRQAC_nmcts400_quantiles3 ,2096
-QRQAC_nmcts400_quantiles9 ,1955.4
+QRQAC_nmcts400_quantiles3,2096
+QRQAC_nmcts400_quantiles9,1955.4
 QRQAC_nmcts400_quantiles27,2090.6
 QRQAC_nmcts400_quantiles81,2036.6
 DQN_nmcts2_eps0.1,993.4
@@ -125,7 +125,7 @@ QRDQN_nmcts400_quantiles81_eps0.1,1541.2
 QRDQN_nmcts400_quantiles81_eps0.4,1412.5
 QRDQN_nmcts400_quantiles81_eps0.7,1552.5
 EQRDQN_resource5913_eps0.1,1178.6
-EQRDQN_resource26325_eps0.1 ,1103.3
+EQRDQN_resource26325_eps0.1,1103.3
 EQRDQN_resource120366_eps0.1,1377.2
 EQRDQN_resource246969_eps0.1,1549.2
 EQRDQN_resource951426_eps0.1,1653
