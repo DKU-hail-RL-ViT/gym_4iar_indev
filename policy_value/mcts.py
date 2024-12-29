@@ -127,10 +127,11 @@ class MCTS(object):
         planning_depth = 0
 
         while (1):
-            if self.rl_model in ["AC", "QAC", "DQN"]:
-                planning_depth += 1
-            else:
-                planning_depth += self.quantiles
+            planning_depth += 1
+            # if self.rl_model in ["AC", "QAC", "DQN"]: # 주석처리하고 위에 걸로
+            #     planning_depth += 1
+            # else:
+            #     planning_depth += self.quantiles
 
             if node.is_leaf():
                 if self.rl_model in ["AC", "QAC", "DQN"]:
