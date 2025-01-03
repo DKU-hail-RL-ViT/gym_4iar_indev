@@ -123,20 +123,25 @@ class MCTS(object):
         self.total_resource = search_resource
         self.p = 1
 
-    def _playout(self, env):
+    def _playout(self, env, game_iter):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
         threshold = 0.1
-        depth_fre = 0
-        width_fre = 0
+        depth_times, width_times = 0, 0
+        planning_depth = 0
 
         while True:
+            planning_depth += 1
+
             if node.is_leaf():
                 break
-            assert len(np.where(np.abs(env.state_[3].reshape((-1,)) - 1))[0]) == len(node._children)
+
+            if game_iter+1 in [1, 10, 20, 31, 50, 100]:
+                graph_name = f"depth_fre/game_iter_{game_iter+1}"
+                wandb.log({graph_name: planning_depth})
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
@@ -144,7 +149,6 @@ class MCTS(object):
 
         self.p = 1
         available, action_probs, leaf_value = self._policy(env)
-
         while self.search_resource >= 3 ** self.p + 3 ** self.p * len(available):
 
             if len(available) > 0:
@@ -183,10 +187,10 @@ class MCTS(object):
                             leaf_value = -1.0
                     node.update_recursive(-leaf_value)
 
-                    depth_fre += (3 ** (self.p-1))
-                    width_fre += (3 ** (self.p-1)) * len(available)
+                    depth_times += (3 ** (self.p-1))
+                    width_times += (3 ** (self.p-1)) * len(available)
 
-                    return len(available), depth_fre, width_fre
+                    return len(available), depth_times, width_times
 
                 else:
                     self.update_depth_search_resource(self.p)
@@ -211,10 +215,10 @@ class MCTS(object):
                             leaf_value = -1.0
                     node.update_recursive(-leaf_value)
 
-                    depth_fre += 3 ** (self.p-1)
-                    width_fre += 3 ** (self.p-1) * len(available)
+                    depth_times += 3 ** (self.p-1)
+                    width_times += 3 ** (self.p-1) * len(available)
 
-                    return len(available), depth_fre, width_fre
+                    return len(available), depth_times, width_times
 
             else:
                 if self.rl_model == "EQRDQN":
@@ -236,12 +240,12 @@ class MCTS(object):
                         leaf_value = -1.0
                 node.update_recursive(-leaf_value)
 
-                width_fre += 3 ** self.p
-                depth_fre += 3 ** self.p * 36  # when len(available) == 0,  action prob = uniform distribution
+                depth_times += 3 ** self.p
+                width_times += 3 ** self.p * 36  # when len(available) == 0,  action prob = uniform distribution
 
-                return len(available), width_fre, depth_fre
+                return len(available), depth_times, width_times
 
-    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, game_iter, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
@@ -252,7 +256,7 @@ class MCTS(object):
 
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
-            avail, depth_fre, width_fre = self._playout(env_copy)
+            avail, depth_fre, width_fre = self._playout(env_copy, game_iter)
             depth_ += depth_fre
             width_ += width_fre
 
@@ -276,7 +280,6 @@ class MCTS(object):
             "resource/width_ratio": width_ / (depth_ + width_+1),
 
             "resource/total_resource_usage": depth_ + width_,
-            "resource/total_planning_depth": n + 1,
             "resource/remain_resource": self.total_resource - depth_ - width_,
             "resource/remain_resource_ratio": (self.total_resource - depth_ - width_) / self.total_resource
         })
@@ -335,13 +338,13 @@ class EMCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, game_iter=0, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
         self.mcts.search_resource = self.resource
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
+            acts, probs = self.mcts.get_move_probs(env, game_iter, temp)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)

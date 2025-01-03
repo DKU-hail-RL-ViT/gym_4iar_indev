@@ -6,6 +6,8 @@ import torch.nn.functional as F
 import numpy as np
 import os
 
+from torchvision.models import resnet34
+
 
 def set_learning_rate(optimizer, lr):
     """Sets the learning rate to the given value"""
@@ -128,9 +130,9 @@ class AC(nn.Module):
 
     def __init__(self, board_width, board_height):
         super(AC, self).__init__()
-
         self.board_width = board_width
         self.board_height = board_height
+
         # common layers
         self.conv1 = nn.Conv2d(5, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
