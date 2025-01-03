@@ -122,17 +122,11 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
-        depth_times = 0
-        width_times = 0
+        depth_times, width_times = 0, 0
         planning_depth = 0
 
         while (1):
             planning_depth += 1
-            # if self.rl_model in ["AC", "QAC", "DQN"]: # 주석처리하고 위에 걸로
-            #     planning_depth += 1
-            # else:
-            #     planning_depth += self.quantiles
-
             if node.is_leaf():
                 if self.rl_model in ["AC", "QAC", "DQN"]:
                     depth_times += 1
@@ -141,7 +135,7 @@ class MCTS(object):
                 break
 
             if game_iter+1 in [1, 10, 20, 31, 50, 100]:
-                graph_name = f"depth_fre_game_iter_{game_iter+1}"
+                graph_name = f"depth_fre/game_iter_{game_iter+1}"
                 wandb.log({graph_name: planning_depth})
 
             # Greedily select next move.
