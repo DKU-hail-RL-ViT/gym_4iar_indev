@@ -123,7 +123,7 @@ class MCTS(object):
         self.total_resource = search_resource
         self.p = 1
 
-    def _playout(self, env, game_iter):
+    def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
@@ -138,10 +138,6 @@ class MCTS(object):
 
             if node.is_leaf():
                 break
-
-            if game_iter+1 in [1, 10, 20, 31, 50, 100]:
-                graph_name = f"depth_fre/game_iter_{game_iter+1}"
-                wandb.log({graph_name: planning_depth})
 
             # Greedily select next move.
             action, node = node.select(self._c_puct)
@@ -190,7 +186,7 @@ class MCTS(object):
                     depth_times += (3 ** (self.p-1))
                     width_times += (3 ** (self.p-1)) * len(available)
 
-                    return len(available), depth_times, width_times
+                    return len(available), planning_depth, depth_times, width_times
 
                 else:
                     self.update_depth_search_resource(self.p)
@@ -218,7 +214,7 @@ class MCTS(object):
                     depth_times += 3 ** (self.p-1)
                     width_times += 3 ** (self.p-1) * len(available)
 
-                    return len(available), depth_times, width_times
+                    return len(available), planning_depth, depth_times, width_times
 
             else:
                 if self.rl_model == "EQRDQN":
@@ -243,7 +239,7 @@ class MCTS(object):
                 depth_times += 3 ** self.p
                 width_times += 3 ** self.p * 36  # when len(available) == 0,  action prob = uniform distribution
 
-                return len(available), depth_times, width_times
+                return len(available), planning_depth, depth_times, width_times
 
     def get_move_probs(self, env, game_iter, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -256,7 +252,7 @@ class MCTS(object):
 
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
-            avail, depth_fre, width_fre = self._playout(env_copy, game_iter)
+            avail, planning_depth, depth_fre, width_fre = self._playout(env_copy)
             depth_ += depth_fre
             width_ += width_fre
 
@@ -266,6 +262,10 @@ class MCTS(object):
             else:
                 next_depth_fre = 3 ** self.p
                 next_width_fre = 3 ** (self.p - 1) * avail
+
+            if game_iter+1 in [1, 10, 20, 31, 50, 100]:
+                graph_name = f"depth_fre/game_iter_{game_iter+1}"
+                wandb.log({graph_name: planning_depth})
 
             if self.search_resource < 0 or self.total_resource < depth_ + width_ + next_depth_fre + next_width_fre:
                 break
