@@ -2,7 +2,7 @@ import os
 import wandb
 
 
-def initialize_wandb(rl_model, args, n_playout=None, epsilon=None, quantiles=None, search_resource=None):
+def initialize_wandb(rl_model, args, n_playout=None, epsilon=None, quantiles=None, effi_n_playout=None):
     common_config = {
         "entity": "hails",
         "project": "gym_4iar_sh2",
@@ -18,16 +18,16 @@ def initialize_wandb(rl_model, args, n_playout=None, epsilon=None, quantiles=Non
     elif rl_model in ["QRAC", "QRQAC"]:
         run_name = f"FIAR-{rl_model}-MCTS{n_playout}-Quantiles{quantiles}"
     elif rl_model == "EQRDQN":
-        run_name = f"FIAR-{rl_model}-Resource{search_resource}-Eps{epsilon}"
+        run_name = f"FIAR-{rl_model}-MCTS{effi_n_playout}-Eps{epsilon}"
     elif rl_model == "EQRQAC":
-        run_name = f"FIAR-{rl_model}-Resource{search_resource}"
+        run_name = f"FIAR-{rl_model}-MCTS{effi_n_playout}"
     else:
         raise ValueError("Model is not defined")
 
     wandb.init(name=run_name, **common_config)
 
 
-def create_models(rl_model, epsilon=None, n_playout=None, quantiles=None, search_resource=None, i=None):
+def create_models(rl_model, epsilon=None, n_playout=None, quantiles=None, effi_n_playout=None, i=None):
     """
     Generate training and evaluation model file paths dynamically based on the rl_model and parameters.
     """
@@ -40,12 +40,12 @@ def create_models(rl_model, epsilon=None, n_playout=None, quantiles=None, search
     model_params = {
         "DQN": f"_nmcts{n_playout}_eps{epsilon}",
         "QRDQN": f"_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}",
-        "EQRDQN": f"_resource{search_resource}_eps{epsilon}",
+        "EQRDQN": f"_nmcts{effi_n_playout}_eps{epsilon}",
         "AC": f"_nmcts{n_playout}",
         "QAC": f"_nmcts{n_playout}",
         "QRAC": f"_nmcts{n_playout}_quantiles{quantiles}",
         "QRQAC": f"_nmcts{n_playout}_quantiles{quantiles}",
-        "EQRQAC": f"_resource{search_resource}"
+        "EQRQAC": f"_nmcts{effi_n_playout}"
     }
 
     if rl_model not in model_params:
@@ -62,7 +62,7 @@ def create_models(rl_model, epsilon=None, n_playout=None, quantiles=None, search
     return model_file, eval_model_file
 
 
-def get_existing_files(rl_model, n_playout=None, epsilon=None, quantiles=None, search_resource=None):
+def get_existing_files(rl_model, n_playout=None, epsilon=None, quantiles=None, effi_n_playout=None):
     """
     Retrieve a list of existing file indices based on the model type and parameters.
     """
@@ -72,13 +72,13 @@ def get_existing_files(rl_model, n_playout=None, epsilon=None, quantiles=None, s
     elif rl_model == "QRDQN":
         path = f"{base_path}/{rl_model}_nmcts{n_playout}_quantiles{quantiles}_eps{epsilon}"
     elif rl_model == "EQRDQN":
-        path = f"{base_path}/{rl_model}_resource{search_resource}_eps{epsilon}"
+        path = f"{base_path}/{rl_model}_nmcts{effi_n_playout}_eps{epsilon}"
     elif rl_model in ["AC", "QAC"]:
         path = f"{base_path}/{rl_model}_nmcts{n_playout}"
     elif rl_model in ["QRAC", "QRQAC"]:
         path = f"{base_path}/{rl_model}_nmcts{n_playout}_quantiles{quantiles}"
     elif rl_model == "EQRQAC":
-        path = f"{base_path}/{rl_model}_resource{search_resource}"
+        path = f"{base_path}/{rl_model}_nmcts{effi_n_playout}"
     else:
         raise ValueError("Model is not defined")
 

@@ -5,36 +5,34 @@ import numpy as np
 import torch
 
 from collections import defaultdict, deque
-from fiar_env import *
+from fiar_env import Fiar, turn, action2d_ize
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
 from policy_value.efficient_mcts import EMCTSPlayer
 from policy_value.file_utils import *
 
-# from policy_value.policy_value_mcts_pure import RandomAction
 
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=400)  # compare with 2, 10, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=3)  # compare with 3, 9, 27, 81
 parser.add_argument('--epsilon', type=float, default=0.7)  # compare with 0.1, 0.4, 0.7
 
 """Efficient Search Hyperparameter"""
-# EQRDQN eps 0.1 (2, 5913), (10, 26325), (50, 120366), (100, 246969),(400, 951426)
-# EQRDQN eps 0.4 (2, 5913), (10, 26325), (50, 137376), (100, 271512),(400, 1066365)
-# EQRDQN eps 0.7 (2, 5913), (10, 26325), (50, 139239), (100, 278073),(400, 1065717)
-# EQRQAC (2, 5913), (10, 29231), (50, 144828), (100, 286578),(400, 1137078)
+# EQRDQN (2, 5832), (10, 29160), (50, 145800), (100, 291600),(400, 1166400)
+# EQRQAC (2, 5832), (10, 29160), (50, 145800), (100, 291600),(400, 1166400)
 
-parser.add_argument('--search_resource', type=int, default=5913)
+parser.add_argument('--effi_n_playout', type=int, default=2)
+parser.add_argument('--search_resource', type=int, default=5832)
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
-# parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
+parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
+# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver
-# parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
+# # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
 
@@ -78,6 +76,7 @@ rl_model = args.rl_model
 quantiles = args.quantiles
 epsilon = args.epsilon
 search_resource = args.search_resource
+effi_n_playout = args.effi_n_playout
 
 
 def get_equi_data(env, play_data):
@@ -277,15 +276,15 @@ def start_play(env, player1, player2):
 if __name__ == '__main__':
     # wandb intialize
     initialize_wandb(rl_model, args, n_playout=n_playout, epsilon=epsilon,
-                     quantiles=quantiles, search_resource=search_resource)
+                     quantiles=quantiles, effi_n_playout=effi_n_playout)
 
     env = Fiar()
     obs, _ = env.reset()
 
-    if torch.cuda.is_available():  # Windows
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():  # Mac OS
-        device = torch.device("mps")
+    # if torch.cuda.is_available():  # Windows
+    #     device = torch.device("cuda")
+    # elif torch.backends.mps.is_available():  # Mac OS
+    #     device = torch.device("mps")
 
     turn_A = turn(obs)
     turn_B = 1 - turn_A
@@ -333,16 +332,15 @@ if __name__ == '__main__':
             if i == 0:
                 """make mcts agent training, eval version"""
                 policy_evaluate(env, curr_mcts_player, curr_mcts_player)
-                model_file, eval_model_file = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, i)
-
+                model_file, eval_model_file = create_models(rl_model, epsilon, n_playout, quantiles, effi_n_playout, i)
                 policy_value_net.save_model(model_file)
                 policy_value_net.save_model(eval_model_file)
 
             else:
                 existing_files = get_existing_files(rl_model, n_playout=n_playout, epsilon=epsilon,
-                                                    quantiles=quantiles, search_resource=search_resource)
+                                                    quantiles=quantiles, effi_n_playout=effi_n_playout)
                 old_i = max(existing_files)
-                best_old_model, _ = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, old_i-1)
+                best_old_model, _ = create_models(rl_model, epsilon, n_playout, quantiles, effi_n_playout, (old_i-1))
                 policy_value_net_old = PolicyValueNet(env.state_.shape[1], env.state_.shape[2], quantiles,
                                                       best_old_model, rl_model=rl_model)
 
@@ -371,7 +369,7 @@ if __name__ == '__main__':
                 win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
 
                 if (i + 1) % 10 == 0:  # save model 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 (1+10: total 11)
-                    _, eval_model_file = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, i)
+                    _, eval_model_file = create_models(rl_model, epsilon, n_playout, quantiles, effi_n_playout, i)
                     policy_value_net.save_model(eval_model_file)
 
                 print("Win rate : ", round(win_ratio * 100, 3), "%")
@@ -379,7 +377,7 @@ if __name__ == '__main__':
 
                 if win_ratio > 0.5:
                     old_mcts_player = curr_mcts_player
-                    model_file, _ = create_models(rl_model, epsilon, n_playout, quantiles, search_resource, i)
+                    model_file, _ = create_models(rl_model, epsilon, n_playout, quantiles, effi_n_playout, i)
                     policy_value_net.save_model(model_file)
                     print(" ---------- New best policy!!! ---------- ")
 
