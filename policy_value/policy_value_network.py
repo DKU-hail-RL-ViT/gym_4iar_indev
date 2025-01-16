@@ -6,8 +6,6 @@ import torch.nn.functional as F
 import numpy as np
 import os
 
-from torchvision.models import resnet34
-
 
 def set_learning_rate(optimizer, lr):
     """Sets the learning rate to the given value"""
