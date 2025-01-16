@@ -14,6 +14,7 @@ gamefile/
 */efficient_mcts_*.py
 */planning_depth.py
 */cal_flops.py
+*/cal_flops8.py
 
 *.log
 *.out
