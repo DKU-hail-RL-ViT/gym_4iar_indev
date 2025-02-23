@@ -5,6 +5,9 @@ import numpy as np
 import torch
 
 from collections import defaultdict, deque
+
+import wandb
+
 from fiar_env import Fiar, turn, action2d_ize
 from policy_value_network import PolicyValueNet
 from policy_value.mcts import MCTSPlayer
@@ -125,7 +128,7 @@ def collect_selfplay_data(env, mcts_player, game_iter, n_games=100):
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("\n ---------- Self-Play win: {}, tie:{}, lose: {} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
     print("Win rate : ", round(win_ratio * 100, 3), "%")
-    wandb.log({"Win_Rate/self_play": round(win_ratio * 100, 3)})
+    wandb.log({"win_rate/self_play": round(win_ratio * 100, 3)})
 
     return data_buffer
 
@@ -142,7 +145,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     obs_post[3] = obs[player_0] + obs[player_1]
 
     while True:
-        move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
+        move, move_probs, pd, nq = mcts_player.get_action(env, temp, return_prob=1)
 
         # store the data
         states.append(obs_post.copy())
@@ -160,7 +163,14 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
 
         end, winners = env.winner()
 
+        if game_iter + 1 in [1, 10, 20, 31, 50, 100]:
+            graph_name = f"training/game_iter_{game_iter + 1}"
+            wandb.log({
+                f"{graph_name}_pd": pd,
+                f"{graph_name}_nq": nq})
+
         if end:
+            obs, _ = env.reset()
             if len(current_player) == 36 and winners == 0:  # draw
                 print('self_play_draw')
 
@@ -227,7 +237,7 @@ def policy_update(lr_mul, policy_value_net, data_buffers=None, rl_model=None):
     return loss, entropy, lr_multiplier, policy_value_net
 
 
-def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # total 30 games
+def policy_evaluate(env, current_mcts_player, old_mcts_player, game_iter, n_games=30):  # total 30 games
     """
     Evaluate the trained policy by playing against the pure MCTS player
     Note: this is only for monitoring the progress of training
@@ -237,16 +247,17 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, n_games=30):  # t
     win_cnt = defaultdict(int)
 
     for j in range(n_games):
-        winner = start_play(env, training_mcts_player, opponent_mcts_player)
+        winner = start_play(env, training_mcts_player, opponent_mcts_player, game_iter)
         win_cnt[winner] += 1
-        print("{} / 30 ".format(j + 1))
+        print(f"game: {game_iter+1}, evaluate:{j + 1}")
 
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("---------- win: {}, tie:{}, lose: {} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
+    print("\n")
     return win_ratio, training_mcts_player
 
 
-def start_play(env, player1, player2):
+def start_play(env, player1, player2, game_iter):
     """start a game between two players"""
     obs, _ = env.reset()
     players = [0, 1]
@@ -259,10 +270,16 @@ def start_play(env, player1, player2):
 
     while True:
         # synchronize the MCTS tree with the current state of the game
-        move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)  # self-play temp=1.0, eval temp=1e-3
+        move, pd, nq = player_in_turn.get_action(env, temp=1e-3, return_prob=0)  # self-play temp=1.0, eval temp=1e-3
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
+
+        if game_iter + 1 in [1, 10, 20, 31, 50, 100]:
+            graph_name = f"training/game_iter_{game_iter + 1}"
+            wandb.log({
+                f"{graph_name}_pd": pd,
+                f"{graph_name}_nq": nq})
 
         if not end:
             current_player = 1 - current_player
@@ -331,7 +348,7 @@ if __name__ == '__main__':
 
             if i == 0:
                 """make mcts agent training, eval version"""
-                policy_evaluate(env, curr_mcts_player, curr_mcts_player)
+                policy_evaluate(env, curr_mcts_player, curr_mcts_player, i)
                 model_file, eval_model_file = create_models(rl_model, epsilon, n_playout, quantiles, effi_n_playout, i)
                 policy_value_net.save_model(model_file)
                 policy_value_net.save_model(eval_model_file)
@@ -366,14 +383,14 @@ if __name__ == '__main__':
                     curr_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, epsilon,
                                                   is_selfplay=0, rl_model=rl_model)
 
-                win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player)
+                win_ratio, curr_mcts_player = policy_evaluate(env, curr_mcts_player, old_mcts_player, i)
 
                 if (i + 1) % 10 == 0:  # save model 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 (1+10: total 11)
                     _, eval_model_file = create_models(rl_model, epsilon, n_playout, quantiles, effi_n_playout, i)
                     policy_value_net.save_model(eval_model_file)
 
                 print("Win rate : ", round(win_ratio * 100, 3), "%")
-                wandb.log({"Win_Rate/Evaluate": round(win_ratio * 100, 3)})
+                wandb.log({"win_rate/evaluate": round(win_ratio * 100, 3)})
 
                 if win_ratio > 0.5:
                     old_mcts_player = curr_mcts_player
