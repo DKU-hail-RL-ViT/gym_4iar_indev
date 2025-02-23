@@ -297,9 +297,9 @@ class MCTSPlayer(object):
                 # reset the root node
                 self.mcts.update_with_move(-1)
             if return_prob:
-                return move, move_probs
+                return move, move_probs, pd, nq
             else:
-                return move
+                return move, pd, nq
         else:
             print("WARNING: the board is full")
 
