@@ -15,21 +15,21 @@ from policy_value.file_utils import *
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=400)  # compare with 2, 10, 50, 100, 400
+parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 20, 50, 100, 400
 parser.add_argument("--quantiles", type=int, default=3)  # compare with 3, 9, 27, 81
 parser.add_argument('--epsilon', type=float, default=0.7)  # compare with 0.1, 0.4, 0.7
 
 """Efficient Search Hyperparameter"""
-# EQRDQN (2, 5832), (10, 29160), (50, 145800), (100, 291600),(400, 1166400)
-# EQRQAC (2, 5832), (10, 29160), (50, 145800), (100, 291600),(400, 1166400)
+# EQRDQN (2, 5832), (20, 58320), (50, 145800), (100, 291600),(400, 1166400)
+# EQRQAC (2, 5832), (20, 58320), (50, 145800), (100, 291600),(400, 1166400)
 
 parser.add_argument('--effi_n_playout', type=int, default=2)
 parser.add_argument('--search_resource', type=int, default=5832)
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
-parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
+# parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
+parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver
 # # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
@@ -142,7 +142,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
     obs_post[3] = obs[player_0] + obs[player_1]
 
     while True:
-        move, move_probs = mcts_player.get_action(env, game_iter, temp, return_prob=1)
+        move, move_probs = mcts_player.get_action(env, temp, return_prob=1)
 
         # store the data
         states.append(obs_post.copy())
@@ -170,7 +170,7 @@ def self_play(env, mcts_player, temp=1e-3, game_iter=0, self_play_i=0):
                 game_iter + 1, self_play_i + 1, len(current_player)))
             winners_z = np.zeros(len(current_player))
 
-            if winners != 0:  # non draw
+            if winners != 0:  # non draw 1, 0 ,-1
                 if winners == -1:
                     winners = 0
                 # if winner is current player, winner_z = 1
@@ -259,7 +259,7 @@ def start_play(env, player1, player2):
 
     while True:
         # synchronize the MCTS tree with the current state of the game
-        move = player_in_turn.get_action(env, game_iter=-1, temp=1e-3, return_prob=0)  # self-play temp=1.0, eval temp=1e-3
+        move = player_in_turn.get_action(env, temp=1e-3, return_prob=0)  # self-play temp=1.0, eval temp=1e-3
         obs, reward, terminated, info = env.step(move)
         assert env.state_[3][action2d_ize(move)] == 1, ("Invalid move", action2d_ize(move))
         end, winner = env.winner()
@@ -281,10 +281,10 @@ if __name__ == '__main__':
     env = Fiar()
     obs, _ = env.reset()
 
-    # if torch.cuda.is_available():  # Windows
-    #     device = torch.device("cuda")
-    # elif torch.backends.mps.is_available():  # Mac OS
-    #     device = torch.device("mps")
+    if torch.cuda.is_available():  # Windows
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():  # Mac OS
+        device = torch.device("mps")
 
     turn_A = turn(obs)
     turn_B = 1 - turn_A

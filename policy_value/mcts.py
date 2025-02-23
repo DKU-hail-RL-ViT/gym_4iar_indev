@@ -95,7 +95,7 @@ class MCTS(object):
     """A simple implementation of Monte Carlo Tree Search."""
 
     def __init__(self, policy_value_fn, c_puct=5, n_playout=1000, quantiles=None,
-                 epsilon=None, search_resource=None, epsilon_decay=None,rl_model=None):
+                 epsilon=None, rl_model=None):
         """
         policy_value_fn: a function that takes in a board state and outputs
             a list of (action, probability) tuples and also a score in [-1, 1]
@@ -112,9 +112,9 @@ class MCTS(object):
         self.rl_model = rl_model
         self.env = Fiar()
         self.epsilon = epsilon
-        self.epsilon_decay = epsilon_decay
-        self.search_resource = search_resource
         self.quantiles = quantiles
+        self.planning_depth = 0
+        self.number_of_quantiles = 0
 
     def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
@@ -122,16 +122,11 @@ class MCTS(object):
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
-        depth_times, width_times = 0, 0
-        planning_depth = 0
+        self.planning_depth, self.number_of_quantiles = 0, 0
 
         while (1):
-            planning_depth += 1
+            self.planning_depth += 1
             if node.is_leaf():
-                if self.rl_model in ["AC", "QAC", "DQN"]:
-                    depth_times += 1
-                else:
-                    depth_times += self.quantiles
                 break
 
             # Greedily select next move.
@@ -212,17 +207,8 @@ class MCTS(object):
             available, action_probs, leaf_value = self._policy(env)
             action_probs = zip(available, action_probs[available])
 
-        if self.rl_model in ["AC"]:
-            width_times += 0
-
-        elif self.rl_model in ["QRAC"]:
-            width_times += self.quantiles
-
-        elif self.rl_model in ["DQN", "QAC"]:
-            width_times += len(available)
-
-        elif self.rl_model in ["QRDQN", "QRQAC"]:
-            width_times += self.quantiles * len(available)
+        if self.rl_model in ["QRDQN", "QRQAC"]:
+            self.number_of_quantiles += self.quantiles
 
         # Check for end of game
         end, winners = env.winner()
@@ -238,47 +224,17 @@ class MCTS(object):
                 leaf_value = -1.0
         node.update_recursive(-leaf_value)
 
-        return planning_depth, depth_times, width_times
-
-    def get_move_probs(self, env, game_iter, temp):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
-        depth_, width_, depth_fre, width_fre = 0, 0, 0, 0
-
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
+            self._playout(env_copy)
 
-            planning_depth, depth_fre, width_fre = self._playout(env_copy)
-            depth_ += depth_fre
-            width_ += width_fre
-
-            if game_iter + 1 in [1, 10, 20, 31, 50, 100]:
-                graph_name = f"planning_depth/game_iter_{game_iter + 1}"
-                wandb.log({graph_name: planning_depth})
-
-        wandb.log({
-            "resource/depth": depth_fre,
-            "resource/depth_resource_usage": depth_,
-            "resource/depth_ratio": depth_ / (depth_ + width_),
-
-            "resource/width": width_fre,
-            "resource/width_resource_usage": width_,
-            "resource/width_ratio": width_ / (depth_ + width_),
-
-            "resource/total_resource_usage": depth_ + width_,
-            "resource/total_planning_depth": n + 1
-        })
-        if self.rl_model in ["AC"]:
-            wandb.log({
-                "resource/total_resource_usage": depth_,
-            })
-        else:
-            wandb.log({
-                "resource/total_resource_usage": depth_ + width_,
-            })
+        pd, nq = self.planning_depth, self.number_of_quantiles
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -286,7 +242,7 @@ class MCTS(object):
         acts, visits = zip(*act_visits)
         act_probs = softmax(1.0 / temp * np.log(np.array(visits) + 1e-10))
 
-        return acts, act_probs
+        return acts, act_probs, pd, nq
 
     def update_with_move(self, last_move):
         """Step forward in the tree, keeping everything we already know
@@ -321,12 +277,12 @@ class MCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, game_iter=0, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, game_iter, temp)  # env.state_.shape = (5,9,4)
+            acts, probs, pd, nq = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)
