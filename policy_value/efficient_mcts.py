@@ -4,10 +4,6 @@ import torch
 import wandb
 
 
-def is_float(a):
-    return np.floor(a) != float(a)
-
-
 def softmax(x):
     probs = np.exp(x - np.max(x))
     probs /= np.sum(probs)
@@ -120,8 +116,12 @@ class MCTS(object):
         self.rl_model = rl_model
         self.epsilon = epsilon
         self.search_resource = search_resource
-        self.total_resource = search_resource
+        self.resource = 0
+        self.planning_depth = 0
+        self.number_of_quantiles = 0
         self.p = 1
+        self.threshold = 0.1
+
 
     def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
@@ -130,12 +130,10 @@ class MCTS(object):
         """
         node = self._root
         threshold = 0.1
-        depth_times, width_times = 0, 0
-        planning_depth = 0
+        self.planning_depth, self.number_of_quantiles = 0, 0
 
         while True:
-            planning_depth += 1
-
+            self.planning_depth += 1
             if node.is_leaf():
                 break
 
@@ -143,10 +141,13 @@ class MCTS(object):
             action, node = node.select(self._c_puct)
             obs, reward, terminated, info = env.step(action)
 
-        self.p = 1
         available, action_probs, leaf_value = self._policy(env)
-        while self.search_resource >= 3 ** self.p + 3 ** self.p * len(available):
 
+        self.p = 1
+        self.depth_ = 3 ** 4
+        self.width_ =  3 ** 4 * len(available)
+
+        while self.search_resource >= (self.depth_ + self.width_) or self.p < 5:
             if len(available) > 0:
                 n_indices = get_fixed_indices(self.p)
                 action_probs_ = np.zeros_like(action_probs)
@@ -161,7 +162,7 @@ class MCTS(object):
 
                 leaf_value_srted, idx_srted = leaf_value_.sort()
 
-                if torch.abs(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]]) > threshold:
+                if torch.abs(leaf_value_[idx_srted[-1]] - leaf_value_[idx_srted[-2]]) > self.threshold:
                     action_probs = zip(available, action_probs[available])
 
                     if self.rl_model == "EQRDQN":
@@ -171,6 +172,7 @@ class MCTS(object):
 
                     # Check for end of game
                     end, winners = env.winner()
+                    self.number_of_quantiles += 3 ** self.p
 
                     if not end:
                         node.expand(action_probs)
@@ -182,23 +184,20 @@ class MCTS(object):
                         else:
                             leaf_value = -1.0
                     node.update_recursive(-leaf_value)
-
-                    depth_times += (3 ** (self.p-1))
-                    width_times += (3 ** (self.p-1)) * len(available)
-
-                    return len(available), planning_depth, depth_times, width_times
+                    break
 
                 else:
                     self.update_depth_search_resource(self.p)
                     self.update_width_search_resource(self.p, available)
                     self.p += 1
 
-                if self.p == 5 or self.search_resource <= 3 ** self.p + 3 ** self.p * len(available):
+                if self.p == 5:
                     action_probs = zip(available, action_probs[available])
                     leaf_value = leaf_value_[idx_srted[-1]]
 
                     # Check for end of game
                     end, winners = env.winner()
+                    self.number_of_quantiles += 3 ** (self.p - 1)
 
                     if not end:
                         node.expand(action_probs)
@@ -210,13 +209,10 @@ class MCTS(object):
                         else:
                             leaf_value = -1.0
                     node.update_recursive(-leaf_value)
-
-                    depth_times += 3 ** (self.p-1)
-                    width_times += 3 ** (self.p-1) * len(available)
-
-                    return len(available), planning_depth, depth_times, width_times
+                    break
 
             else:
+                self.update_depth_search_resource(self.p)
                 if self.rl_model == "EQRDQN":
                     leaf_value = leaf_value.max()
                 elif self.rl_model == "EQRQAC":
@@ -235,54 +231,23 @@ class MCTS(object):
                     else:
                         leaf_value = -1.0
                 node.update_recursive(-leaf_value)
+                break
 
-                depth_times += 3 ** self.p
-                width_times += 3 ** self.p * 36  # when len(available) == 0,  action prob = uniform distribution
 
-                return len(available), planning_depth, depth_times, width_times
-
-    def get_move_probs(self, env, game_iter, temp):  # state.shape = (5,9,4)
+    def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
         their corresponding probabilities.
         state: the current game state
         temp: temperature parameter in (0, 1] controls the level of exploration
         """
-        depth_, width_ = 0, 0
-        depth_fre, width_fre = 0, 0
-
         for n in range(self._n_playout):  # for 400 times
             env_copy = copy.deepcopy(env)
-            avail, planning_depth, depth_fre, width_fre = self._playout(env_copy)
-            depth_ += depth_fre
-            width_ += width_fre
+            self._playout(env_copy)
 
-            if self.p != 5:
-                next_depth_fre = 3 ** self.p
-                next_width_fre = 3 ** self.p * avail
-            else:
-                next_depth_fre = 3 ** self.p
-                next_width_fre = 3 ** (self.p - 1) * avail
-
-            if game_iter+1 in [1, 10, 20, 31, 50, 100]:
-                graph_name = f"depth_fre/game_iter_{game_iter+1}"
-                wandb.log({graph_name: planning_depth})
-
-            if self.search_resource < 0 or self.total_resource < depth_ + width_ + next_depth_fre + next_width_fre:
+            if self.search_resource < 0:
                 break
 
-        wandb.log({
-            "resource/depth": depth_fre,
-            "resource/depth_resource_usage": depth_,
-            "resource/depth_ratio": depth_ / (depth_ + width_+1),
-
-            "resource/width": width_fre,
-            "resource/width_resource_usage": width_,
-            "resource/width_ratio": width_ / (depth_ + width_+1),
-
-            "resource/total_resource_usage": depth_ + width_,
-            "resource/remain_resource": self.total_resource - depth_ - width_,
-            "resource/remain_resource_ratio": (self.total_resource - depth_ - width_) / self.total_resource
-        })
+        pd, nq = self.planning_depth, self.number_of_quantiles
 
         # calc the move probabilities based on visit counts at the root node
         act_visits = [(act, node._n_visits)
@@ -290,7 +255,7 @@ class MCTS(object):
         acts, visits = zip(*act_visits)
         act_probs = softmax(1.0 / temp * np.log(np.array(visits) + 1e-10))
 
-        return acts, act_probs
+        return acts, act_probs, pd, nq
 
     def update_with_move(self, last_move):
         """Step forward in the tree, keeping everything we already know
@@ -303,16 +268,20 @@ class MCTS(object):
             self._root = TreeNode(None, 1.0)
 
     def update_depth_search_resource(self, p):
-        if p in [1, 2, 3, 4]:
-            self.search_resource -= 2 ** (p-1) * 3
+        if p == 1:
+            self.search_resource -= 3
+        elif p == 2:
+            self.search_resource -= 6
         else:
-            assert False, "not defined"
+            self.search_resource -= 3 * (3 ** (p - 2)) * (2 ** min(1, p - 1))
 
     def update_width_search_resource(self, p, available):
-        if p in [1, 2, 3, 4]:
-            self.search_resource -= 2 ** (p-1) * 3 * len(available)
+        if p == 1:
+            self.search_resource -= 3 * len(available)
+        elif p == 2:
+            self.search_resource -= 6 * len(available)
         else:
-            assert False, "not defined"
+            self.search_resource -= 3 * (3 ** (p - 2)) * (2 ** min(1, p - 1)) * len(available)
 
     def __str__(self):
         return "MCTS"
@@ -338,13 +307,13 @@ class EMCTSPlayer(object):
     def reset_player(self):
         self.mcts.update_with_move(-1)
 
-    def get_action(self, env, game_iter=0, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
+    def get_action(self, env, temp=1e-3, return_prob=0):  # env.state_.shape = (5,9,4)
         sensible_moves = np.nonzero(env.state_[3].flatten() == 0)[0]
         move_probs = np.zeros(env.state_.shape[1] * env.state_.shape[2])
         self.mcts.search_resource = self.resource
 
         if len(sensible_moves) > 0:
-            acts, probs = self.mcts.get_move_probs(env, game_iter, temp)  # env.state_.shape = (5,9,4)
+            acts, probs, pd, nq = self.mcts.get_move_probs(env, temp)  # env.state_.shape = (5,9,4)
             move_probs[list(acts)] = probs
             if self._is_selfplay:
                 # add Dirichlet Noise for exploration (needed for self-play training)
@@ -361,7 +330,7 @@ class EMCTSPlayer(object):
             if return_prob:
                 return move, move_probs
             else:
-                return move
+                return move, pd, nq
         else:
             print("WARNING: the board is full")
 

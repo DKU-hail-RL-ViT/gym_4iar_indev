@@ -26,7 +26,7 @@ def apply_masking(probs, available):
     if total_sum > 0:
         masked_probs /= total_sum
     else:
-        masked_probs /= (total_sum + 1)  # 전체가 0인 경우 보정
+        masked_probs /= (total_sum + 1)
     return masked_probs
 
 
@@ -404,8 +404,8 @@ class EQRQAC(nn.Module):  # Efficient Quantile Regression action value actor cri
     #
     #     return x_val
 
-        # X_val * W 이때 W가 (원래 shape, 81*36)
-        # 이때 W의 몇개 열만 뽑으면 (원래 shape, 9*36)처럼 할수도 있는 것
+        # X_val * W ?? W? (?? shape, 81*36)
+        # ?? W? ?? ?? ??? (?? shape, 9*36)?? ??? ?? ?
         # iter [ 0 ]
         # idx_iter = [0,1,2, 36,37,38, ...]
         # Z_k3 = x_val @ self._policy.val_fc2.weight.data[:, idx_iter] -->  (batchsize, 3*36)
