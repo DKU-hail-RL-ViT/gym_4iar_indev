@@ -18,26 +18,26 @@ from policy_value.file_utils import *
 parser = argparse.ArgumentParser()
 
 """ tuning parameter """
-parser.add_argument("--n_playout", type=int, default=2)  # compare with 2, 20, 50, 100, 400
-parser.add_argument("--quantiles", type=int, default=3)  # compare with 3, 9, 27, 81
-parser.add_argument('--epsilon', type=float, default=0.7)  # compare with 0.1, 0.4, 0.7
+parser.add_argument("--n_playout", type=int, default=20)  # compare with 2, 20, 50, 100, 400
+parser.add_argument("--quantiles", type=int, default=81)  # compare with 3, 9, 27, 81
+parser.add_argument('--epsilon', type=float, default=0.4)  # compare with 0.1, 0.4, 0.7
 
 """Efficient Search Hyperparameter"""
 # EQRDQN (2, 5832), (20, 58320), (50, 145800), (100, 291600),(400, 1166400)
 # EQRQAC (2, 5832), (20, 58320), (50, 145800), (100, 291600),(400, 1166400)
 
-parser.add_argument('--effi_n_playout', type=int, default=2)
-parser.add_argument('--search_resource', type=int, default=5832)
+parser.add_argument('--effi_n_playout', type=int, default=20)
+parser.add_argument('--search_resource', type=int, default=58320)
 
 """ RL model """
 # parser.add_argument("--rl_model", type=str, default="DQN")  # action value ver
 # parser.add_argument("--rl_model", type=str, default="QRDQN")  # action value ver
-parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
+# parser.add_argument("--rl_model", type=str, default="AC")       # Actor critic state value ver
 # parser.add_argument("--rl_model", type=str, default="QAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="QRAC")   # Actor critic state value ver
-# # parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
+# parser.add_argument("--rl_model", type=str, default="QRQAC")  # Actor critic action value ver
 # parser.add_argument("--rl_model", type=str, default="EQRDQN") # Efficient search + action value ver
-# parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
+parser.add_argument("--rl_model", type=str, default="EQRQAC")  # Efficient search + Actor critic action value ver
 
 """ MCTS parameter """
 parser.add_argument("--buffer_size", type=int, default=10000)
@@ -253,7 +253,6 @@ def policy_evaluate(env, current_mcts_player, old_mcts_player, game_iter, n_game
 
     win_ratio = 1.0 * win_cnt[1] / n_games
     print("---------- win: {}, tie:{}, lose: {} ----------".format(win_cnt[1], win_cnt[0], win_cnt[-1]))
-    print("\n")
     return win_ratio, training_mcts_player
 
 
@@ -366,8 +365,8 @@ if __name__ == '__main__':
                     old_mcts_player = EMCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, epsilon,
                                                   search_resource, is_selfplay=0, rl_model=rl_model)
                 elif rl_model in ["DQN", "QRDQN", "QRAC", "QRQAC"]:
-                    old_mcts_player = MCTSPlayer(policy_value_net.policy_value_fn, c_puct, n_playout, quantiles,
-                                                  epsilon, is_selfplay=0, rl_model=rl_model)
+                    old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, quantiles,
+                                                 epsilon, is_selfplay=0, rl_model=rl_model)
                 else:
                     old_mcts_player = MCTSPlayer(policy_value_net_old.policy_value_fn, c_puct, n_playout, epsilon,
                                                  is_selfplay=0, rl_model=rl_model)

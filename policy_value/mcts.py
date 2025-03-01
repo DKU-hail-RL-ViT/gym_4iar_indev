@@ -1,22 +1,11 @@
 import numpy as np
 import copy
-import wandb
-
-from fiar_env import Fiar
 
 
 def softmax(x):
     probs = np.exp(x - np.max(x))
     probs /= np.sum(probs)
     return probs
-
-
-def interpolate_quantiles(interpolate_pre, interpolate_aft):
-    quantiles_old = np.linspace(0, 1, interpolate_pre + 1)
-    quantiles_new = np.linspace(0, 1, interpolate_aft + 1)
-    new_quantiles = np.interp(quantiles_new[1:-1], quantiles_old[1:-1], interpolate_pre)
-
-    return new_quantiles
 
 
 class TreeNode(object):
@@ -27,7 +16,6 @@ class TreeNode(object):
     def __init__(self, parent, prior_p):
         self._parent = parent
         self._children = {}  # a map from action to TreeNode
-        self._removed_children = []
         self._n_visits = 0
         self._Q = 0
         self._u = 0
@@ -110,7 +98,6 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
         self.rl_model = rl_model
-        self.env = Fiar()
         self.epsilon = epsilon
         self.quantiles = quantiles
         self.planning_depth = 0
@@ -124,7 +111,7 @@ class MCTS(object):
         node = self._root
         self.planning_depth, self.number_of_quantiles = 0, 0
 
-        while (1):
+        while True:
             self.planning_depth += 1
             if node.is_leaf():
                 break
