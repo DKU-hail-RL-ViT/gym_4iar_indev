@@ -1,7 +1,6 @@
 import numpy as np
 import copy
 import torch
-import wandb
 
 
 def softmax(x):
@@ -31,7 +30,6 @@ class TreeNode(object):
     def __init__(self, parent, prior_p):
         self._parent = parent
         self._children = {}  # a map from action to TreeNode
-        self._removed_children = []
         self._n_visits = 0
         self._Q = 0
         self._u = 0
@@ -114,6 +112,7 @@ class MCTS(object):
         self._c_puct = c_puct
         self._n_playout = n_playout
         self.rl_model = rl_model
+        self.quantiles = 81
         self.epsilon = epsilon
         self.search_resource = search_resource
         self.resource = 0
@@ -122,14 +121,12 @@ class MCTS(object):
         self.p = 1
         self.threshold = 0.1
 
-
     def _playout(self, env):
         """Run a single playout from the root to the leaf, getting a value at
         the leaf and propagating it back through its parents.
         State is modified in-place, so a copy must be provided.
         """
         node = self._root
-        threshold = 0.1
         self.planning_depth, self.number_of_quantiles = 0, 0
 
         while True:
@@ -145,9 +142,9 @@ class MCTS(object):
 
         self.p = 1
         self.depth_ = 3 ** 4
-        self.width_ =  3 ** 4 * len(available)
+        self.width_ = 3 ** 4 * len(available)
 
-        while self.search_resource >= (self.depth_ + self.width_) or self.p < 5:
+        while self.search_resource >= (self.depth_ + self.width_):
             if len(available) > 0:
                 n_indices = get_fixed_indices(self.p)
                 action_probs_ = np.zeros_like(action_probs)
@@ -172,7 +169,7 @@ class MCTS(object):
 
                     # Check for end of game
                     end, winners = env.winner()
-                    self.number_of_quantiles += 3 ** self.p
+                    self.number_of_quantiles = 3 ** self.p
 
                     if not end:
                         node.expand(action_probs)
@@ -197,7 +194,7 @@ class MCTS(object):
 
                     # Check for end of game
                     end, winners = env.winner()
-                    self.number_of_quantiles += 3 ** (self.p - 1)
+                    self.number_of_quantiles = 3 ** (self.p - 1)  # maximum quantiles 81
 
                     if not end:
                         node.expand(action_probs)
@@ -232,7 +229,6 @@ class MCTS(object):
                         leaf_value = -1.0
                 node.update_recursive(-leaf_value)
                 break
-
 
     def get_move_probs(self, env, temp):  # state.shape = (5,9,4)
         """Run all playouts sequentially and return the available actions and
@@ -328,7 +324,7 @@ class EMCTSPlayer(object):
                 # reset the root node
                 self.mcts.update_with_move(-1)
             if return_prob:
-                return move, move_probs
+                return move, move_probs, pd, nq
             else:
                 return move, pd, nq
         else:
