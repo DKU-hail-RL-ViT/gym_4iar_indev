@@ -240,7 +240,7 @@ class MCTS(object):
             env_copy = copy.deepcopy(env)
             self._playout(env_copy)
 
-            if self.search_resource < 0:
+            if self.search_resource <= 0:
                 break
 
         pd, nq = self.planning_depth, self.number_of_quantiles
